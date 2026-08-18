@@ -6,6 +6,7 @@
 //    POST /api/settings  -> aggiorna i parametri presenti nel body e salva in NVS
 //    GET  /api/live      -> valori live del mic (livello/fondo/soglia) + stato
 //    POST /api/reset     -> ripristina i default di fabbrica
+//    POST /api/local/test-> prova i servizi AI in casa (chi risponde, con che modello)
 //  Il server e' sincrono: durante un'interazione (registrazione/rete) il loop e'
 //  bloccato e la pagina non risponde per qualche secondo -> normale, il pannello
 //  si usa a riposo.
@@ -13,6 +14,7 @@
 #include "webui.h"
 #include "config.h"
 #include "settings.h"
+#include "localai.h"
 #include "volume.h"
 #include "mic.h"
 #include "wakeword.h"
@@ -35,6 +37,7 @@ static void fillSettingsJson(JsonDocument &doc) {
   doc["micLvlAttack"]     = gSettings.micLvlAttack;
   doc["micLvlRelease"]    = gSettings.micLvlRelease;
   doc["idleReactive"]     = gSettings.idleReactive;
+  doc["chatContinua"]     = gSettings.chatContinua;
   doc["wakeGain"]         = gSettings.wakeGain;
   doc["wakeProbCutoff"]   = gSettings.wakeProbCutoff;
   doc["wakeWindow"]       = gSettings.wakeWindow;
@@ -47,6 +50,16 @@ static void fillSettingsJson(JsonDocument &doc) {
   doc["musicStations"]    = gSettings.musicStations;
   doc["replyTrigger"]     = gSettings.replyTrigger;
   doc["replyText"]        = gSettings.replyText;
+  doc["localLlmUrl"]      = gSettings.localLlmUrl;
+  doc["localLlmModel"]    = gSettings.localLlmModel;
+  doc["localLlmTemp"]     = gSettings.localLlmTemp;
+  doc["localSttUrl"]      = gSettings.localSttUrl;
+  doc["localSttModel"]    = gSettings.localSttModel;
+  doc["localTtsUrl"]      = gSettings.localTtsUrl;
+  doc["localTtsModel"]    = gSettings.localTtsModel;
+  doc["localTtsVoice"]    = gSettings.localTtsVoice;
+  doc["localOnly"]        = gSettings.localOnly;
+  doc["ttsLocalOnly"]     = gSettings.ttsLocalOnly;
   doc["volume"]           = volumeGet();
 }
 
@@ -72,6 +85,7 @@ static void handlePostSettings() {
   if (!doc["micLvlAttack"].isNull())     gSettings.micLvlAttack     = doc["micLvlAttack"].as<float>();
   if (!doc["micLvlRelease"].isNull())    gSettings.micLvlRelease    = doc["micLvlRelease"].as<float>();
   if (!doc["idleReactive"].isNull())     gSettings.idleReactive     = doc["idleReactive"].as<bool>();
+  if (!doc["chatContinua"].isNull())     gSettings.chatContinua     = doc["chatContinua"].as<bool>();
   if (!doc["wakeGain"].isNull())         gSettings.wakeGain         = doc["wakeGain"].as<int>();
   if (!doc["wakeProbCutoff"].isNull())   gSettings.wakeProbCutoff   = doc["wakeProbCutoff"].as<int>();
   if (!doc["wakeWindow"].isNull())       gSettings.wakeWindow       = doc["wakeWindow"].as<int>();
@@ -84,6 +98,16 @@ static void handlePostSettings() {
   if (!doc["musicStations"].isNull())    gSettings.musicStations    = doc["musicStations"].as<String>();
   if (!doc["replyTrigger"].isNull())     gSettings.replyTrigger     = doc["replyTrigger"].as<String>();
   if (!doc["replyText"].isNull())        gSettings.replyText        = doc["replyText"].as<String>();
+  if (!doc["localLlmUrl"].isNull())      gSettings.localLlmUrl      = doc["localLlmUrl"].as<String>();
+  if (!doc["localLlmModel"].isNull())    gSettings.localLlmModel    = doc["localLlmModel"].as<String>();
+  if (!doc["localLlmTemp"].isNull())     gSettings.localLlmTemp     = doc["localLlmTemp"].as<float>();
+  if (!doc["localSttUrl"].isNull())      gSettings.localSttUrl      = doc["localSttUrl"].as<String>();
+  if (!doc["localSttModel"].isNull())    gSettings.localSttModel    = doc["localSttModel"].as<String>();
+  if (!doc["localTtsUrl"].isNull())      gSettings.localTtsUrl      = doc["localTtsUrl"].as<String>();
+  if (!doc["localTtsModel"].isNull())    gSettings.localTtsModel    = doc["localTtsModel"].as<String>();
+  if (!doc["localTtsVoice"].isNull())    gSettings.localTtsVoice    = doc["localTtsVoice"].as<String>();
+  if (!doc["localOnly"].isNull())        gSettings.localOnly        = doc["localOnly"].as<bool>();
+  if (!doc["ttsLocalOnly"].isNull())     gSettings.ttsLocalOnly     = doc["ttsLocalOnly"].as<bool>();
   if (!doc["volume"].isNull())           volumeSet(doc["volume"].as<int>());
 
   settingsSave();   // clampa e scrive in NVS
@@ -141,6 +165,29 @@ static void handleChat() {
   server.sendContent("");   // chiude il chunked transfer
 }
 
+// POST /api/local/test -> prova i tre servizi in casa e dice chi risponde e con
+// quale modello. Su richiesta e non in automatico: ogni prova costa un'attesa, e
+// farla di continuo rallenterebbe il loop (wake word compreso).
+static void handleLocalTest() {
+  localForget();                     // niente esiti vecchi: si riprova davvero
+  JsonDocument doc;
+  const char *nome[LOC_COUNT] = { "stt", "llm", "tts" };
+  for (int i = 0; i < LOC_COUNT; i++) {
+    LocalSvc s = (LocalSvc)i;
+    JsonObject o = doc[nome[i]].to<JsonObject>();
+    if (localBaseUrl(s).isEmpty()) { o["stato"] = "spento"; continue; }
+    if (!localConnected(s)) { o["stato"] = "non risponde"; continue; }
+    // Risponde: ora la domanda vera e' se ci si puo' lavorare. Il cervello senza
+    // modello caricato non serve a niente, e va detto invece di far vedere un
+    // "risponde" che poi in pratica va lo stesso in cloud.
+    String m = localModelName(s);
+    o["stato"] = localReachable(s) ? "in casa" : "risponde, ma nessun modello caricato";
+    o["modello"] = m.length() ? m : String("(non dichiarato)");
+  }
+  String out; serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
 // POST /api/music/stop -> ferma la musica in riproduzione (pulsante del pannello).
 static void handleMusicStop() {
   musicRequestStop();
@@ -166,6 +213,7 @@ bool webuiBegin() {
   server.on("/api/chat",     HTTP_GET,  handleChat);
   server.on("/api/reset",    HTTP_POST, handleReset);
   server.on("/api/music/stop", HTTP_POST, handleMusicStop);
+  server.on("/api/local/test", HTTP_POST, handleLocalTest);
 
   // Pagina statica da LittleFS (data/index.html).
   server.serveStatic("/", LittleFS, "/index.html");

@@ -21,8 +21,12 @@ interfaccia) è in **italiano**.
 ## Come funziona
 
 Alexo da solo è troppo piccolo per "ragionare": fa il **fattorino** tra alcuni servizi
-cloud. L'unica intelligenza che gira in locale (offline) è il riconoscimento della parola
+cloud. L'unica intelligenza che gira **dentro** l'ESP32 è il riconoscimento della parola
 di attivazione.
+
+> 🏠 Il cloud però non è obbligatorio: ognuno dei tre servizi può essere sostituito da un
+> **server sulla tua rete locale** (LM Studio, Whisper, un TTS) — vedi il
+> [capitolo 16 del manuale](MANUALE.md#16-lai-in-casa-far-girare-tutto-sul-tuo-pc).
 
 ```mermaid
 flowchart TD
@@ -52,6 +56,11 @@ animazione in base allo stato (ascolto / pensa / parla).
 - 🗣️ **Wake word locale** "Okay Nabu" (microWakeWord / TensorFlow Lite Micro, offline)
 - 🎛️ **Encoder** come comando unico (click per parlare, giro per scorrere/volume)
 - 🧠 **Memoria della conversazione** + **ricerca web** (via Claude)
+- 💬 **Chat continua** (opzionale): finita la risposta il microfono si riapre da solo,
+  la domanda dopo non richiede di ridire la wake word
+- 🏠 **AI "in casa"** (opzionale): trascrizione, cervello e voce possono girare su un
+  **PC della tua rete** invece che nel cloud, con un interruttore "non uscire mai su
+  internet"
 - ⏱️ **Stop automatico al silenzio** adattivo al rumore di fondo
 - 📻 **Web-radio** MP3 ("metti radio…", cambio stazione dall'encoder)
 - 🌐 **Pannello web** (`http://alexo.local/`): taratura parametri, volume, voci,
@@ -78,7 +87,7 @@ Schema dei collegamenti pin-per-pin e note di montaggio nel
 
 Firmware in **C++ / PlatformIO** (Arduino), modulare: `mic`, `net`, `stt`, `llm`, `tts`,
 `music`, `ui` (LED), `gobbo` (display), `encoder`, `volume`, `sound`, `wakeword`,
-`settings` + `webui` (pannello web). La pipeline pesante gira su un core, le animazioni
+`localai` (i servizi AI in casa), `settings` + `webui` (pannello web). La pipeline pesante gira su un core, le animazioni
 sull'altro, così restano fluide anche mentre Alexo "pensa".
 
 ## Come si costruisce (in breve)
@@ -90,7 +99,9 @@ sull'altro, così restano fluide anche mentre Alexo "pensa".
    - **ElevenLabs** (voce TTS) — elevenlabs.io
 3. **Configura i segreti**: copia `include/secrets.example.h` in `include/secrets.h` e
    inserisci WiFi + le 3 chiavi. (`secrets.h` è ignorato da git: non finirà nel repo.)
-4. **Compila e carica** (primo flash via USB):
+4. **Compila e carica** (primo flash via USB): in fondo a `platformio.ini` le righe
+   attive sono quelle dell'**OTA** — per il caricamento via cavo scambiale con le due
+   righe `upload_port = COMx` / `upload_protocol = esptool` (vedi i commenti nel file).
    
    ```
    pio run -e esp32-s3-devkitc-1 -t upload

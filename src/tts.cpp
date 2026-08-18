@@ -1,13 +1,19 @@
 // ============================================================================
-//  ALEXO - Text-to-Speech: ElevenLabs -> streaming MP3 sul VS1053
-//  POST a api.elevenlabs.io, l'MP3 ricevuto viene dato a pezzetti al VS1053
-//  man mano che arriva (bassa latenza, niente buffer enorme).
+//  ALEXO - Text-to-Speech -> streaming MP3 sul VS1053
+//  L'MP3 ricevuto viene dato a pezzetti al VS1053 man mano che arriva (bassa
+//  latenza, niente buffer enorme). Due strade:
+//    CLOUD  ElevenLabs (voce clonata)
+//    CASA   server compatibile OpenAI sulla LAN (vedi localai.h), senza chiave
+//  Si va in casa solo se il pannello ha un indirizzo E il PC risponde; se il
+//  server locale sbaglia, si ripiega su ElevenLabs. In entrambi i casi serve
+//  MP3: il VS1053 non decodifica altro.
 // ============================================================================
 #include "tts.h"
 #include "secrets.h"
 #include "gobbo.h"
 #include "volume.h"
 #include "settings.h"
+#include "localai.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -83,6 +89,125 @@ static int leggiOrario(const String &in, int i, int n, String &out) {
   return after - i;   // caratteri consumati (le ore + ':' + i 2 minuti)
 }
 
+// Prova a leggere una DATA a partire da in[i]. Se combacia accoda a 'out' la
+// forma parlata "G <mese> AAAA" e ritorna i caratteri consumati; altrimenti 0.
+// Il mese diventa una parola, giorno e anno restano cifre: i motori vocali li
+// leggono bene da soli, e cosi' non serve saper scrivere i numeri a lettere.
+//   10/3/2026 - 01.12.1992 - 12-09-1989  ->  "10 marzo 2026" ecc.
+//   2026-08-16 (all'incontrario, come la scrivono le macchine) -> "16 agosto 2026"
+// Il separatore puo' essere / . - ma dev'essere lo STESSO due volte: "1.500/3"
+// non e' una data.
+// PERCHE': senza questa, la regola della frazione qui sotto leggeva le date con
+// la barra come "10 fratto 3 fratto 2026", e quelle col punto o col trattino
+// venivano lette alla lettera.
+// Vincoli STRETTI perche' non morda le frazioni vere ("3/4") ne' le migliaia
+// ("1.500.000"): giorno 1-31, mese 1-12, anno di ESATTAMENTE 4 cifre.
+static const char *MESI_VOCE[] = { "gennaio", "febbraio", "marzo", "aprile",
+                                   "maggio", "giugno", "luglio", "agosto",
+                                   "settembre", "ottobre", "novembre", "dicembre" };
+// Legge fino a 'max' cifre da j; torna quante ne ha lette (0 = nessuna) e sposta j.
+static int cifreDa(const String &in, int n, int &j, int max) {
+  int c = 0;
+  while (j < n && isDigit((uint8_t)in[j]) && c < max) { j++; c++; }
+  return c;
+}
+
+static int leggiData(const String &in, int i, int n, String &out) {
+  int j = i;
+  int p1 = i, c1 = cifreDa(in, n, j, 4);          // giorno, oppure anno se sono 4
+  if (c1 < 1 || j >= n) return 0;
+  const char sep = in[j];
+  if (sep != '/' && sep != '.' && sep != '-') return 0;
+
+  int p2 = ++j, c2 = cifreDa(in, n, j, 3);        // mese: sempre 1-2 cifre
+  if (c2 < 1 || c2 > 2 || j >= n || in[j] != sep) return 0;
+
+  int p3 = ++j, c3 = cifreDa(in, n, j, 5);
+  if (j < n && (in[j] == sep || in[j] == ':')) return 0;   // c'e' un altro pezzo: non e' una data
+
+  String sG, sA;
+  if (c1 <= 2 && c3 == 4)        { sG = in.substring(p1, p1 + c1); sA = in.substring(p3, p3 + c3); }
+  else if (c1 == 4 && c3 <= 2)   { sA = in.substring(p1, p1 + c1); sG = in.substring(p3, p3 + c3); }
+  else return 0;
+
+  int G = sG.toInt(), M = in.substring(p2, p2 + c2).toInt();
+  if (G < 1 || G > 31 || M < 1 || M > 12) return 0;
+
+  out += String(G); out += ' '; out += MESI_VOCE[M - 1]; out += ' '; out += sA;
+  return j - i;
+}
+
+// Prova a leggere un numero col PUNTO DELLE MIGLIAIA a partire da in[i]
+// ("230.000"). Se combacia accoda a 'out' lo stesso numero senza punti
+// ("230000") e ritorna i caratteri consumati; altrimenti 0.
+// PERCHE': ElevenLabs i numeri se li normalizza da solo, i motori in casa no -
+// Kokoro legge il punto alla lettera ("duecentotrenta punto zerozerozero").
+// Regola: 1-3 cifre, poi uno o piu' gruppi di ESATTAMENTE 3 cifre preceduti dal
+// punto, e dopo l'ultimo gruppo niente cifre ne' altri punti. Cosi' restano fuori
+// il decimale all'inglese ("3.14", il gruppo non e' di 3 cifre) e gli indirizzi
+// di rete ("192.168.1.50", dopo l'ultimo gruppo c'e' ancora un punto).
+static int leggiMigliaia(const String &in, int i, int n, String &out) {
+  int j = i, cifre = 0;
+  while (j < n && isDigit((uint8_t)in[j]) && cifre < 4) { j++; cifre++; }
+  if (cifre < 1 || cifre > 3) return 0;
+
+  int gruppi = 0;
+  while (j + 3 < n && in[j] == '.' &&
+         isDigit((uint8_t)in[j + 1]) && isDigit((uint8_t)in[j + 2]) &&
+         isDigit((uint8_t)in[j + 3])) {
+    if (j + 4 < n && isDigit((uint8_t)in[j + 4])) return 0;   // gruppo di 4+: non e' un separatore
+    j += 4; gruppi++;
+  }
+  if (gruppi == 0) return 0;
+  if (j < n && (isDigit((uint8_t)in[j]) || in[j] == '.')) return 0;
+
+  for (int k = i; k < j; k++) if (in[k] != '.') out += in[k];
+  return j - i;
+}
+
+// Abbreviazioni di unita' di misura: "km" -> "chilometri". Senza, le voci le
+// leggono a lettere ("kappa emme") o all'inglese. Le piu' LUNGHE per prime:
+// "km/h" va cercata prima di "km", altrimenti resta "chilometri fratto acca".
+// PER AGGIUNGERNE UNA: una riga qui, singolare e plurale. Il confronto ignora
+// maiuscole e minuscole (i modelli scrivono "km" o "KM" indifferentemente).
+struct UnitaVoce { const char *abbr; const char *sing; const char *plur; };
+static const UnitaVoce UNITA[] = {
+  { "km/h", "chilometro orario", "chilometri orari" },
+  { "km",   "chilometro",        "chilometri"       },
+  { "kg",   "chilogrammo",       "chilogrammi"      },
+};
+
+// Se in[i] apre una di quelle abbreviazioni COME PAROLA A SE' (non "kmart", non
+// "okm"), scrive la forma parlata e ritorna quanti caratteri consumare.
+// Singolare solo se prima c'e' esattamente "1" o "un/uno/una": "21 km" in
+// italiano e' plurale, quindi non basta guardare l'ultima cifra.
+// Il punto NON viene consumato: "230 km." di solito e' fine frase, e togliere il
+// punto toglierebbe la pausa. La 'm' resta attaccata solo se e' parte di parola.
+static int leggiUnita(const String &in, int i, int n, String &out) {
+  if (i > 0 && isAlphaNumeric((uint8_t)in[i - 1])) return 0;   // "okm"
+  for (unsigned u = 0; u < sizeof(UNITA) / sizeof(UNITA[0]); u++) {
+    int L = (int)strlen(UNITA[u].abbr);
+    if (i + L > n) continue;
+    bool uguale = true;
+    for (int k = 0; k < L && uguale; k++)
+      if (tolower((uint8_t)in[i + k]) != UNITA[u].abbr[k]) uguale = false;
+    if (!uguale) continue;
+    if (i + L < n && isAlphaNumeric((uint8_t)in[i + L])) continue;   // "kmart"
+
+    // Cosa c'e' prima: salta gli spazi, poi prendi la parola/numero attaccato.
+    int j = i - 1;
+    while (j >= 0 && in[j] == ' ') j--;
+    int fine = j;
+    while (j >= 0 && isAlphaNumeric((uint8_t)in[j])) j--;
+    String prima = in.substring(j + 1, fine + 1);
+    prima.toLowerCase();
+    bool sing = (prima == "1" || prima == "un" || prima == "uno" || prima == "una");
+    out += sing ? UNITA[u].sing : UNITA[u].plur;
+    return L;
+  }
+  return 0;
+}
+
 static String normalizzaPerVoce(const String &in) {
   String out;
   out.reserve(in.length() + 16);
@@ -95,7 +220,28 @@ static String normalizzaPerVoce(const String &in) {
     if (isDigit(c) && (i == 0 || !isDigit((uint8_t)in[i - 1]))) {
       int consumed = leggiOrario(in, i, n, out);
       if (consumed > 0) { i += consumed - 1; continue; }
+      // stesso punto di partenza: la data PRIMA della frazione qui sotto, che
+      // altrimenti se la mangia ("10 fratto 3 fratto 2026").
+      consumed = leggiData(in, i, n, out);
+      if (consumed > 0) { i += consumed - 1; continue; }
+      // "230.000" -> "230000" (vedi leggiMigliaia)
+      consumed = leggiMigliaia(in, i, n, out);
+      if (consumed > 0) { i += consumed - 1; continue; }
     }
+
+    // Unita' di misura abbreviate: "20 km/h" -> "20 chilometri orari". Prima
+    // dello strip del markdown: qui non c'e' markdown di mezzo, e la 'k' non e'
+    // un carattere che quel filtro tocca.
+    if (c == 'k' || c == 'K') {
+      int consumed = leggiUnita(in, i, n, out);
+      if (consumed > 0) { i += consumed - 1; continue; }
+    }
+
+    // Markdown: i modelli lo usano anche quando il prompt dice di non farlo (i
+    // locali soprattutto). A voce "**Emilia-Romagna**" diventa un balbettio o
+    // una lettura degli asterischi, quindi qui i segni si tolgono. A VIDEO
+    // restano: questa normalizzazione vale solo per il parlato.
+    if (c == '*' || c == '`' || c == '_' || c == '#') continue;
 
     // grado "°" (UTF-8 0xC2 0xB0), eventualmente seguito da C/F
     if (c == 0xC2 && i + 1 < n && (uint8_t)in[i + 1] == 0xB0) {
@@ -130,55 +276,22 @@ static String normalizzaPerVoce(const String &in) {
   return out;
 }
 
-bool ttsSpeak(VS1053 &player, const String &text, const String &voiceId) {
-  if (text.isEmpty()) return false;
-
-  // Testo "parlato": uguale a quello a video ma coi simboli espansi (vedi sopra).
-  String parlato = normalizzaPerVoce(text);
-
-  // Voce: usa quella passata, altrimenti la default (dal pannello web).
-  String voce = voiceId.isEmpty() ? gSettings.voiceId : voiceId;
-
-  // Corpo JSON
-  JsonDocument req;
-  req["text"]     = parlato;
-  req["model_id"] = ELEVEN_MODEL;
-  String body;
-  serializeJson(req, body);
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setTimeout(20000);
-
-  HTTPClient http;
-  http.setTimeout(25000);
-  String url = String("https://api.elevenlabs.io/v1/text-to-speech/")
-             + voce + "?output_format=mp3_44100_128";
-  http.begin(client, url);
-  http.addHeader("xi-api-key", ELEVENLABS_API_KEY);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("Accept", "audio/mpeg");
-
-  Serial.printf("[tts] sintesi di %u caratteri (%s)...\n",
-                (unsigned)parlato.length(), ELEVEN_MODEL);
+// Prende l'MP3 dalla risposta gia' aperta e lo dà a pezzetti al VS1053 man mano
+// che arriva. Identico sulle due strade (cloud e casa): quello che cambia e' solo
+// come si e' chiesto l'audio. Chiude da se' la connessione.
+static bool ttsStream(HTTPClient &http, VS1053 &player, const String &parlato,
+                      uint32_t bytePerMs) {
   uint32_t t0 = millis();
-  int code = http.POST(body);
-  if (code != 200) {
-    Serial.printf("[tts] errore HTTP %d: %s\n", code, http.getString().c_str());
-    http.end();
-    return false;
-  }
-
-  // --- streaming dell'MP3 verso il VS1053 ---
   int len = http.getSize();             // -1 se sconosciuto (chunked)
   WiFiClient *stream = http.getStreamPtr();
   player.setVolume(volumeVsValue());   // volume utente rimappato nella zona udibile
 
   // L'audio sta per partire: lega lo scroll del gobbo alla DURATA dell'audio.
-  // mp3_44100_128 = 128 kbps CBR -> durata(ms) = byte * 8 / 128000 = byte / 16.
-  // Se ElevenLabs manda Content-Length (len>0) la durata e' ESATTA; se la
-  // risposta e' chunked (len<0) ricado sulla stima da lunghezza testo.
-  uint32_t durMs = (len > 0) ? (uint32_t)len / 16
+  // Quanti byte valgono un millisecondo dipende dal formato, e lo dice chi
+  // chiama: MP3 a 128 kbps = 16, WAV 24 kHz 16 bit mono = 48. Se arriva il
+  // Content-Length (len>0) la durata e' esatta; se la risposta e' chunked
+  // (len<0) ricado sulla stima da lunghezza testo.
+  uint32_t durMs = (len > 0) ? (uint32_t)len / bytePerMs
                              : (uint32_t)parlato.length() * TTS_MS_PER_CHAR;
   gobboScrollOver(durMs);
   Serial.printf("[tts] durata audio: %lu ms (%s)\n", (unsigned long)durMs,
@@ -221,7 +334,115 @@ bool ttsSpeak(VS1053 &player, const String &text, const String &voiceId) {
   for (int i = 0; i < 4; i++) player.playChunk(buf, sizeof(buf));
   uiSetLevel(0);   // fine voce: ring giu'
 
-  Serial.printf("[tts] riprodotti %u byte MP3 in %lu ms\n",
+  Serial.printf("[tts] riprodotti %u byte in %lu ms\n",
                 (unsigned)total, (unsigned long)(millis() - t0));
   return total > 0;
+}
+
+// Voce IN CASA: server compatibile OpenAI (/audio/speech) sulla LAN, senza
+// chiave. Si chiede WAV, non MP3: il VS1053 lo decodifica nativamente (i bip di
+// sound.cpp sono gia' WAV) e cosi' il server non deve comprimere niente - che
+// significa meno attesa e nessun ffmpeg da installare sul PC. Costa piu' banda,
+// ~380 kbit/s contro 128, che sulla WiFi di casa non si sente.
+// Torna false se non ce l'ha fatta: chi chiama ripiega su ElevenLabs.
+#define WAV_BYTE_PER_MS 48    // 24000 campioni/s x 2 byte = 48 byte per ms
+#define MP3_BYTE_PER_MS 16    // 128 kbps CBR = 16 byte per ms
+static bool speakLocal(VS1053 &player, const String &parlato) {
+  const String base  = localBaseUrl(LOC_TTS);
+  String model = localModelName(LOC_TTS);
+  if (model.isEmpty()) model = "tts-1";       // la gran parte dei server lo ignora
+
+  JsonDocument req;
+  req["model"]           = model;
+  req["input"]           = parlato;
+  req["response_format"] = "wav";
+  // Voce vuota = lascia scegliere al server la sua predefinita.
+  if (gSettings.localTtsVoice.length()) req["voice"] = gSettings.localTtsVoice;
+  String body;
+  serializeJson(req, body);
+
+  WiFiClient client;
+  client.setTimeout(30000);
+
+  HTTPClient http;
+  http.setTimeout(30000);
+  http.begin(client, base + "/audio/speech");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Accept", "audio/wav");
+
+  Serial.printf("[tts] sintesi in casa di %u caratteri (%s)...\n",
+                (unsigned)parlato.length(), model.c_str());
+  int code = http.POST(body);
+  if (code != 200) {
+    Serial.printf("[tts] errore locale HTTP %d: %s\n", code, http.getString().c_str());
+    http.end();
+    return false;
+  }
+  return ttsStream(http, player, parlato, WAV_BYTE_PER_MS);
+}
+
+// Dove va la voce: la decide un INTERRUTTORE, non il fatto che il server di casa
+// sia acceso. Un server raggiungibile ma non richiesto non deve dirottare niente:
+// senza flag si va su ElevenLabs anche se il PC e' vivo. Serve anche a main.cpp
+// per mettere "[LOC]" davanti alla risposta a video.
+bool ttsUsesLocal() {
+  if (localBaseUrl(LOC_TTS).isEmpty()) return false;
+  return gSettings.localOnly || gSettings.ttsLocalOnly;
+}
+
+bool ttsSpeak(VS1053 &player, const String &text, const String &voiceId) {
+  if (text.isEmpty()) return false;
+
+  // Testo "parlato": uguale a quello a video ma coi simboli espansi (vedi sopra).
+  String parlato = normalizzaPerVoce(text);
+
+  // Voce in casa: solo se l'ha chiesto un interruttore ("voce sempre in casa"
+  // oppure "solo casa"). Niente controllo di raggiungibilita' prima (attesa in
+  // meno) e niente ripiego su ElevenLabs: e' il punto dell'interruttore, non
+  // consumare i crediti gratuiti alle spalle di chi l'ha acceso.
+  if (ttsUsesLocal()) {
+    if (speakLocal(player, parlato)) return true;
+    Serial.println("[tts] voce in casa non riuscita: non ripiego su ElevenLabs");
+    localSayBlocked(LOC_TTS);
+    return false;
+  }
+
+  // "Solo casa" senza indirizzo di casa: il testo non esce. Resta a video.
+  if (gSettings.localOnly) { localSayBlocked(LOC_TTS); return false; }
+
+  localSayCloud(LOC_TTS);
+
+  // Voce: usa quella passata, altrimenti la default (dal pannello web).
+  String voce = voiceId.isEmpty() ? gSettings.voiceId : voiceId;
+
+  // Corpo JSON
+  JsonDocument req;
+  req["text"]     = parlato;
+  req["model_id"] = ELEVEN_MODEL;
+  String body;
+  serializeJson(req, body);
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(20000);
+
+  HTTPClient http;
+  http.setTimeout(25000);
+  String url = String("https://api.elevenlabs.io/v1/text-to-speech/")
+             + voce + "?output_format=mp3_44100_128";
+  http.begin(client, url);
+  http.addHeader("xi-api-key", ELEVENLABS_API_KEY);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Accept", "audio/mpeg");
+
+  Serial.printf("[tts] sintesi di %u caratteri (%s)...\n",
+                (unsigned)parlato.length(), ELEVEN_MODEL);
+  int code = http.POST(body);
+  if (code != 200) {
+    Serial.printf("[tts] errore HTTP %d: %s\n", code, http.getString().c_str());
+    http.end();
+    return false;
+  }
+
+  return ttsStream(http, player, parlato, MP3_BYTE_PER_MS);
 }

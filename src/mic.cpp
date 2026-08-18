@@ -35,6 +35,11 @@ static uint8_t *g_wav   = nullptr;   // header WAV + copia PCM
 static size_t   g_count = 0;         // campioni nell'ultima registrazione
 static int      g_peak  = 0;         // picco assoluto ultima registrazione
 static bool     g_heard = false;     // voce vera rilevata (sopra soglia) nell'ultima reg.
+static volatile bool g_heardNow = false;  // idem, ma LIVE durante la registrazione
+static uint32_t g_noVoiceMs = 0;     // attesa "nessuno parla" per la prossima reg. (0 = normale)
+
+void micSetNoVoiceMs(uint32_t ms) { g_noVoiceMs = ms; }
+bool micVoiceStarted()            { return g_heardNow; }
 
 // ============================================================================
 //                    BACKEND I2S (ICS-43434 / INMP441)
@@ -115,6 +120,13 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t), 
   const uint32_t recStart = millis();
   uint32_t lastSound = recStart;
   bool     heard = false;
+  g_heardNow = false;
+  // Attesa "nessuno sta parlando": quella di cortesia, salvo che la chiamata
+  // precedente non l'abbia accorciata con micSetNoVoiceMs (chat continua).
+  // Si consuma qui: vale per questa registrazione e basta.
+  const uint32_t noVoiceMs = g_noVoiceMs ? g_noVoiceMs
+                                         : (uint32_t)(REC_MIN_MS + silenceMs + 1000);
+  g_noVoiceMs = 0;
 
   // Passa-alto a un polo (~120 Hz) sul dominio a 24 bit: rimuove il DC e la deriva
   // a bassa frequenza che, misurata in diagnostica (Step 0), erano il grosso del
@@ -165,9 +177,9 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t), 
         silLevel += (rms - silLevel) * 0.40f;                 // envelope anti-raffica
         float soglia = noiseFloor * REC_SILENCE_MARGIN + REC_SILENCE_FLOOR;
         uint32_t now = millis();
-        if (silLevel >= soglia) { lastSound = now; heard = true; }
+        if (silLevel >= soglia) { lastSound = now; heard = true; g_heardNow = true; }
         bool stopSilenzio  = heard && (now - lastSound) >= silenceMs;
-        bool stopNienteVoce = !heard && (now - recStart) >= (uint32_t)(REC_MIN_MS + silenceMs + 1000);
+        bool stopNienteVoce = !heard && (now - recStart) >= noVoiceMs;
         if (stopSilenzio || stopNienteVoce) { chunkPeak = 0; break; }
       }
       levelTimer = millis();

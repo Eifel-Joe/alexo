@@ -29,6 +29,7 @@ ogni concetto difficile è spiegato con parole semplici e con un esempio.
 13. [Come personalizzare Alexo](#13-come-personalizzare-alexo)
 14. [Il pannello impostazioni web](#14-il-pannello-impostazioni-web)
 15. [La musica: ascoltare la web-radio](#15-la-musica-ascoltare-la-web-radio)
+16. [L'AI "in casa": far girare tutto sul tuo PC](#16-lai-in-casa-far-girare-tutto-sul-tuo-pc)
 
 ---
 
@@ -46,9 +47,16 @@ Internet a dei servizi specializzati, riceve la risposta e la fa parlare.
 **Analogia:** immagina un centralinista. Non sa lui la risposta, ma sa a chi
 telefonare per averla, e poi te la riferisce. Alexo è quel centralinista.
 
-L'unica cosa "intelligente" che Alexo fa **da solo, offline**, è accorgersi
-quando dici la parola magica ("Okay Nabu") per svegliarsi. Quello sì, lo fa in
-casa, senza Internet.
+L'unica cosa "intelligente" che Alexo fa **dentro di sé, offline**, è accorgersi
+quando dici la parola magica ("Okay Nabu") per svegliarsi. Quello sì, lo fa da
+solo, senza Internet.
+
+> 🏠 **Il cloud non è obbligatorio.** Se hai un PC in casa abbastanza capace, ognuno
+> dei tre servizi (trascrizione, cervello, voce) può girare **lì** invece che su
+> Internet: Alexo telefona al tuo PC sulla rete locale anziché a Groq/Anthropic/
+> ElevenLabs. Non cambia niente nell'uso, e c'è anche un interruttore per **vietargli**
+> di uscire. Tutto spiegato nel [capitolo 16](#16-lai-in-casa-far-girare-tutto-sul-tuo-pc).
+> Nel resto del manuale, per semplicità, si racconta la versione cloud.
 
 ---
 
@@ -309,7 +317,8 @@ src/                   ← il codice vero e proprio
   netlog.cpp           ← invia i log via rete (per leggerli senza cavo USB)
   settings.cpp         ← parametri modificabili "a caldo", salvati in memoria (NVS)
   webui.cpp            ← il web server del pannello impostazioni
-  wakeword.cpp         ← riconosce "Okay Nabu" (l'unica IA locale)
+  wakeword.cpp         ← riconosce "Okay Nabu" (l'unica IA che gira sull'ESP32)
+  localai.cpp          ← i servizi AI "in casa": il PC sulla rete risponde?
 
 data/                  ← file serviti dal web server (via LittleFS)
   index.html           ← la pagina del pannello impostazioni
@@ -607,6 +616,9 @@ flowchart TD
     ASCOLTO -->|stop al silenzio| PENSO["PENSO<br/>Whisper + Claude"]
     PENSO -->|risposta pronta| PARLO["PARLO<br/>ElevenLabs → VS1053"]
     PARLO -->|audio finito| PRONTO
+    PARLO -.->|se la chat continua è accesa| ATE["A TE<br/>aspetta la prossima domanda"]
+    ATE -.->|parli| ASCOLTO
+    ATE -.->|3 s di silenzio / click| PRONTO
     ASCOLTO -->|no WiFi| ERRORE
     PENSO -->|non capito| ERRORE
     ERRORE -->|bip + msg rosso| PRONTO
@@ -614,11 +626,41 @@ flowchart TD
 
 > A riposo (**PRONTO / idle**) il ring è spento o reattivo al suono.
 
-Nel codice, la funzione `runInteraction()` esegue una singola conversazione d
+Nel codice, la funzione `runInteraction()` esegue **una** conversazione da
 inizio-a-fine, e la funzione `setState()` aggiorna **insieme** le luci (`ui.cpp`)
 e l'intestazione del display (`gobbo.cpp`). Il `loop()` principale, oltre a
-lanciare `runInteraction()` quando serve, tiene vivo l'OTA, applica i cambi di
+lanciare la conversazione quando serve, tiene vivo l'OTA, applica i cambi di
 volume e ascolta di continuo il microfono per la wake word.
+
+### La "chat continua" (le caselle tratteggiate)
+
+Di solito, finita la risposta, per fare un'altra domanda devi ridire "Okay Nabu". Con
+la **chat continua** accesa (pannello web, **spenta di fabbrica**) il microfono si
+**riapre da solo**: chiedi la cosa dopo e basta, come in una conversazione vera. Nel
+codice è `runConversation()`, che chiama `runInteraction()` **in ciclo** finché c'è
+qualcosa da dire; un "giro" = una risposta detta.
+
+Mentre aspetta, Alexo è nello stato **"a te"**: sul ring girano **due puntini ambra a
+luminosità costante**, e sul display compare "a te". Non è il solito effetto che segue
+la voce, e non a caso: quello direbbe "ti sto già registrando", e un effetto che si
+spegne e riaccende darebbe l'impressione che la chat si chiuda e riapra a ogni giro.
+Appena cominci davvero a parlare passa in **ASCOLTO** — con lo stesso criterio dello
+stop-al-silenzio, cioè la soglia che si adatta al rumore di fondo, non un livello fisso.
+
+Si esce in **tre modi**, e non c'è nessuna "trappola" per restare dentro:
+
+1. **Non parli** entro 3 secondi → la chat si chiude e Alexo torna a riposo.
+2. **Click sull'encoder** → chiude subito (in "a te" il click vale come in ascolto:
+   ferma la registrazione a vuoto).
+3. **Un errore** qualsiasi → chiude.
+
+> ⚠️ Dettaglio che sembra un cavillo e non lo è: prima di riaprire il microfono, Alexo
+> lo **svuota per 400 ms**. La coda della voce appena pronunciata dall'altoparlante
+> rientra nel microfono, e senza quella pulizia partirebbe una "domanda fantasma"
+> fatta di se stesso.
+>
+> La memoria della conversazione (le ultime battute passate a Claude) c'era già anche
+> prima: la chat continua **toglie solo la wake word**, non aggiunge contesto.
 
 > C'è anche uno stato in più, **MUSICA**: quando chiedi una radio, Alexo entra qui
 > e ci resta a suonare finché non lo fermi (doppio click o dal pannello). In questo
@@ -690,6 +732,12 @@ pio run -e esp32-s3-devkitc-1
 La **prima volta** (scheda nuova) si carica **via cavo USB**: colleghi l'ESP32 al
 computer e lanci l'upload sulla porta seriale.
 
+> ⚠️ Nel `platformio.ini` di questo repo le righe attive in fondo sono quelle
+> dell'**OTA** (l'aggiornamento via WiFi, che è come viene tenuto aggiornato l'Alexo
+> già montato). Per il primo caricamento via cavo **scambiale**: togli il `;` davanti
+> alle due righe `upload_port = COMx` / `upload_protocol = esptool` (mettendo la tua
+> porta seriale) e mettilo davanti alle due righe `alexo.local` / `espota`.
+
 ```
 pio run -e esp32-s3-devkitc-1 -t upload
 ```
@@ -714,9 +762,13 @@ colpo d'occhio.
 > `alexo.local` torni online dopo il riavvio del firmware prima di lanciarlo. Vedi il
 > [capitolo 14](#14-il-pannello-impostazioni-web).
 
-**Backup pronti:** nella cartella [`firmware_demo/`](firmware_demo/) ci sono versioni
-`.bin` già compilate e funzionanti, per tornare in fretta a una build buona se un
-esperimento va storto.
+> 💡 **Consiglio: tieniti i `.bin` che funzionano.** Ogni volta che una versione è
+> stata provata dal vivo e va bene, copia da parte il firmware compilato (lo trovi in
+> `.pio/build/esp32-s3-devkitc-1/`, `firmware.bin` e `littlefs.bin`). Se un
+> esperimento va storto torni indietro in un minuto, senza ricompilare. Si rimettono
+> con `espota.py` (OTA) o con `esptool` via USB. Salva il backup **solo dopo** la
+> prova sul campo: una build non provata può "fotografare" proprio la regressione da
+> cui volevi difenderti.
 
 ---
 
@@ -764,7 +816,8 @@ tre parametri insieme: se poi funziona (o non funziona) non sai quale è stato.
 
 > 💡 **La via più comoda:** quasi tutto ciò che segue si può ormai cambiare dal
 > [pannello web](#14-il-pannello-impostazioni-web) (voce, voce alternativa +
-> trigger, modello e personalità di Claude, soglie mic/wake, volume, easter-egg),
+> trigger, modello e personalità di Claude, soglie mic/wake, volume, risposta
+> personalizzata),
 > **senza ricompilare**. Sotto restano i riferimenti nel codice per chi vuole
 > cambiare i valori di *fabbrica* o toccare cose non esposte nel pannello.
 
@@ -776,7 +829,7 @@ Tutto senza toccare la logica, solo pochi valori:
   senza ricompilare, e le parole-trigger possono essere più d'una.)
 - **Rendere Alexo più "intelligente" (default):** `LLM_MODEL_DEF` in `config.h`.
   Tre scelte: `claude-haiku-4-5` (veloce/economico), `claude-sonnet-5` (equilibrato)
-  e `claude-opus-4-8` (il più intelligente, più lento/costoso). Dal pannello lo
+  e `claude-opus-5` (il più intelligente, più lento/costoso). Dal pannello lo
   cambi al volo. Per la voce conviene la velocità → Haiku o Sonnet.
 - **Cambiare la personalità (default):** `SYSTEM_PROMPT_DEF` in `config.h` (o dal
   pannello). È il testo che descrive chi è Alexo e come deve rispondere.
@@ -788,7 +841,8 @@ Tutto senza toccare la logica, solo pochi valori:
 - **Comportamento LED reattivi (default):** `MIC_LVL_MARGIN_DEF`/`MIC_LVL_FLOOR_DEF`
   (soglia), `MIC_LVL_ATTACK_DEF` (reattività/salita) e `MIC_LVL_RELEASE_DEF`
   (permanenza/discesa) in `config.h` — tutti anche dal pannello.
-- **Termini dell'easter-egg:** `EGG_TERMS_DEF` in `config.h` (o dal pannello).
+- **Risposta personalizzata:** `REPLY_TRIGGER_DEF` e `REPLY_TEXT_DEF` in `config.h`
+  (o dal pannello).
 - **Cambiare la wake word:** si sostituisce il file del modello `src/wake_model.h`
   (con quello di un'altra parola) e si aggiornano i parametri `WAKE_*` in `config.h`.
   Per addestrare una parola tutta tua vedi la nota in fondo al [capitolo 10](#10-la-wake-word-okay-nabu-spiegata-semplice).
@@ -823,8 +877,17 @@ Adesso è: *sposti uno slider dal telefono e guardi l'effetto in tempo reale*.
   frase inizia con una di quelle, Alexo risponde con l'altra voce).
 - **Cervello:** il **modello** di Claude (haiku = veloce, opus = più intelligente)
   e la **personalità** (il testo che descrive chi è Alexo e come deve rispondere).
-- **Easter egg:** i **termini trigger** (separati da virgola) che fanno scattare
-  la frase scherzosa; lascia vuoto per disattivarlo.
+- **Chat continua:** finita una risposta il microfono si riapre da solo, così la
+  domanda dopo non richiede di ridire "Okay Nabu" (vedi
+  [capitolo 9](#9-la-macchina-a-stati)). Spenta di fabbrica; si applica **al click**,
+  senza premere Salva.
+- **AI in casa:** indirizzi e nomi modello dei tre servizi sul tuo PC, la
+  **temperatura** del modello locale e i due interruttori **"Solo casa"** e **"Voce
+  sempre in casa"**, più il pulsante **"Prova ora"**. Tutto spiegato nel
+  [capitolo 16](#16-lai-in-casa-far-girare-tutto-sul-tuo-pc).
+- **Risposta personalizzata:** un **trigger** (parola o frase) e una **risposta fissa**:
+  se la domanda contiene il trigger, Alexo dice quel testo e **salta l'AI**. Comodo per
+  battute fisse o riprese video ripetibili; lascia il trigger vuoto per disattivarla.
 - **Filtro anti-fantasma (Whisper):** la lista delle **frasi-fantasma** da scartare
   (quelle che Whisper inventa sul silenzio, tipo "Grazie"); ne aggiungi di nuove se
   ne spunta qualcuna. Lascia vuoto per disattivare il filtro.
@@ -939,6 +1002,133 @@ suonano bene** (il log via Telnet mostra nome e bitrate di ognuna, utile per pro
 > accessibili (usano protocolli chiusi e protezioni anti-copia). E niente "metti la
 > canzone X dell'artista Y" a comando: le web-radio trasmettono un palinsesto, non
 > singoli brani a richiesta.
+
+---
+
+## 16. L'AI "in casa": far girare tutto sul tuo PC
+
+Fin qui Alexo ha fatto il **fattorino verso Internet**. Ma il fattorino non sa (e non
+gli importa) *dove* sta il servizio a cui telefona: gli basta che risponda nel modo
+giusto. Da qui l'idea: se in casa hai un PC che fa girare l'AI, **il numero da chiamare
+diventa quello del tuo PC**.
+
+Si può fare per **tutti e tre** gli anelli della catena, uno indipendente dall'altro:
+
+| Anello | In cloud | In casa (esempi) |
+| --- | --- | --- |
+| Trascrizione (voce → testo) | Groq Whisper | un server Whisper (es. faster-whisper) |
+| Cervello (la risposta) | Claude, Anthropic | LM Studio, Ollama, llama.cpp… |
+| Voce (testo → suono) | ElevenLabs | un server TTS (es. Kokoro) |
+
+Puoi anche farne girare **solo uno** in casa e lasciare gli altri due nel cloud.
+
+### La condizione: parlare la stessa lingua
+
+Il server sul PC deve esporre le sue funzioni nel **formato OpenAI**, cioè rispondere a
+questi tre indirizzi (è lo standard che ormai usano quasi tutti i programmi di AI
+locale, per questo va bene):
+
+```
+POST <indirizzo>/audio/transcriptions   ← trascrizione
+POST <indirizzo>/chat/completions       ← cervello
+POST <indirizzo>/audio/speech           ← voce
+```
+
+Nel pannello web (card **"AI in casa"**) scrivi, per ciascuno dei tre, l'**indirizzo
+fino a `/v1`** (es. `http://192.168.1.50:1234/v1`) e — se vuoi — il nome del modello.
+Il resto lo aggiunge Alexo.
+
+> 💡 Usa l'**indirizzo numerico** del PC, non il suo nome di rete: è più veloce e non
+> dipende dalla risoluzione dei nomi. E il server dev'essere in ascolto **su tutta la
+> rete locale** (spesso si scrive `0.0.0.0`), non solo su `localhost`: se ascolta solo
+> se stesso, Alexo non lo vede e sembra che sia rotto.
+>
+> Il **nome del modello lasciato vuoto** vuol dire "usa quello che il server ha caricato
+> adesso" (Alexo glielo chiede con `GET <indirizzo>/models`): così cambi modello dal PC
+> e nel pannello non tocchi niente.
+
+### La regola, una sola
+
+- **Indirizzo vuoto** → servizio di casa spento, si usa il cloud come sempre.
+- **Indirizzo scritto e il PC risponde** → si usa il PC.
+- **Indirizzo scritto ma il PC è spento o in errore** → si **torna al cloud da solo**,
+  senza che tu debba fare niente.
+
+Il controllo "il PC risponde?" ha un'attesa **cortissima** apposta: con il PC spento la
+catena vocale non deve restare appesa. L'esito resta in cache per qualche secondo, così
+si può chiedere a ogni domanda senza pagarlo ogni volta.
+
+### I tre pallini sul display
+
+In alto sul TFT ci sono **tre puntini**, nell'ordine: **trascrizione, cervello, voce**.
+**Verde** = quel servizio in casa risponde, **rosso** = si sta usando il cloud. Il
+display gira sull'altro core e non può mettersi ad aspettare la rete, quindi mostra
+l'**ultimo esito noto**: a tenerlo aggiornato ci pensa il `loop()`, che quando Alexo è a
+riposo riprova **un servizio per volta ogni ~20 secondi**.
+
+### I due interruttori (e perché servono)
+
+Il ripiego automatico sul cloud è comodo, ma è **silenzioso**: credi di essere in casa e
+invece la tua voce è appena uscita su Internet. I pallini verdi non bastano a
+smentirlo, perché dicono com'è andato l'ultimo *controllo*, non dove è finita la frase
+appena detta. Da qui due interruttori nel pannello (entrambi **spenti di fabbrica**, ed
+entrambi si applicano **al click**, senza premere Salva):
+
+- **"Solo casa"** — trascrizione, cervello e voce **non escono mai** su Internet. Se il
+  servizio di casa manca o sbaglia, Alexo lo **scrive in chat e si ferma**, invece di
+  ripiegare di nascosto. ⚠️ Senza indirizzi di casa validi, così Alexo non risponde più.
+  Restano fuori la **web-radio** (quella la chiedi tu) e l'**orologio NTP** (non
+  trasporta niente di quello che dici).
+- **"Voce sempre in casa"** — lo stesso ma ristretto alla **sola voce**, utile perché
+  ElevenLabs è l'unico dei tre che si paga a consumo. La voce si chiede sempre al
+  server di casa, **senza nemmeno il controllo preliminare** (un'attesa in meno) e
+  **senza ripiego**. Trascrizione e cervello non cambiano.
+
+Con "Solo casa" acceso, se un pezzo esce **comunque** su Internet, Alexo lo dice con una
+riga di avviso in chat (`[uscito su internet: …]`): **verde sul TFT** (il rosso su questo
+display è illeggibile) e **rossa nel pannello web**. A interruttore spento l'avviso non
+compare: lì il cloud è il funzionamento normale, e la riga sarebbe rumore a ogni frase.
+
+> ⚠️ **Per la voce la regola generale non vale.** Il TTS di casa entra in gioco **solo**
+> se lo chiede uno dei due interruttori, non per il fatto che il server risponde:
+> indirizzo scritto e nessun interruttore acceso = si usa ElevenLabs, PC acceso o no.
+> Altrimenti basterebbe avere il PC acceso perché la voce cambiasse senza che nessuno
+> l'avesse chiesto. Quando parla il server di casa, la risposta a schermo è preceduta da
+> **`[LOC]`** (il testo letto ad alta voce resta pulito).
+
+### Cose da sapere prima di provarci
+
+- **In casa non c'è la ricerca web.** La ricerca è uno strumento di Anthropic: con il
+  cervello locale non esiste, e il system prompt glielo dice esplicitamente, altrimenti
+  il modello **se la inventa**. Per meteo, notizie, orari e prezzi conviene restare sul
+  cloud.
+- **Per il cervello "verde" non basta il server acceso**: serve anche un **modello
+  caricato**. Un server vuoto accetta la connessione e poi rifiuta la domanda, e ti
+  ritroveresti in cloud dopo aver perso secondi.
+- **La temperatura del modello locale** è regolabile dal pannello: i server locali
+  partono spesso da 0.7–0.8, troppo alta per un assistente vocale (divaga). 0.2–0.4 dà
+  risposte più aderenti.
+- **Il "pensiero" dei modelli che ragionano** (il blocco `<think>…</think>`) viene tolto
+  da Alexo, anche quando si chiede al modello di non ragionare: non tutti ubbidiscono.
+- **La voce di casa si chiede in WAV**, non in MP3: il VS1053 decodifica il WAV
+  nativamente, quindi il server non deve comprimere niente e non serve installare
+  `ffmpeg`. Costa più banda (~380 kbit/s contro 128), irrilevante su WiFi.
+- **La memoria della conversazione è una sola** per le due strade, quindi viene
+  **azzerata quando si cambia strada** e nel momento del ripiego: quello che è stato
+  detto in casa non parte verso il cloud insieme alla domanda successiva.
+- **I collegamenti in casa vanno in `http://` semplice**, senza cifratura: sono sulla
+  tua rete locale, non su Internet.
+
+### Provare che funziona
+
+Nel pannello, in fondo alla card, c'è il pulsante **"Prova ora"**: chiede ai tre
+servizi se rispondono e con quale modello, e te lo scrive lì sotto. **Salva prima**: la
+prova usa gli indirizzi già salvati sul dispositivo, non quelli che stai scrivendo.
+
+> **La contropartita onesta:** un modello che gira su un PC di casa è quasi sempre più
+> piccolo di quelli in cloud, quindi sull'italiano e sulla cultura generale sbaglia di
+> più (e non c'è la ricerca web). In cambio: niente costi a consumo, e quello che dici
+> non esce di casa. È un baratto, non un miglioramento gratis.
 
 ---
 

@@ -32,6 +32,7 @@
 #include "wakeword.h"
 #include "tfltest.h"
 #include "settings.h"
+#include "localai.h"
 #include "webui.h"
 #include "music.h"
 
@@ -90,6 +91,17 @@ static bool recKeepGoing() { return !gobboStopRequested(); }
 
 // Cambia stato: aggiorna SIA il ring (animazioni) SIA l'header del TFT.
 static inline void setState(AlexoState s) { uiSetState(s); gobboSetState(s); }
+
+// CHAT CONTINUA: mentre si aspetta la domanda successiva il ring resta in
+// "segnalazione" (ST_FOLLOWUP, respiro ambra) e NON fa il VU-meter, che vorrebbe
+// dire "ti sto gia' registrando". Appena parti davvero - stessa soglia adattiva
+// dello stop-al-silenzio, non un livello inventato qui - si passa all'ascolto
+// normale. true finche' siamo nell'attesa.
+static bool g_attendo = false;
+static void recLevel(uint8_t l) {
+  if (g_attendo && micVoiceStarted()) { g_attendo = false; setState(ST_LISTENING); }
+  uiSetLevel(l);
+}
 
 // Allucinazioni tipiche di Whisper sul silenzio/rumore (italiano): quando la
 // registrazione non contiene voce, Whisper "inventa" queste frasi. Le scartiamo
@@ -324,15 +336,22 @@ static void playStation(const MusicStation *st) {
 }
 
 // --- Una interazione completa (ascolto -> pensa -> parla) -------------------
-static void runInteraction() {
+//  followUp = questa e' una domanda di seguito, dentro una chat gia' aperta: il
+//  ring segnala "tocca a te" e si aspetta solo CHAT_FOLLOWUP_MS invece
+//  dell'attesa di cortesia. Ritorna true se ha detto una risposta, cioe' se ha
+//  senso riaprire il mic per la domanda dopo.
+static bool runInteraction(bool followUp) {
   // 1) ASCOLTO
   gobboClearStopRequest();   // ignora click "vecchi": si ferma solo col prossimo
-  setState(ST_LISTENING);    // ora un click dell'encoder = stop registrazione
+  g_attendo = followUp;
+  setState(followUp ? ST_FOLLOWUP : ST_LISTENING);  // un click qui = stop registrazione
+  if (followUp) micSetNoVoiceMs(CHAT_FOLLOWUP_MS);  // nessuno parla -> chiudi, non aspettare
   if (vsOk) ampEnable(true); // accendi l'ampli: bip e voce passano, poi si muta
   if (vsOk) soundStart(player);
 
   uint32_t t0 = millis();
-  size_t   n  = micRecord(REC_MAX_MS, recKeepGoing, uiSetLevel, gSettings.recSilenceMs);
+  size_t   n  = micRecord(REC_MAX_MS, recKeepGoing, recLevel, gSettings.recSilenceMs);
+  g_attendo = false;
   if (vsOk) soundStop(player);
 
   size_t wavLen = 0;
@@ -346,30 +365,33 @@ static void runInteraction() {
   if (n < (size_t)(micSampleRate() / 4)) {
     if (vsOk) ampEnable(false);   // muta l'ampli prima di tornare a riposo
     setState(ST_IDLE);
-    return;
+    return false;
   }
   // Nessuna voce VERA rilevata (solo silenzio/rumore): probabile falso avvio
   // (wake fantasma / click). NON mandare a Whisper (allucinerebbe "Grazie" e
   // farebbe ripartire una chat). Torna a riposo in silenzio.
+  // In chat continua e' anche la via d'uscita normale: passati i 3 secondi senza
+  // che nessuno parli (o col click, che ferma la registrazione a vuoto) si finisce
+  // qui e la conversazione si chiude.
   if (!micHeardVoice()) {
     Serial.println(">> nessuna voce rilevata: ignoro (niente Whisper)");
     if (vsOk) ampEnable(false);
     setState(ST_IDLE);
-    return;
+    return false;
   }
-  if (!wifiOk()) { fail("No WiFi"); return; }
+  if (!wifiOk()) { fail("No WiFi"); return false; }
 
   // 2) PENSO - trascrizione
   setState(ST_THINKING);
   String testo = sttTranscribe(wav, wavLen, "it");
-  if (testo.isEmpty()) { fail("Non ho capito"); return; }
+  if (testo.isEmpty()) { fail("Non ho capito"); return false; }
   // Filtro anti-allucinazione di Whisper (il "Grazie" fantasma sul silenzio):
   // scarta in silenzio, senza rispondere ne' far ripartire nulla.
   if (isAllucinazione(testo)) {
     Serial.printf(">> scartata allucinazione STT: \"%s\"\n", testo.c_str());
     if (vsOk) ampEnable(false);
     setState(ST_IDLE);
-    return;
+    return false;
   }
   Serial.printf(">> TESTO: \"%s\"\n", testo.c_str());
   gobboPrintUser(testo);   // mostra "Tu: ..." nella chat
@@ -386,7 +408,7 @@ static void runInteraction() {
     {
       String tLowerMus = testo; tLowerMus.toLowerCase();
       const MusicStation *st = musicMatch(tLowerMus);
-      if (st && vsOk) { playStation(st); return; }
+      if (st && vsOk) { playStation(st); return false; }   // la musica chiude la chat
     }
 
     // 3) PENSO - cervello. Gli do il tool musica (solo se il VS1053 c'e'): per una
@@ -398,17 +420,19 @@ static void runInteraction() {
     // Claude ha deciso di mettere musica?
     if (vsOk && musicGenre.length()) {
       const MusicStation *cs = musicFromGenre(musicGenre);
-      if (cs) { playStation(cs); return; }
+      if (cs) { playStation(cs); return false; }
       // catalogo senza quel genere: lo dice a voce invece di tacere
       Serial.printf(">> musica: genere \"%s\" non in catalogo\n", musicGenre.c_str());
       risposta = String("Non ho una stazione per ") + musicGenre + ", mi dispiace.";
     }
   }
 
-  if (risposta.isEmpty()) { fail("Errore cervello"); return; }
+  if (risposta.isEmpty()) { fail("Errore cervello"); return false; }
 
   Serial.printf(">> ALEXO: \"%s\"\n", risposta.c_str());
-  gobboPrint(risposta);   // "Alexo: ..." nella chat (scorre con la voce)
+  // "[LOC]" davanti = questa risposta la sta dicendo il server di casa. Solo a
+  // video (chat TFT e pannello): il testo mandato al TTS resta pulito.
+  gobboPrint(ttsUsesLocal() ? String("[LOC] ") + risposta : risposta);
 
   // 4) PARLO
   if (vsOk) {
@@ -417,8 +441,11 @@ static void runInteraction() {
     String t = testo; t.trim(); t.toLowerCase();
     bool vocaltra = matchAnyTerm(t, gSettings.voiceTrigger, false);  // startsWith uno dei termini
     Serial.printf("[tts] voce: %s\n", vocaltra ? "alternativa" : "default");
-    ttsSpeak(player, risposta, vocaltra ? gSettings.voiceIdAlt : String(""));
+    bool detto = ttsSpeak(player, risposta, vocaltra ? gSettings.voiceIdAlt : String(""));
     delay(50); ampEnable(false);   // lascia sfumare la coda di silenzio, poi muta
+    // Voce non uscita (server di casa giu' in "solo casa", o errore cloud): stesso
+    // trattamento di trascrizione e cervello -> ring rosso + bip, non silenzio.
+    if (!detto) { fail("Errore voce"); return false; }
     // La coda della VOCE rientra nel mic: raffreddamento come per la musica, cosi'
     // non parte una chat fantasma subito dopo la risposta.
     g_audioEndMs = millis();
@@ -426,6 +453,37 @@ static void runInteraction() {
     Serial.println(">> VS1053 non collegato: salto la voce");
   }
   setState(ST_IDLE);
+  return true;   // risposta detta: si puo' riaprire il mic (chat continua)
+}
+
+// --- Conversazione: una domanda, o tante di fila -----------------------------
+//  Con la chat continua accesa, finita una risposta il mic si riapre da solo e
+//  la domanda dopo non vuole di nuovo "Okay Nabu". Si esce da tre parti, tutte
+//  gia' esistenti: nessuno parla entro CHAT_FOLLOWUP_MS, un click dell'encoder
+//  (ferma la registrazione a vuoto = come non aver parlato), o un errore.
+static void runConversation() {
+  bool ancora = runInteraction(false);
+  int giro = 0;
+  while (ancora && gSettings.chatContinua) {
+    // Log dei giri: se un giorno sembrasse che si riapre da sola, qui si vede
+    // quante volte e' successo davvero (un giro = una risposta detta).
+    char msg[48];
+    snprintf(msg, sizeof(msg), "[chat] continua: giro %d, a te", ++giro);
+    Serial.println(msg);
+    netlogPrintln(msg);
+    // La coda della voce appena detta rientra nel mic: se riaprissimo subito,
+    // Alexo si sentirebbe parlare e partirebbe una domanda fantasma. Stessa
+    // difesa usata all'uscita dalla musica.
+    for (int i = 0; i < 10; i++) { micFlush(); delay(40); }
+    gobboClearStopRequest();
+    ancora = runInteraction(true);
+  }
+  if (giro) {
+    char msg[48];
+    snprintf(msg, sizeof(msg), "[chat] chiusa dopo %d giri", giro);
+    Serial.println(msg);
+    netlogPrintln(msg);
+  }
 }
 
 void setup() {
@@ -646,7 +704,7 @@ void loop() {
     if (!micOk) {
       fail("Mic non pronto");
     } else {
-      runInteraction();
+      runConversation();
       micFlush(); wakeReset();   // scarta l'audio accumulato, niente falso wake
       lastInteraction = millis();
       convActive = true;
@@ -666,7 +724,7 @@ void loop() {
       if (wakeFeed(wbuf, got) && (millis() - g_audioEndMs) > AUDIO_COOLDOWN_MS) {
         Serial.println("[wake] *** WAKE WORD! avvio chat ***");
         netlogPrintln("[wake] *** WAKE WORD! avvio chat ***");
-        runInteraction();
+        runConversation();
         micFlush(); wakeReset();   // scarta l'audio della risposta, niente auto-wake
         lastInteraction = millis();
         convActive = true;
@@ -683,6 +741,13 @@ void loop() {
   // l'I2S col passa-alto; va aggiornato OGNI giro o g_level resta "congelato".
   if (micOk) uiSetLevel(gSettings.idleReactive ? micPeekLevel() : 0);
 #endif
+
+  // Giro di controllo dei servizi in casa (uno per volta, ogni ~20s): tiene
+  // onesti i pallini dell'header anche se non stai facendo domande. Col PC
+  // spento l'attesa vale qualche centinaio di ms, in cui il mic non viene letto:
+  // per questo subito dopo si butta l'audio accumulato e si riparte pulito, o il
+  // wake word si troverebbe un buco in mezzo alla parola.
+  if (wifiOk() && localRefreshTick() && micOk) { micFlush(); wakeReset(); }
 
   // Dopo 2 minuti di inattivita' azzera la memoria: nuova conversazione
   if (convActive && (millis() - lastInteraction) > 120000) {

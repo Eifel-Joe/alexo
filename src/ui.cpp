@@ -73,6 +73,26 @@ static void animSpeaking(uint32_t t) {
   }
 }
 
+// CHAT CONTINUA, "tocca a te": due punti AMBRA opposti che girano piano.
+// NON usa g_level di proposito: il VU-meter e' il segno che Alexo ti sta gia'
+// registrando, qui invece sta ancora aspettando che tu cominci. Resta cosi'
+// finche' non parti (allora passa a ST_LISTENING) o finche' la chat non si
+// chiude - il colore caldo lo distingue da tutti gli altri stati.
+// LUMINOSITA' COSTANTE, di proposito: la prima versione era un respiro su tutto
+// l'anello, e calando fino quasi al buio sembrava che la chat si chiudesse e
+// riaprisse a ogni ciclo (~2-3 volte nei 3 secondi di attesa). Qualcosa che si
+// muove SENZA mai spegnersi non si puo' scambiare per "si e' chiuso".
+static void animFollowUp(uint32_t t) {
+  int head = (int)((t / 110) % LED_RING_COUNT);          // ~1,3 s per giro
+  int opp  = (head + LED_RING_COUNT / 2) % LED_RING_COUNT;
+  for (int i = 0; i < LED_RING_COUNT; i++) {
+    bool acceso = (i == head || i == opp);
+    // fondo ambra tenue sempre acceso: l'anello non e' MAI spento durante l'attesa
+    if (acceso) R->setPixelColor(i, 150, 68, 0);
+    else        R->setPixelColor(i, 14,   6, 0);
+  }
+}
+
 static void animError(uint32_t t) {
   bool on = ((t / 180) % 2) == 0;
   for (int i = 0; i < LED_RING_COUNT; i++) {
@@ -103,6 +123,7 @@ static void uiTask(void *) {
       case ST_ERROR:     animError(t);     break;
       case ST_OTA:       animOta(t);       break;
       case ST_MUSIC:     animReactive(t);  break;   // arcobaleno sul livello musica
+      case ST_FOLLOWUP:  animFollowUp(t);  break;   // "tocca a te" (chat continua)
     }
     showAll();
     vTaskDelay(pdMS_TO_TICKS(25));   // ~40 fps

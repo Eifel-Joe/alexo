@@ -58,6 +58,9 @@
   .msg.u{align-self:flex-end;background:#0c2b33;border:1px solid var(--cy-d)}
   .msg.a{align-self:flex-start;background:#141c24;border:1px solid var(--line)}
   .msg.s{align-self:center;background:transparent;color:var(--mut);font-style:italic;font-size:12.5px;padding:2px 8px}
+  /* avviso: e' uscito qualcosa su internet. Rosso, al centro, impossibile da non vedere */
+  .msg.w{align-self:center;background:#2a0d0d;border:1px solid #ff4d4d;color:#ff6b6b;
+    font-size:12.5px;font-weight:700;padding:4px 10px}
   .msg .who{display:block;font-size:11px;color:var(--mut);margin-bottom:2px;letter-spacing:.5px}
 </style>
 </head>
@@ -185,6 +188,14 @@
           finché Alexo non lavora. (Equivale al doppio-click sull'encoder.)</div>
         <div class="sw"><input type="checkbox" id="idleReactive"><span>abilita effetto reattivo</span></div>
       </div>
+      <div class="row">
+        <label>Chat continua</label>
+        <div class="desc">Se acceso, finita una risposta Alexo riapre il microfono da solo:
+          la domanda dopo non vuole di nuovo "Okay Nabu". Mentre aspetta, l'anello fa un
+          respiro <b>ambra</b> e sul display c'è scritto "a te". Si chiude stando zitti
+          3 secondi, oppure subito con un click dell'encoder.</div>
+        <div class="sw"><input type="checkbox" id="chatContinua"><span>continua a chiacchierare senza wake word</span></div>
+      </div>
     </div>
   </div>
 
@@ -257,14 +268,14 @@
       <div class="row">
         <label>Modello</label>
         <div class="desc"><b>claude-haiku-4-5</b>: il più veloce ed economico (default, ideale per
-          una risposta vocale rapida). <b>claude-sonnet-5</b>: via di mezzo, più bravo di Haiku ma
-          più svelto/economico di Opus. <b>claude-opus-4-8</b>: il più intelligente, ma più lento e
-          costoso. Per un assistente vocale la <b>velocità conta</b>: Haiku o Sonnet sono di solito
-          la scelta migliore.</div>
+          una risposta vocale rapida). <b>claude-sonnet-5</b>: molto capace e comunque svelto, il
+          miglior compromesso se Haiku sbaglia troppo. <b>claude-opus-5</b>: il più intelligente,
+          ma più lento e costoso (circa 5 volte Sonnet). Per un assistente vocale la
+          <b>velocità conta</b>: Haiku o Sonnet sono di solito la scelta migliore.</div>
         <select id="llmModel">
           <option value="claude-haiku-4-5">claude-haiku-4-5 (veloce/economico)</option>
           <option value="claude-sonnet-5">claude-sonnet-5 (equilibrato)</option>
-          <option value="claude-opus-4-8">claude-opus-4-8 (massima intelligenza)</option>
+          <option value="claude-opus-5">claude-opus-5 (massima intelligenza)</option>
         </select>
       </div>
       <div class="row">
@@ -273,6 +284,144 @@
           rispondere. Tienilo breve e chiaro: qui decidi tono, lingua e stile. Ricordati che le
           risposte vengono lette ad alta voce (meglio frasi corte, niente elenchi/emoji).</div>
         <textarea id="systemPrompt" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVIZI AI IN CASA -->
+  <!-- NOTA per chi legge il sorgente: le descrizioni qui sotto citano una
+       installazione REALE e funzionante (porte 8002/8003, numeri dei lanciatori,
+       nomi delle voci, cartella dei campioni). Sono esempi concreti, non requisiti:
+       il firmware non conosce nessuno di quei nomi e non va a cercare quei percorsi.
+       Vale solo la regola generale - un server che parla il formato OpenAI a
+       <indirizzo>/v1 - quindi al loro posto vanno i tuoi indirizzi e i tuoi nomi. -->
+  <div class="card">
+    <h2>AI in casa (al posto del cloud)</h2>
+    <div class="body">
+      <div class="row">
+        <div class="desc" style="margin:0">Alexo può usare l'AI che gira sul <b>tuo PC</b>
+          invece dei servizi online. La regola è sempre la stessa: <b>indirizzo vuoto</b> =
+          spento, si usa il cloud come sempre; <b>indirizzo scritto</b> = se il PC risponde
+          si usa quello, se è spento o occupato si torna al cloud da solo, senza che tu
+          debba fare niente.<br><br>
+          Metti l'<b>indirizzo numerico</b> del PC (es. <code>http://192.168.1.50:1234/v1</code>),
+          non il nome: è più veloce e non dipende dalla risoluzione dei nomi. Il server dev'essere
+          in ascolto <b>su tutta la rete locale</b>, non solo su <code>localhost</code>, altrimenti
+          Alexo non lo vede. Il <b>nome del modello lasciato vuoto</b> significa "usa quello che il
+          server ha caricato adesso": così cambi modello dal PC e qui non tocchi niente.</div>
+      </div>
+      <div class="row">
+        <label>Cervello · indirizzo (LM Studio)</label>
+        <div class="desc">Il server che risponde alle domande. Attenzione: in casa <b>non c'è
+          la ricerca web</b>, quindi su meteo, notizie e prezzi il locale non può aiutarti (per
+          quelli conviene restare sul cloud). Se il modello "ragiona" prima di rispondere, Alexo
+          gli chiede di non farlo: il pensiero costa secondi di silenzio.</div>
+        <input type="text" id="localLlmUrl" spellcheck="false" autocapitalize="off"
+               placeholder="http://192.168.1.50:1234/v1">
+      </div>
+      <div class="row">
+        <label>Cervello · modello</label>
+        <div class="desc">Vuoto = quello caricato adesso su LM Studio. Scrivilo solo se sul
+          server ne tieni più d'uno e vuoi imporre quale.</div>
+        <input type="text" id="localLlmModel" spellcheck="false" autocapitalize="off"
+               placeholder="(vuoto = quello caricato)">
+      </div>
+      <div class="row">
+        <label>Cervello · temperatura</label>
+        <div class="desc">Quanto il modello <b>osa</b> nella scelta delle parole. <b>Bassa</b>
+          (0.2–0.4): prende quasi sempre la parola più probabile, risposte aderenti e
+          ripetibili. <b>Media</b> (0.7–0.8): è il valore di partenza della maggior parte dei
+          server, più varietà ma ogni tanto divaga. <b>Alta</b> (oltre 1): per inventare storie.
+          L'effetto si <b>accumula</b>: una parola insolita all'inizio si trascina dietro tutta
+          la frase. Non c'entra con quanto il modello <i>sa</i>, solo con quanto rischia.
+          Vale solo per il modello in casa (il cloud usa il suo).</div>
+        <input type="number" id="localLlmTemp" min="0" max="2" step="0.05">
+      </div>
+      <div class="row">
+        <label>Trascrizione · indirizzo</label>
+        <div class="desc">Il server che trasforma la tua voce in testo (Whisper in casa). Stesso
+          formato del servizio online, quindi cambia solo l'indirizzo.</div>
+        <input type="text" id="localSttUrl" spellcheck="false" autocapitalize="off"
+               placeholder="http://192.168.1.50:8001/v1">
+      </div>
+      <div class="row">
+        <label>Trascrizione · modello</label>
+        <div class="desc">Vuoto = quello caricato sul server. Molti server Whisper ignorano
+          comunque questo campo.</div>
+        <input type="text" id="localSttModel" spellcheck="false" autocapitalize="off"
+               placeholder="(vuoto = quello caricato)">
+      </div>
+      <div class="row">
+        <label>Voce · indirizzo</label>
+        <div class="desc">Il server che legge le risposte ad alta voce. Deve parlare la
+          grammatica di OpenAI: qui va l'indirizzo <b>fino a /v1</b>, il resto
+          (<code>/audio/speech</code>) lo aggiunge Alexo. Va bene sia MP3 sia <b>WAV</b>,
+          che il VS1053 decodifica nativamente ed è quello che mandano i due server di casa.
+          <br><b>Sul PC di casa ce ne sono due, si sceglie cambiando la porta:</b>
+          <br><code>http://&lt;ip-del-PC&gt;:8002/v1</code> — <b>Kokoro</b> (lanciatore 15).
+          Sulla CPU, risponde in mezzo secondo e non toglie niente a nessuno: è la voce di
+          tutti i giorni.
+          <br><code>http://&lt;ip-del-PC&gt;:8003/v1</code> — <b>Chatterbox</b> (lanciatore 16).
+          Clona la voce di ElevenLabs e le somiglia davvero, ma vuole la scheda video
+          (3,6 GB di VRAM) e ci mette ~3,5 secondi. Avviato con <code>--cpu</code> diventa
+          ~19 secondi, e non ci si conversa.
+          <br>Vuoto = si usa sempre ElevenLabs.</div>
+        <input type="text" id="localTtsUrl" spellcheck="false" autocapitalize="off"
+               placeholder="http://192.168.1.50:8002/v1">
+      </div>
+      <div class="row">
+        <label>Voce · modello</label>
+        <div class="desc">Vuoto = quello caricato sul server.</div>
+        <input type="text" id="localTtsModel" spellcheck="false" autocapitalize="off"
+               placeholder="(vuoto = quello caricato)">
+      </div>
+      <div class="row">
+        <label>Voce · nome della voce</label>
+        <div class="desc">Quale voce far parlare sul server locale (non è il Voice ID di
+          ElevenLabs: è il nome che usa il tuo motore). <b>Nel dubbio lascialo VUOTO</b>:
+          ogni server parte già con la voce scelta a orecchio, e un nome sbagliato qui
+          vince su quella.
+          <br><b>Vuole due cose diverse a seconda della porta:</b>
+          <br>Su <b>Kokoro</b> (8002) è il nome di una voce: <code>alexo_calda</code>
+          (quella su misura, ed è la predefinita), <code>if_sara</code>,
+          <code>im_nicola</code>.
+          <br>Su <b>Chatterbox</b> (8003) è il <b>nome del file</b> del campione da clonare,
+          estensione compresa: <code>campione_corto20.wav</code> (predefinito, 20 secondi:
+          all'ascolto ha battuto sia quello da 10 sia quello da 48).
+          I file stanno in <code>AI_locale\voce_alexo\NonToccare\campioni\</code>.
+          <br>L'elenco di quelle disponibili lo dice il server stesso, aprendo
+          <code>&lt;indirizzo&gt;/audio/voices</code> nel browser.</div>
+        <input type="text" id="localTtsVoice" spellcheck="false" autocapitalize="off"
+               placeholder="(vuoto = voce predefinita)">
+      </div>
+      <div class="row">
+        <label>Voce sempre in casa (mai ElevenLabs)</label>
+        <div class="desc">Riguarda <b>solo la voce</b>: acceso, la risposta la sintetizza
+          sempre il server di casa, <b>senza controllarlo prima</b> (una attesa in meno) e
+          <b>senza ripiegare su ElevenLabs</b> se non ce la fa — così i crediti gratuiti
+          restano per quando servono davvero. Se il server di casa è spento, Alexo lo scrive
+          e non parla. Trascrizione e cervello non cambiano. Se è acceso <b>Solo casa</b>
+          qui sotto, questo non serve: vale già quello.</div>
+        <div class="sw"><input type="checkbox" id="ttsLocalOnly"><span>voce solo dal server di casa</span></div>
+      </div>
+      <div class="row">
+        <label>Solo casa (non uscire su internet)</label>
+        <div class="desc">Di serie, se un servizio di casa non risponde o sbaglia, Alexo
+          <b>ripiega sul cloud da solo e in silenzio</b>: comodo, ma vuol dire che la tua voce,
+          la domanda o la risposta escono senza che tu te ne accorga — e le tre spie verdi non
+          te lo dicono, perché guardano l'ultimo controllo, non la frase appena detta.<br><br>
+          Con questo acceso il ripiego <b>non avviene</b>: se casa non c'è, Alexo lo scrive in
+          <b>rosso</b> nella chat e si ferma. Riguarda solo trascrizione, cervello e voce:
+          la <b>radio</b> (la chiedi tu) e l'<b>orologio</b> continuano ad andare su internet.
+          Attenzione: senza indirizzi di casa validi, così Alexo non risponde più.</div>
+        <div class="sw"><input type="checkbox" id="localOnly"><span>non uscire mai su internet</span></div>
+      </div>
+      <div class="row" style="border-bottom:0">
+        <label>Prova i collegamenti</label>
+        <div class="desc">Chiede ai tre servizi se rispondono e con quale modello. <b>Salva
+          prima</b>: la prova usa gli indirizzi già salvati sul dispositivo.</div>
+        <button id="btnLocalTest" class="ghost" style="margin-top:4px;width:100%">Prova ora</button>
+        <div class="desc" id="localTestOut" style="margin-top:8px;white-space:pre-line"></div>
       </div>
     </div>
   </div>
@@ -327,10 +476,15 @@ const $ = id => document.getElementById(id);
 const FIELDS = {
   recSilenceMs:'int', recSilenceMargin:'float', recSilenceFloor:'int',
   micLvlMargin:'float', micLvlFloor:'float', micLvlAttack:'float', micLvlRelease:'float', idleReactive:'bool',
+  chatContinua:'bool',
   wakeGain:'int', wakeProbCutoff:'int', wakeWindow:'int',
   volume:'int', voiceId:'str', voiceIdAlt:'str', voiceTrigger:'str',
   llmModel:'str', systemPrompt:'str', replyTrigger:'str', replyText:'str', hallucTerms:'str',
-  musicStations:'str'
+  musicStations:'str',
+  localLlmUrl:'str', localLlmModel:'str', localLlmTemp:'float',
+  localSttUrl:'str', localSttModel:'str',
+  localTtsUrl:'str', localTtsModel:'str', localTtsVoice:'str',
+  localOnly:'bool', ttsLocalOnly:'bool'
 };
 
 function toast(msg, ok=true){
@@ -344,7 +498,17 @@ function apply(s){
     if(!(k in s)) continue;
     const el=$(k); if(!el) continue;
     if(FIELDS[k]==='bool') el.checked = !!s[k];
-    else el.value = s[k];
+    else {
+      // Su un <select> un valore senza opzione corrispondente lascia il menu VUOTO
+      // (e al Salva cambierebbe il modello senza che tu l'abbia chiesto): se in NVS
+      // c'e' un modello non piu' in elenco lo aggiungo come opzione.
+      if(el.tagName==='SELECT' && s[k] && !el.querySelector(`option[value="${s[k]}"]`)){
+        const o=document.createElement('option');
+        o.value=s[k]; o.textContent=s[k]+' (salvato)';
+        el.appendChild(o);
+      }
+      el.value = s[k];
+    }
   }
   if('volume' in s) $('volumeV').textContent = s.volume;
 }
@@ -415,6 +579,54 @@ $('idleReactive').addEventListener('change', async e=>{
     toast('Effetto reattivo '+(on?'ON':'OFF')+' ✓');
   }catch(err){ toast('Errore', false); }
 });
+// "Chat continua": auto-salva al click come gli altri interruttori di comportamento.
+// Vale dalla conversazione successiva (quella in corso finisce come e' iniziata).
+$('chatContinua').addEventListener('change', async e=>{
+  const on = e.target.checked;
+  try{
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chatContinua:on})});
+    toast('Chat continua '+(on?'ON':'OFF')+' ✓');
+  }catch(err){ toast('Errore', false); }
+});
+// "Solo casa": auto-salva al click, come il volume. NON deve dipendere dal pulsante
+// Salva: e' un interruttore di sicurezza, e uno che sembra armato senza esserlo e'
+// peggio che non averlo (la spunta c'e', ma la domanda dopo esce lo stesso).
+$('localOnly').addEventListener('change', async e=>{
+  const on = e.target.checked;
+  try{
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({localOnly:on})});
+    toast(on?'Solo casa ON ✓':'Solo casa OFF ✓');
+  }catch(err){ toast('Errore', false); }
+});
+// "Voce sempre in casa": stesso trattamento, si applica al click.
+$('ttsLocalOnly').addEventListener('change', async e=>{
+  const on = e.target.checked;
+  try{
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ttsLocalOnly:on})});
+    toast(on?'Voce sempre in casa ON ✓':'Voce sempre in casa OFF ✓');
+  }catch(err){ toast('Errore', false); }
+});
+// Prova dei servizi in casa. Puo' metterci qualche secondo (tre attese + la
+// domanda "che modello hai caricato"), quindi il pulsante si disabilita.
+async function localTest(){
+  const btn=$('btnLocalTest'), out=$('localTestOut');
+  btn.disabled=true; out.textContent='Sto provando…';
+  const nomi={llm:'Cervello', stt:'Trascrizione', tts:'Voce'};
+  try{
+    const d=await (await fetch('/api/local/test',{method:'POST'})).json();
+    out.textContent=Object.keys(nomi).map(k=>{
+      const s=d[k]||{};
+      const segno = s.stato==='in casa' ? '✓' : s.stato==='spento' ? '–' : '✗';
+      return segno+' '+nomi[k]+': '+(s.stato||'?')+(s.modello?'  ('+s.modello+')':'');
+    }).join('\n');
+  }catch(e){ out.textContent='Non sono riuscito a fare la prova (dispositivo occupato?)'; }
+  btn.disabled=false;
+}
+
+$('btnLocalTest').addEventListener('click', localTest);
 $('btnSave').addEventListener('click', save);
 $('btnReset').addEventListener('click', reset);
 $('btnMusicStop').addEventListener('click', musicStop);
@@ -425,11 +637,12 @@ async function loadChat(){
   try{
     const arr=await (await fetch('/api/chat')).json();
     const box=$('chatBox'); box.innerHTML='';
-    const names=['Alexo','Tu','sistema'];
+    const names=['Alexo','Tu','sistema','avviso'];
     for(const m of arr){
       const el=document.createElement('div');
-      el.className='msg '+(m.r===1?'u':m.r===2?'s':'a');
-      if(m.r!==2){const w=document.createElement('span');w.className='who';w.textContent=names[m.r]||'';el.appendChild(w);}
+      // ruolo 3 = avviso rosso (qualcosa e' uscito su internet), senza intestazione
+      el.className='msg '+(m.r===1?'u':m.r===2?'s':m.r===3?'w':'a');
+      if(m.r<2){const w=document.createElement('span');w.className='who';w.textContent=names[m.r]||'';el.appendChild(w);}
       el.appendChild(document.createTextNode(m.t));
       box.appendChild(el);
     }

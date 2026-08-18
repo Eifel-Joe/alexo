@@ -35,13 +35,32 @@ flowchart TD
 > Riquadri **ciano** = servizi cloud (HTTPS); **magenta** = uscite UI (aggiornate lungo
 > tutta la catena). Le frecce tratteggiate = "riflette lo stato", non passaggio di dati.
 
+- **Ogni anello può girare IN CASA** invece che in cloud: se nel pannello si mette
+  l'indirizzo di un server compatibile OpenAI sulla rete locale (LM Studio, un server
+  Whisper, un TTS) e quel server risponde, Alexo usa quello; altrimenti torna al cloud
+  da solo. Vedi "AI in casa" più sotto.
 - **Cervello**: API Anthropic, modello `claude-haiku-4-5` (economico/veloce; si può
-  passare a `claude-opus-4-8` per risposte più capaci — runtime dal pannello web).
+  passare a `claude-opus-5` per risposte più capaci — runtime dal pannello web).
 - **STT**: **Groq** Whisper (gratis). **TTS**: **ElevenLabs** (supporta voce clonata).
   Servono 3 API key (Groq + Anthropic + ElevenLabs); OpenAI è opzionale.
 - **Attivazione**: **wake word locale "Okay Nabu"** (microWakeWord/TFLite Micro, tutto
   offline sull'S3) **oppure** click dell'**encoder** — in parallelo. La registrazione si
   chiude da sola dopo **1.5 s di silenzio** (tetto 20 s).
+- **Chat continua** (`gSettings.chatContinua`, pannello, di fabbrica spenta): finita una
+  risposta il mic si **riapre da solo**, così la domanda dopo non vuole di nuovo la wake
+  word. Mentre aspetta, il ring sta in **`ST_FOLLOWUP`** (due punti **ambra** che girano a
+  luminosità **costante** — non il VU-meter, che direbbe "ti sto già registrando"; e non un
+  respiro, perché calando fino al buio sembrava che la chat si chiudesse e riaprisse a ogni
+  ciclo) e il display scrive "a te"; appena
+  parti davvero — stessa soglia adattiva dello stop-al-silenzio, via `micVoiceStarted()` —
+  passa a `ST_LISTENING`. Si esce da tre parti: **nessuno parla** entro `CHAT_FOLLOWUP_MS`
+  (3 s, `micSetNoVoiceMs` accorcia l'attesa di cortesia per la sola registrazione dopo), un
+  **click** dell'encoder (ferma la registrazione a vuoto = come non aver parlato: in
+  `gobbo.cpp` il click in `ST_FOLLOWUP` vale come in ascolto, altrimenti riavvierebbe una
+  chat appena chiusa), o un errore. La memoria della conversazione c'era già (storico 8
+  messaggi in `llm.cpp`): la chat continua toglie solo la wake word, non aggiunge contesto.
+  Prima di riaprire il mic si fanno **400 ms di `micFlush()`** — la coda della voce appena
+  detta rientra nel microfono e senza questo partirebbe una domanda fantasma.
 - **Gesti encoder**: **click** = avvia/ferma chat; **doppio click** = on/off del ring
   reattivo al suono; **premuto+giro** = volume; **giro** = scroll. **In MUSICA**
   (ST_MUSIC) il ramo cambia: **click** = stazione successiva, **doppio click** = esci,
@@ -120,15 +139,18 @@ output del programma.
 include/
   config.h           # tutti i pin + parametri hardware (+ flag WAKE_*, REC_*, MIC_DIAG, TFL_SELFTEST) + DEFAULT del pannello web
   mic.h net.h stt.h llm.h tts.h ui.h sound.h netlog.h wakeword.h tfltest.h music.h
+  encoder.h gobbo.h volume.h
+  localai.h          # servizi AI in casa: raggiungibilita' + nome modello (vedi sotto)
   settings.h webui.h # pannello impostazioni web (parametri runtime in NVS)
   secrets.example.h  # template -> copiare in secrets.h (gitignored)
 src/
-  main.cpp           # macchina a stati (loop su core 1): ascolto->pensa->parla. matchAnyTerm (voce alt+easter-egg) + isAllucinazione (anti-fantasma) + skip se !micHeardVoice
+  main.cpp           # macchina a stati (loop su core 1): ascolto->pensa->parla. runConversation = una domanda o tante di fila (chat continua). matchAnyTerm (trigger voce alt) + rispostaPersonalizzata + isAllucinazione (anti-fantasma) + skip se !micHeardVoice
   mic.cpp            # mic I2S: registra (stop al silenzio ADATTIVO/RMS) + livello ring + micReadChunk/micFlush per il wake + micGetLive + micHeardVoice
   net.cpp            # connessione WiFi (credenziali da secrets.h) + orologio NTP (timeBegin, fuso Europe/Rome) + nowContextString per Claude
-  stt.cpp            # POST multipart del WAV -> Groq Whisper -> testo
-  llm.cpp            # POST JSON -> Anthropic Messages API (modello+prompt da gSettings, +data/ora NTP nel system) -> risposta
-  tts.cpp            # ElevenLabs -> streaming MP3 -> VS1053 (voce default da gSettings). normalizzaPerVoce: gradi/%/frazioni + ORARI (leggiOrario)
+  stt.cpp            # POST multipart del WAV -> Whisper (Groq, o server in casa) -> testo
+  llm.cpp            # due strade: Anthropic Messages API (+ricerca web) oppure server compatibile OpenAI in casa. Modello+prompt da gSettings, +data/ora NTP nel system. ripuliMarkdown sulla risposta (i modelli lo usano anche se il prompt lo vieta): a video e a voce lo stesso testo
+  tts.cpp            # voce -> streaming al VS1053: ElevenLabs (MP3) o server in casa (WAV). normalizzaPerVoce: gradi/%/frazioni + ORARI (leggiOrario) + MIGLIAIA (leggiMigliaia) + DATE (leggiData) + UNITA' abbreviate (leggiUnita: km/km-h/kg, tabella UNITA estendibile) + via il markdown
+  localai.cpp        # servizi AI IN CASA: il PC risponde? che modello ha caricato? (cache + giro di controllo per le spie del display)
   ui.cpp             # animazioni ring NeoPixel su TASK dedicato (core 0)
   sound.cpp          # bip di feedback (toni WAV generati al volo sul VS1053)
   gobbo.cpp          # chat/teleprompter sul TFT (task core 0, bus HSPI, canvas 16bit) + schermata OTA HUD verde (renderOtaScreen) + anello chat UTF-8 per il pannello web (gobboChatRev/Count/Item)
@@ -148,15 +170,62 @@ partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
 ```
 
 > **Pannello impostazioni web** (`http://alexo.local/`): i parametri "tarabili"
-> (mic/stop-al-silenzio/LED, wake, volume+voci, modello+prompt Claude, termini easter-egg,
-> frasi anti-fantasma Whisper) sono **runtime** in `gSettings` (modulo settings), caricati
+> (mic/stop-al-silenzio/LED, **chat continua**, wake, volume+voci, modello+prompt Claude, risposta personalizzata,
+> frasi anti-fantasma Whisper, **indirizzi e modelli dei servizi in casa** + **"solo casa"**)
+> sono **runtime**
+> in `gSettings` (modulo settings), caricati
 > dall'NVS all'avvio (default = macro `*_DEF` di config.h) e modificabili dal browser senza
 > ricompilare. `webui.cpp` serve la pagina da **LittleFS** + API JSON (`/api/settings`
-> GET/POST, `/api/live`, `/api/reset`, `/api/music/stop`, `/api/chat`). Server sincrono:
+> GET/POST, `/api/live`, `/api/reset`, `/api/music/stop`, `/api/chat`, `/api/local/test`). Server sincrono:
 > durante un'interazione la pagina non risponde per qualche secondo (normale). Lettura LIVE
 > del mic (`micGetLive`) per tarare le soglie dal browser. **Card "Chat"**: rispecchia la
 > conversazione del TFT (anello UTF-8 in PSRAM nel gobbo, `/api/chat` in streaming; refresh
 > guidato da `chatRev` in `/api/live`, cioè a ogni nuovo messaggio, non a timer).
+
+> **AI in casa (al posto del cloud)**: ognuno dei tre anelli — trascrizione, cervello,
+> voce — può essere servito da un PC sulla stessa rete, purché esponga l'API in **formato
+> OpenAI** (`/v1/audio/transcriptions`, `/v1/chat/completions`, `/v1/audio/speech`).
+> Nel pannello si mettono indirizzo e nome modello per ciascuno. **Regola unica**: indirizzo
+> vuoto = cloud come sempre; indirizzo pieno e server che risponde = si va in casa; server
+> spento o in errore = si ricade sul cloud da solo, senza intervento. **Nome modello vuoto**
+> = Alexo chiede al server quale ha caricato (`GET /v1/models`), così si cambia modello dal
+> PC senza toccare il pannello. Dettagli in [`localai.h`](include/localai.h). Da sapere:
+> - il **cervello in casa non ha la ricerca web** (il tool `web_search` è di Anthropic), e il
+>   system prompt glielo dice, altrimenti inventa;
+> - per il cervello "disponibile" richiede anche un **modello caricato**: un server acceso ma
+>   vuoto accetta la connessione e poi rifiuta la domanda;
+> - la **temperatura** del solo modello locale è regolabile dal pannello (i server locali
+>   partono da 0.7-0.8, troppo alta per un assistente vocale);
+> - la voce in casa si chiede in **WAV**, non in MP3: il VS1053 lo decodifica nativamente
+>   (come i bip di `sound.cpp`), quindi il server non deve comprimere niente e non serve
+>   ffmpeg. Costa più banda (~380 kbit/s contro 128), irrilevante su WiFi;
+> - **"Solo casa"** (interruttore nel pannello, `gSettings.localOnly`, di fabbrica spento): il
+>   ripiego sul cloud è comodo ma **silenzioso**, e le tre spie non bastano a escluderlo (dicono
+>   com'è andato l'ultimo controllo, non dove è finita la frase appena detta). Con l'interruttore
+>   acceso trascrizione, cervello e voce **non escono mai**: se il servizio in casa manca o
+>   sbaglia, Alexo lo scrive e si ferma. Si applica al click, senza premere Salva. Restano fuori
+>   la web-radio (la si chiede esplicitamente) e l'orologio NTP (non trasporta niente di detto);
+> - **"Voce sempre in casa"** (`gSettings.ttsLocalOnly`, di fabbrica spento) è l'interruttore
+>   ristretto al solo TTS, per non consumare i crediti gratuiti di ElevenLabs: la voce si chiede
+>   sempre al server di casa, **senza il controllo di raggiungibilità** (un'attesa in meno) e
+>   **senza ripiego** sul cloud; se il server non risponde Alexo lo scrive e non parla.
+>   Trascrizione e cervello non cambiano. **Per la voce la regola generale non vale**: il TTS di
+>   casa entra in gioco solo se lo chiede uno dei due interruttori, non perché il server risponde
+>   (indirizzo compilato + nessun flag = ElevenLabs). Quando tocca a casa, la risposta a video
+>   (TFT e pannello) è preceduta da **`[LOC]`** — il testo parlato resta pulito;
+> - quando un pezzo **esce comunque** su internet lo dice in chat una riga di avviso
+>   (`localSayCloud`/`localSayBlocked` in localai.cpp): **verde sul TFT** — il rosso su ST7735 è
+>   illeggibile — e **rossa nel pannello web**. Compare solo se quel servizio in casa è configurato
+>   **e solo con "solo casa" acceso**: a interruttore spento il cloud è il funzionamento normale e
+>   l'avviso sarebbe rumore a ogni frase;
+> - la **memoria della conversazione è una sola** per le due strade, quindi viene **azzerata al
+>   cambio strada** e nel momento del ripiego: quello che è stato detto in casa non parte verso
+>   il cloud insieme alla domanda successiva;
+> - **tre pallini nell'header del TFT** (ordine: trascrizione, cervello, voce) dicono a colpo
+>   d'occhio chi sta girando dove: verde = in casa, rosso = in cloud. Il display gira sul core
+>   0 e non può aspettare la rete, quindi legge l'ultimo esito noto; a tenerlo aggiornato è
+>   `localRefreshTick()` nel loop, che riprova **un servizio per volta ogni ~20 s** e subito
+>   dopo svuota il mic (l'attesa del controllo è un buco in cui il wake word non ascolta).
 
 > **Wake word / TFLite Micro**: runtime = lib **Chirale_TensorFlowLite** (in
 > `platformio.ini`); `esp-tflite-micro` scartato (gira male in PlatformIO). Il microfrontend

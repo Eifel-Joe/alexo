@@ -26,6 +26,7 @@ privato/
 # --- Tooling locale ---
 .claude/
 CLAUDE.local.md
+src/Alexo.code-workspace
 
 # --- OS ---
 .DS_Store

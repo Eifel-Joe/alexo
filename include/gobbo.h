@@ -28,6 +28,12 @@ void gobboPrint(const String &text);
 // contenuto (scroll a fondo). Chiamabile da qualsiasi core.
 void gobboPrintUser(const String &text);
 
+// Riga di AVVISO (verde sul TFT, rossa nel pannello web: il rosso su questo
+// display non si legge), senza il prefisso "Alexo:". Serve a dire in faccia
+// una cosa che altrimenti passerebbe inosservata - oggi solo "questo pezzo e'
+// uscito su internet" (vedi localai.h). Chiamabile da qualsiasi core.
+void gobboPrintWarn(const String &text);
+
 // Imposta il tempo (ms) entro cui completare lo scroll fino in fondo: serve a
 // sincronizzare lo scorrimento con la durata del parlato (chiamata da ttsSpeak
 // quando l'audio inizia). Chiamabile da qualsiasi core.

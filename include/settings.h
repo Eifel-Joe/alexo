@@ -18,6 +18,7 @@ struct AlexoSettings {
   float    micLvlAttack;      // LED reattivi: velocita' di salita (reattivita') 0..1
   float    micLvlRelease;     // LED reattivi: velocita' di discesa (permanenza) 0..1
   bool     idleReactive;      // LED "ballano" col suono a riposo (on/off)
+  bool     chatContinua;      // dopo una risposta riapre il mic (niente wake word ogni volta)
 
   // --- Wake word "Okay Nabu" ---
   int      wakeGain;          // guadagno digitale del percorso wake
@@ -30,7 +31,7 @@ struct AlexoSettings {
   String   voiceTrigger;      // parola iniziale che attiva la voce alternativa (vuoto = off)
 
   // --- Cervello (Claude) ---
-  String   llmModel;          // es. claude-haiku-4-5 / claude-opus-4-8
+  String   llmModel;          // es. claude-haiku-4-5 / claude-sonnet-5 / claude-opus-5
   String   systemPrompt;      // "personalita'" di Alexo
 
   // --- Filtro anti-allucinazione Whisper ---
@@ -38,6 +39,20 @@ struct AlexoSettings {
 
   // --- Musica (web-radio) ---
   String   musicStations;     // stazioni, una per riga "chiave | nome | url"
+
+  // --- Servizi AI IN CASA (LM Studio & co., vedi localai.h) ---
+  //  Indirizzo VUOTO = servizio locale spento -> si va in cloud come sempre.
+  //  Nome modello VUOTO = usa quello caricato adesso sul server (glielo chiede).
+  String   localLlmUrl;       // cervello, es. http://192.168.1.50:1234/v1
+  String   localLlmModel;
+  float    localLlmTemp;      // quanto il modello locale "osa" nella scelta delle parole
+  String   localSttUrl;       // trascrizione, es. http://192.168.1.50:8001/v1
+  String   localSttModel;
+  String   localTtsUrl;       // voce, es. http://192.168.1.50:8880/v1
+  String   localTtsModel;
+  String   localTtsVoice;     // nome voce del server locale (non il Voice ID ElevenLabs)
+  bool     localOnly;         // true = mai in cloud per stt/llm/tts: se casa non c'e', tace
+  bool     ttsLocalOnly;      // true = voce SEMPRE in casa (niente ElevenLabs), solo il tts
 
   // --- Risposta personalizzata (trigger + testo) ---
   String   replyTrigger;      // parola/frase nella domanda (vuoto = off -> risponde l'AI)

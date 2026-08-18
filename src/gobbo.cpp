@@ -18,6 +18,7 @@
 #include "gobbo.h"
 #include "encoder.h"
 #include "volume.h"
+#include "localai.h"
 #include "config.h"
 #include <Adafruit_GFX.h>
 
@@ -44,15 +45,28 @@ static volatile bool g_talkReq = false;
 static volatile bool g_stopReq = false;
 static volatile int32_t g_musSeek = 0;   // detenti "premuto+giro" in musica -> cambio stazione
 // Etichetta + colore per ogni AlexoState (indice = valore enum in ui.h).
-static const char *ST_LABEL[] = { "pronto","ascolto","penso","parlo","errore","OTA","musica" };
+static const char *ST_LABEL[] = { "pronto","ascolto","penso","parlo","errore","OTA","musica",
+                                  "a te" };
 static const uint16_t ST_COL[] = { ST77XX_BLUE, ST77XX_GREEN, ST77XX_YELLOW,
-                                   ST77XX_CYAN, ST77XX_RED, ST77XX_GREEN, ST77XX_MAGENTA };
+                                   ST77XX_CYAN, ST77XX_RED, ST77XX_GREEN, ST77XX_MAGENTA,
+                                   ST77XX_ORANGE };
 
 // Ruolo di una riga -> colore. Lo storico wrappa le frasi su piu' righe, quindi
 // ogni riga si porta dietro il suo ruolo (la prima ha il prefisso "Tu:"/"Alexo:").
-enum { ROLE_ALEXO = 0, ROLE_USER = 1, ROLE_SYS = 2 };
-// ROLE_SYS in GIALLO (il rosso e' poco leggibile su questo pannello ST7735).
-static const uint16_t ROLE_COLOR[3] = { ST77XX_WHITE, ST77XX_YELLOW, ST77XX_YELLOW };
+enum { ROLE_ALEXO = 0, ROLE_USER = 1, ROLE_SYS = 2, ROLE_WARN = 3 };
+// ROLE_SYS in GIALLO: su questo ST7735 il rosso non si legge, provato anche in
+// versione chiara (255,80,80) e resta illeggibile. Per questo ROLE_WARN - l'avviso
+// "e' uscito qualcosa su internet" - qui e' VERDE: conta che si legga, il senso lo
+// dà il testo. Nel pannello web quella stessa riga resta rossa (li' si vede bene).
+static const uint16_t ROLE_COLOR[4] = { ST77XX_WHITE, ST77XX_YELLOW, ST77XX_YELLOW,
+                                        ST77XX_GREEN };
+
+// Una risposta che comincia per "[" e' un messaggio di sistema (errori, OTA).
+// Eccezione: "[LOC]", che marca solo CHI ha sintetizzato la voce - il resto della
+// riga e' una risposta di Alexo come le altre, e va scritta col suo colore.
+static bool isSysMsg(const char *t) {
+  return t[0] == '[' && strncmp(t, "[LOC]", 5) != 0;
+}
 
 // Buffer righe circolare in PSRAM (testo + ruolo paralleli)
 static char    *buf      = nullptr;   // MAXLINES * (COLS+1)
@@ -203,12 +217,27 @@ static void addText(const char *text) {
 // Header fisso in alto: "ALEXO" a sinistra, etichetta di stato (colorata) a
 // destra, riga di separazione del colore dello stato. Disegnato DOPO la chat
 // cosi' copre eventuali righe che sconfinano sotto l'header.
+//  Tre spie fra "ALEXO" e l'etichetta di stato, nell'ordine della catena vocale:
+//  trascrizione, cervello, voce. VERDE = quel pezzo sta girando sul PC di casa,
+//  ROSSO = sta andando in cloud (perche' spento nel pannello o perche' il PC non
+//  risponde). Lo stato e' l'ULTIMO NOTO: qui siamo sul core 0, che non puo'
+//  fermarsi ad aspettare la rete (ci pensa il loop, vedi localRefreshTick).
+#define DOT_X0     46      // centro del primo pallino
+#define DOT_STEP   12      // distanza fra i centri
+#define DOT_R       3
+static void drawDots() {
+  for (int i = 0; i < LOC_COUNT; i++)
+    CV->fillCircle(DOT_X0 + i * DOT_STEP, 6, DOT_R,
+                   localOn((LocalSvc)i) ? ST77XX_GREEN : ST77XX_RED);
+}
+
 static void drawHeader() {
-  uint8_t s = g_state; if (s > ST_MUSIC) s = ST_IDLE;
+  uint8_t s = g_state; if (s > ST_LAST) s = ST_IDLE;
   CV->fillRect(0, 0, VIEWW, HEADER_H, ST77XX_BLACK);
   CV->setTextColor(ST77XX_WHITE);
   CV->setCursor(2, 3);
   CV->print("ALEXO");
+  drawDots();
   const char *lbl = ST_LABEL[s];
   int x = VIEWW - (int)strlen(lbl) * 6 - 2;   // 6px per glifo (font size 1)
   CV->setTextColor(ST_COL[s]);
@@ -367,6 +396,7 @@ static void gobboTask(void *) {
   float   lastPosY  = -1.0f;
   int     lastN     = -1;
   uint8_t lastState = 0xFF;
+  uint8_t lastDots  = 0xFF;   // spie cloud/casa: anche loro fanno scattare il redraw
   // Risparmio energetico del display: si spegne il backlight dopo
   // DISPLAY_SLEEP_MS senza interventi, si riaccende al primo intervento.
   uint32_t lastActivity = millis();
@@ -404,6 +434,12 @@ static void gobboTask(void *) {
         strncpy(np_artist,  s3, sizeof(np_artist)  - 1); np_artist[sizeof(np_artist)  - 1] = 0;
         utf8ToCp437(np_station); utf8ToCp437(np_title); utf8ToCp437(np_artist);
         np_changeMs = millis();                   // cambio brano -> marquee riparte, schermata pulita
+      } else if (m->kind == 5) {                  // avviso rosso (senza "Alexo:")
+        curRole = ROLE_WARN;
+        snprintf(tmp, sizeof(tmp), "%s", m->text);
+        utf8ToCp437(tmp);
+        addText(tmp); pushLine("");
+        voiceDur = 0; mode = MODE_AUTO;           // mostra in fondo
       } else if (m->kind == 3) {                  // domanda utente
         curRole = ROLE_USER;
         snprintf(tmp, sizeof(tmp), "Tu: %s", m->text);
@@ -413,7 +449,7 @@ static void gobboTask(void *) {
       } else {                                    // risposta Alexo
         respStart = nLines;
         // "[...]" = messaggio di sistema (errori, OTA) -> rosso; altrimenti Alexo.
-        curRole = (m->text[0] == '[') ? ROLE_SYS : ROLE_ALEXO;
+        curRole = isSysMsg(m->text) ? ROLE_SYS : ROLE_ALEXO;
         snprintf(tmp, sizeof(tmp), "Alexo: %s", m->text);
         utf8ToCp437(tmp);
         addText(tmp); pushLine("");
@@ -460,9 +496,14 @@ static void gobboTask(void *) {
     //   in MUSICA  -> stazione SUCCESSIVA (avanti, ciclico)
     //   in ascolto -> ferma la registrazione
     //   altrimenti -> avvia la chat
+    // In "a te" (chat continua, si aspetta la prossima domanda) il click vale
+    // come in ascolto: ferma la registrazione. Non avendo sentito voce, il core 1
+    // chiude la conversazione -> il click e' la via d'uscita immediata. Senza
+    // questo ramo finirebbe nell'else e riavvierebbe una chat appena chiusa.
     if (encoderButtonPressed()) {
       if      (g_state == (uint8_t)ST_MUSIC)     g_musSeek += 1;   // click = radio successiva
-      else if (g_state == (uint8_t)ST_LISTENING) g_stopReq = true; // ferma registrazione
+      else if (g_state == (uint8_t)ST_LISTENING ||
+               g_state == (uint8_t)ST_FOLLOWUP)  g_stopReq = true; // ferma registrazione
       else                                       g_talkReq = true; // avvia chat
     }
     // DOPPIO click in MUSICA = esci dalla radio e torna alla chat (musicPlay legge
@@ -500,10 +541,16 @@ static void gobboTask(void *) {
         }
       }
 
-      // 4) ridisegna solo se serve (evita blit inutili a schermo fermo)
-      if (posY != lastPosY || nLines != lastN || g_state != lastState) {
+      // 4) ridisegna solo se serve (evita blit inutili a schermo fermo).
+      //    Fra le cose che cambiano ci sono anche le spie cloud/casa dell'header:
+      //    senza guardarle, un servizio che passa in locale a schermo fermo non
+      //    si vedrebbe mai (il pallino resterebbe del colore dell'ultimo blit).
+      uint8_t dots = 0;
+      for (int i = 0; i < LOC_COUNT; i++)
+        if (localOn((LocalSvc)i)) dots |= (1 << i);
+      if (posY != lastPosY || nLines != lastN || g_state != lastState || dots != lastDots) {
         render();
-        lastPosY = posY; lastN = nLines; lastState = g_state;
+        lastPosY = posY; lastN = nLines; lastState = g_state; lastDots = dots;
       }
     }
 
@@ -565,8 +612,9 @@ bool gobboStopRequested()   { return g_stopReq; }
 // Azzera lo stop pendente: il core 1 lo chiama appena prima di registrare.
 void gobboClearStopRequest(){ g_stopReq = false; }
 int32_t gobboTakeMusicSeek() { int32_t d = g_musSeek; g_musSeek -= d; return d; }
-void gobboPrint(const String &text)     { if (!text.isEmpty()) { webChatPush(text[0] == '[' ? ROLE_SYS : ROLE_ALEXO, text.c_str()); send(0, text, 0); } }
+void gobboPrint(const String &text)     { if (!text.isEmpty()) { webChatPush(isSysMsg(text.c_str()) ? ROLE_SYS : ROLE_ALEXO, text.c_str()); send(0, text, 0); } }
 void gobboPrintUser(const String &text) { if (!text.isEmpty()) { webChatPush(ROLE_USER, text.c_str()); send(3, text, 0); } }
+void gobboPrintWarn(const String &text) { if (!text.isEmpty()) { webChatPush(ROLE_WARN, text.c_str()); send(5, text, 0); } }
 
 // Contatore di revisione della chat: cambia a ogni nuovo messaggio (il pannello lo
 // legge in /api/live e ricarica /api/chat solo quando e' cambiato).

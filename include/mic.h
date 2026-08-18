@@ -18,6 +18,18 @@ bool micBegin();
 // sentito parlare). 0 = disattivato (si ferma solo a keepGoing()==false o a maxMs).
 size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t) = nullptr, uint32_t silenceMs = 0);
 
+// Attesa massima, in ms, prima di mollare quando NON si sente nessuna voce.
+// Vale per la SOLA registrazione successiva, poi torna da sola all'attesa di
+// cortesia normale (REC_MIN_MS + silenceMs + 1s). Serve alla chat continua: dopo
+// una risposta si riapre il mic e, se nessuno parla entro pochi secondi, si
+// chiude - senza allungare l'attesa quando la chat la avvii tu.
+void micSetNoVoiceMs(uint32_t ms);
+
+// true se la registrazione IN CORSO ha gia' sentito voce vera (stessa soglia
+// adattiva di micHeardVoice, ma leggibile mentre si registra). Serve a capire
+// che la domanda e' partita, senza aspettare la fine.
+bool micVoiceStarted();
+
 // Svuota il buffer DMA del mic (scarta l'audio accumulato). Da chiamare dopo una
 // interazione, prima di riprendere l'ascolto del wake word (evita falsi trigger).
 void micFlush();

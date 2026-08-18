@@ -22,6 +22,7 @@ static void loadDefaults() {
   gSettings.micLvlAttack     = MIC_LVL_ATTACK_DEF;
   gSettings.micLvlRelease    = MIC_LVL_RELEASE_DEF;
   gSettings.idleReactive     = (IDLE_REACTIVE != 0);
+  gSettings.chatContinua     = (CHAT_CONTINUA_DEF != 0);
   gSettings.wakeGain         = WAKE_GAIN;
   gSettings.wakeProbCutoff   = WAKE_PROB_CUTOFF;
   gSettings.wakeWindow       = WAKE_WINDOW;
@@ -34,6 +35,16 @@ static void loadDefaults() {
   gSettings.musicStations    = MUSIC_STATIONS_DEF;
   gSettings.replyTrigger     = REPLY_TRIGGER_DEF;
   gSettings.replyText        = REPLY_TEXT_DEF;
+  gSettings.localLlmUrl      = LOCAL_LLM_URL_DEF;
+  gSettings.localLlmModel    = LOCAL_LLM_MODEL_DEF;
+  gSettings.localLlmTemp     = LOCAL_LLM_TEMP_DEF;
+  gSettings.localSttUrl      = LOCAL_STT_URL_DEF;
+  gSettings.localSttModel    = LOCAL_STT_MODEL_DEF;
+  gSettings.localTtsUrl      = LOCAL_TTS_URL_DEF;
+  gSettings.localTtsModel    = LOCAL_TTS_MODEL_DEF;
+  gSettings.localTtsVoice    = LOCAL_TTS_VOICE_DEF;
+  gSettings.localOnly        = (LOCAL_ONLY_DEF != 0);
+  gSettings.ttsLocalOnly     = (TTS_LOCAL_ONLY_DEF != 0);
 }
 
 // Vincoli di sicurezza (evita valori che romperebbero il firmware).
@@ -57,6 +68,8 @@ static void clamp() {
   if (gSettings.wakeProbCutoff > 255)      gSettings.wakeProbCutoff = 255;
   if (gSettings.wakeWindow < 1)            gSettings.wakeWindow = 1;
   if (gSettings.wakeWindow > 16)           gSettings.wakeWindow = 16;   // recent[16]
+  if (gSettings.localLlmTemp < 0.0f)       gSettings.localLlmTemp = 0.0f;
+  if (gSettings.localLlmTemp > 2.0f)       gSettings.localLlmTemp = 2.0f;
 }
 
 void settingsBegin() {
@@ -70,6 +83,7 @@ void settingsBegin() {
   gSettings.micLvlAttack     = prefs.getFloat("lvlAt",   gSettings.micLvlAttack);
   gSettings.micLvlRelease    = prefs.getFloat("lvlRe",   gSettings.micLvlRelease);
   gSettings.idleReactive     = prefs.getBool ("idle",    gSettings.idleReactive);
+  gSettings.chatContinua     = prefs.getBool ("chatCont",gSettings.chatContinua);
   gSettings.wakeGain         = prefs.getInt  ("wkGain",  gSettings.wakeGain);
   gSettings.wakeProbCutoff   = prefs.getInt  ("wkCut",   gSettings.wakeProbCutoff);
   gSettings.wakeWindow       = prefs.getInt  ("wkWin",   gSettings.wakeWindow);
@@ -82,6 +96,19 @@ void settingsBegin() {
   gSettings.musicStations    = prefs.getString("music",  gSettings.musicStations);
   gSettings.replyTrigger     = prefs.getString("rtrig",  gSettings.replyTrigger);
   gSettings.replyText        = prefs.getString("rtext",  gSettings.replyText);
+  //  Chiavi NUOVE: al primo avvio dopo l'aggiornamento non esistono ancora in
+  //  NVS e restano al default (vuoto = locale spento). Le impostazioni gia'
+  //  salvate qui sopra non vengono toccate.
+  gSettings.localLlmUrl      = prefs.getString("locLlmUrl", gSettings.localLlmUrl);
+  gSettings.localLlmModel    = prefs.getString("locLlmMod", gSettings.localLlmModel);
+  gSettings.localLlmTemp     = prefs.getFloat ("locLlmTmp", gSettings.localLlmTemp);
+  gSettings.localSttUrl      = prefs.getString("locSttUrl", gSettings.localSttUrl);
+  gSettings.localSttModel    = prefs.getString("locSttMod", gSettings.localSttModel);
+  gSettings.localTtsUrl      = prefs.getString("locTtsUrl", gSettings.localTtsUrl);
+  gSettings.localTtsModel    = prefs.getString("locTtsMod", gSettings.localTtsModel);
+  gSettings.localTtsVoice    = prefs.getString("locTtsVoc", gSettings.localTtsVoice);
+  gSettings.localOnly        = prefs.getBool  ("locOnly",   gSettings.localOnly);
+  gSettings.ttsLocalOnly     = prefs.getBool  ("locTtsOnly",gSettings.ttsLocalOnly);
   prefs.end();
   clamp();
   Serial.println("[set] impostazioni caricate da NVS (default se assenti)");
@@ -98,6 +125,7 @@ void settingsSave() {
   prefs.putFloat ("lvlAt",  gSettings.micLvlAttack);
   prefs.putFloat ("lvlRe",  gSettings.micLvlRelease);
   prefs.putBool  ("idle",   gSettings.idleReactive);
+  prefs.putBool  ("chatCont",gSettings.chatContinua);
   prefs.putInt   ("wkGain", gSettings.wakeGain);
   prefs.putInt   ("wkCut",  gSettings.wakeProbCutoff);
   prefs.putInt   ("wkWin",  gSettings.wakeWindow);
@@ -110,6 +138,16 @@ void settingsSave() {
   prefs.putString("music",  gSettings.musicStations);
   prefs.putString("rtrig",  gSettings.replyTrigger);
   prefs.putString("rtext",  gSettings.replyText);
+  prefs.putString("locLlmUrl", gSettings.localLlmUrl);
+  prefs.putString("locLlmMod", gSettings.localLlmModel);
+  prefs.putFloat ("locLlmTmp", gSettings.localLlmTemp);
+  prefs.putString("locSttUrl", gSettings.localSttUrl);
+  prefs.putString("locSttMod", gSettings.localSttModel);
+  prefs.putString("locTtsUrl", gSettings.localTtsUrl);
+  prefs.putString("locTtsMod", gSettings.localTtsModel);
+  prefs.putString("locTtsVoc", gSettings.localTtsVoice);
+  prefs.putBool  ("locOnly",   gSettings.localOnly);
+  prefs.putBool  ("locTtsOnly",gSettings.ttsLocalOnly);
   prefs.end();
   Serial.println("[set] impostazioni salvate in NVS");
 }

@@ -14,8 +14,11 @@ enum AlexoState {
   ST_SPEAKING,   // parla: pulsazione
   ST_ERROR,      // errore: lampeggio rosso
   ST_OTA,        // aggiornamento OTA: cometa verde
-  ST_MUSIC       // musica: arcobaleno psichedelico reattivo al livello audio
+  ST_MUSIC,      // musica: arcobaleno psichedelico reattivo al livello audio
+  ST_FOLLOWUP    // chat continua: "tocca a te", respiro ambra finche' non parli
 };
+// Ultimo valore dell'enum: chi indicizza tabelle per stato (gobbo) si ferma qui.
+#define ST_LAST ST_FOLLOWUP
 
 // Avvia il task di animazione (core 0). Il ring dev'essere gia' inizializzato.
 void uiBegin(Adafruit_NeoPixel *ring);

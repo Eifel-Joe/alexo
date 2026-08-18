@@ -70,8 +70,8 @@
 // --- MICROFONO --------------------------------------------------------------
 //  Selezione del microfono. L'API software e' identica per entrambi, quindi
 //  per cambiare basta questa riga (e ricablare): NON si tocca altro codice.
-//    0 = MAX4466 analogico (attuale, su ADC1)
-//    1 = mic I2S digitale (ICS-43434 / INMP441) -> metti 1, ricompila, flasha
+//    0 = MAX4466 analogico (su ADC1) -> metti 0, ricompila, flasha
+//    1 = mic I2S digitale (ICS-43434 / INMP441) - ATTUALE
 #define MIC_USE_I2S      1
 
 #define MIC_SAMPLE_RATE  16000  // Hz, quello che vuole Whisper (per entrambi)
@@ -96,13 +96,13 @@
 //  l'OTA RESTA ATTIVO: per uscire rimetti 0 e riflasha via OTA. Default 0.
 #define MIC_DIAG         0
 
-// --- Wake word locale "Alexo" (microWakeWord, vedi WAKEWORD.md) -------------
-//  In sviluppo. 0 = disattivo (avvio chat SOLO col click encoder, attuale).
-//  1 = abilita il rilevamento wake (richiede TFLite Micro + modello, work in
-//  progress in wakeword.cpp). Lo stub attuale non fa nulla: tenere 0.
+// --- Wake word locale "Okay Nabu" (microWakeWord, vedi WAKEWORD.md) ---------
+//  1 = wake word attiva (avvio chat con "Okay Nabu" IN PARALLELO al click
+//  encoder); 0 = avvio SOLO col click. Vedi WAKEWORD.md.
 #define WAKE_ENABLE      1
-//  Parametri detection (dal manifest v2 "alexa"): cutoff probabilita' 0..255
-//  (0.9*255≈230) e dimensione della finestra mobile su cui si fa la media.
+//  Parametri detection (dal manifest v2 "okay_nabu"): cutoff probabilita' 0..255
+//  (0.97*255=246) e dimensione della finestra mobile su cui si fa la media.
+//  Entrambi regolabili a caldo dal pannello web: qui c'e' solo il default.
 #define WAKE_PROB_CUTOFF 246
 #define WAKE_WINDOW      5
 //  Guadagno digitale del solo percorso wake (il PCM a shift 15 e' troppo basso:
@@ -124,6 +124,12 @@
 #define REC_SILENCE_MARGIN  1.6f  // moltiplicatore sul fondo (alza se il rumore fa da "voce")
 #define REC_SILENCE_FLOOR    150  // margine minimo assoluto in RMS (alza se taglia tardi)
 #define REC_MIN_MS          800   // grazia iniziale: non fermarti prima (lascia iniziare a parlare)
+//  CHAT CONTINUA: finita una risposta il mic si riapre da solo, cosi' la domanda
+//  dopo non vuole di nuovo la wake word. Si esce stando zitti (CHAT_FOLLOWUP_MS)
+//  o con un click dell'encoder. Interruttore runtime nel pannello; qui il default
+//  di fabbrica (spento: e' un cambio di comportamento, si accende scegliendolo).
+#define CHAT_CONTINUA_DEF     0
+#define CHAT_FOLLOWUP_MS   3000   // quanto aspetta la domanda dopo una risposta
 //  Self-test TFLite Micro (passo 2 di WAKEWORD.md): 1 = al boot gira il modello
 //  di prova "hello_world" (sin) + frontend, stampa su Telnet. OTA resta attivo.
 #define TFL_SELFTEST     0
@@ -211,8 +217,8 @@
     "sottotitoli e revisione a cura di qtss,sottotitoli creati dalla comunità amara.org," \
     "ciao,ciao a tutti,buona giornata,arrivederci,prego"
 //  Cervello: modello Claude di default e "personalita'" (system prompt). Prima
-//  erano in llm.cpp. claude-haiku-4-5 = veloce/economico; claude-opus-4-8 = piu'
-//  intelligente ma piu' lento/costoso.
+//  erano in llm.cpp. claude-haiku-4-5 = veloce/economico; claude-sonnet-5 = via di
+//  mezzo; claude-opus-5 = piu' intelligente ma piu' lento/costoso.
 #define LLM_MODEL_DEF       "claude-haiku-4-5"
 #define SYSTEM_PROMPT_DEF \
     "Sei Alexo, un assistente vocale domestico in italiano. " \
@@ -251,6 +257,33 @@
     "kiss kiss | Radio Kiss Kiss | http://ice07.fluidstream.net/KissKiss.mp3\n" \
     "rock | rock | http://listen.181fm.com/181-eagle_128k.mp3\n" \
     "pop | pop | http://listen.181fm.com/181-power_128k.mp3"
+//  SERVIZI AI IN CASA (LM Studio e simili, vedi localai.h). Di fabbrica sono
+//  SPENTI (indirizzo vuoto): Alexo lavora in cloud esattamente come prima. Si
+//  accendono dal pannello mettendo l'indirizzo del PC, e da quel momento, se il
+//  PC risponde, quella parte della catena resta in casa. Il nome del modello
+//  lasciato VUOTO significa "usa quello che il server ha caricato adesso".
+#define LOCAL_LLM_URL_DEF     ""
+#define LOCAL_LLM_MODEL_DEF   ""
+//  Temperatura del solo modello IN CASA (il cloud usa la sua). Bassa = si attiene
+//  alla parola piu' probabile (risposte aderenti e ripetibili), alta = osa di piu'
+//  (piu' varieta', ma anche piu' divagazioni). I server locali partono da 0.7-0.8.
+#define LOCAL_LLM_TEMP_DEF    0.3f
+#define LOCAL_STT_URL_DEF     ""
+#define LOCAL_STT_MODEL_DEF   ""
+#define LOCAL_TTS_URL_DEF     ""
+#define LOCAL_TTS_MODEL_DEF   ""
+#define LOCAL_TTS_VOICE_DEF   ""
+//  SOLO CASA: se acceso, i tre pezzi della catena vocale NON escono mai su
+//  internet. Se il servizio di casa non c'e' o sbaglia, Alexo lo dice e si ferma,
+//  invece di ripiegare sul cloud in silenzio (che manderebbe fuori voce, domanda
+//  o risposta senza che tu te ne accorga). Non tocca la radio (la chiedi tu) ne'
+//  l'orologio NTP (non contiene niente di detto). Di fabbrica SPENTO.
+#define LOCAL_ONLY_DEF        0
+//  VOCE SEMPRE IN CASA: riguarda SOLO il TTS. Acceso, la voce si chiede sempre al
+//  server di casa, senza il controllo di raggiungibilita' e senza ripiego su
+//  ElevenLabs (il punto e' non consumare i crediti gratuiti). Trascrizione e
+//  cervello restano come sono. Ignorato se "solo casa" e' acceso (li' vale gia').
+#define TTS_LOCAL_ONLY_DEF    0
 //  RISPOSTA PERSONALIZZATA: se REPLY_TRIGGER (parola/frase) e' valorizzato e la domanda lo
 //  CONTIENE, Alexo dice REPLY_TEXT (testo fisso) e salta l'AI. Trigger VUOTO = disattivato
 //  (risponde l'AI). Per scherzi, battute fisse o riprese ripetibili. Runtime da /api/settings.
