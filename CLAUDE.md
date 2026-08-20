@@ -149,7 +149,7 @@ src/
   net.cpp            # connessione WiFi (credenziali da secrets.h) + orologio NTP (timeBegin, fuso Europe/Rome) + nowContextString per Claude
   stt.cpp            # POST multipart del WAV -> Whisper (Groq, o server in casa) -> testo
   llm.cpp            # due strade: Anthropic Messages API (+ricerca web) oppure server compatibile OpenAI in casa. Modello+prompt da gSettings, +data/ora NTP nel system. ripuliMarkdown sulla risposta (i modelli lo usano anche se il prompt lo vieta): a video e a voce lo stesso testo
-  tts.cpp            # voce -> streaming al VS1053: ElevenLabs (MP3) o server in casa (WAV). normalizzaPerVoce: gradi/%/frazioni + ORARI (leggiOrario) + MIGLIAIA (leggiMigliaia) + DATE (leggiData) + UNITA' abbreviate (leggiUnita: km/km-h/kg, tabella UNITA estendibile) + via il markdown
+  tts.cpp            # voce -> streaming al VS1053: ElevenLabs (MP3) o server in casa (WAV). normalizzaPerVoce: gradi/%/frazioni/valute + ORARI (leggiOrario) + MIGLIAIA (leggiMigliaia) + DATE (leggiData) + UNITA' abbreviate (leggiUnita, tabella UNITA estendibile) + ORDINALI in lettere (leggiOrdinale/ordinaleParola: "85esima" -> "ottantacinquesima") + via il markdown
   localai.cpp        # servizi AI IN CASA: il PC risponde? che modello ha caricato? (cache + giro di controllo per le spie del display)
   ui.cpp             # animazioni ring NeoPixel su TASK dedicato (core 0)
   sound.cpp          # bip di feedback (toni WAV generati al volo sul VS1053)
@@ -233,6 +233,21 @@ partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
 > `src/wake_model.h` (`xxd -i` del nuovo `.tflite`, simbolo `g_wake_model`) e aggiorna
 > `WAKE_PROB_CUTOFF`/`WAKE_WINDOW` dal manifest. Flag diagnostici in `config.h`: `WAKE_TEST`
 > (prova la catena leggendo il mic), `TFL_SELFTEST` (hello_world), `MIC_DIAG` (rumore mic).
+
+### La voce: come si legge un testo scritto
+
+Il testo passa da `normalizzaPerVoce` (`tts.cpp`) **prima** del bivio cloud/casa, quindi le
+correzioni valgono su **entrambe** le voci. Oltre a gradi, percentuali, orari, date, migliaia
+e unita' di misura, ci sono gli **ordinali**: le voci leggono "85esima" cifra-per-cifra
+("ottocinquesima"), quindi l'ordinale va scritto per esteso — `cardinaleParola` (numeri in
+lettere, 0..999999) + `ordinaleParola`, con gli irregolari 1-10, ...tre/...sei che tengono la
+vocale (ventitreesimo, ventiseiesimo) e ...mila → millesimo (duemillesimo).
+Si intercettano `85esima`, gli indicatori `ª`/`º` e il grado usato come ordinale
+(`21° secolo`). Quest'ultimo e' ambiguo: decide la **parola dopo** — un ordinale e' seguito
+da un nome, i gradi da una preposizione o da niente (lista `DOPO_GRADI`); nel dubbio restano
+**gradi**. Per aggiungere un'unita' di misura basta una riga nella tabella `UNITA`; il campo
+`serveNum` serve alle sigle di una lettera sola (`m`, `l`, `g`, `s`, `h`), che valgono solo
+con un numero davanti.
 
 ## Segreti
 

@@ -165,16 +165,192 @@ static int leggiMigliaia(const String &in, int i, int n, String &out) {
   return j - i;
 }
 
+// ---------------------------------------------------------------------------
+//  ORDINALI: "85esima" -> "ottantacinquesima"
+//  Le voci (tutte e due: ElevenLabs e il server di casa) leggono la cifra da
+//  sola e poi il suffisso attaccato, e ne esce "ottocinquesima". L'unico modo
+//  di sistemarlo e' scrivere l'ordinale per esteso, quindi serve saper mettere
+//  un numero in lettere. Si copre 1..999999: oltre, meglio lasciare com'e'.
+// ---------------------------------------------------------------------------
+static const char *ORD_U[]  = { "", "uno", "due", "tre", "quattro", "cinque",
+                                "sei", "sette", "otto", "nove" };
+static const char *ORD_T[]  = { "dieci", "undici", "dodici", "tredici",
+                                "quattordici", "quindici", "sedici",
+                                "diciassette", "diciotto", "diciannove" };
+static const char *ORD_D[]  = { "", "", "venti", "trenta", "quaranta",
+                                "cinquanta", "sessanta", "settanta", "ottanta",
+                                "novanta" };
+// I primi dieci ordinali non seguono nessuna regola: vanno a memoria.
+static const char *ORD_IRR[] = { "", "prim", "second", "terz", "quart", "quint",
+                                 "sest", "settim", "ottav", "non", "decim" };
+
+static String cardinaleSotto100(int v) {
+  if (v < 10)  return String(ORD_U[v]);
+  if (v < 20)  return String(ORD_T[v - 10]);
+  String s = ORD_D[v / 10];
+  int u = v % 10;
+  if (u == 1 || u == 8) s.remove(s.length() - 1);   // venti+uno -> "ventuno"
+  s += ORD_U[u];
+  return s;
+}
+
+static String cardinaleSotto1000(int v) {
+  if (v < 100) return cardinaleSotto100(v);
+  int c = v / 100, r = v % 100;
+  String s = (c == 1) ? String("") : String(ORD_U[c]);
+  s += "cento";
+  if (r == 0) return s;
+  String rr = cardinaleSotto100(r);
+  char p = rr[0];
+  if (p == 'o' || p == 'u') s.remove(s.length() - 1);   // "centotto", "centuno"
+  s += rr;
+  return s;
+}
+
+static String cardinaleParola(long v) {
+  if (v == 0) return String("zero");
+  if (v < 1000) return cardinaleSotto1000((int)v);
+  int m = (int)(v / 1000), r = (int)(v % 1000);
+  String s = (m == 1) ? String("mille") : (cardinaleSotto1000(m) + "mila");
+  if (r) s += cardinaleSotto1000(r);
+  return s;
+}
+
+// L'ordinale si forma dal cardinale: via l'ultima vocale, poi "-esim-" e la
+// desinenza (o/a/i/e). Tre eccezioni che sembrano pignoleria e non lo sono:
+//   ...tre -> ventitreESIMO (la "e" resta)   ...sei -> ventiseiESIMO (resta la "i")
+//   ...mila -> duemilLESIMO (non "duemilaesimo")
+static String ordinaleParola(long v, char genere) {
+  String base;
+  if (v >= 1 && v <= 10) {
+    base = ORD_IRR[v];
+  } else {
+    String c = cardinaleParola(v);
+    if (c.endsWith("mila")) {
+      c.remove(c.length() - 4);
+      base = c + "millesim";
+    } else if (c.endsWith("tre") || c.endsWith("sei")) {
+      base = c + "esim";
+    } else {
+      char u = c[c.length() - 1];
+      if (u == 'a' || u == 'e' || u == 'i' || u == 'o' || u == 'u')
+        c.remove(c.length() - 1);
+      base = c + "esim";
+    }
+  }
+  base += genere;
+  return base;
+}
+
+// Parole che dopo un "N°" dicono che NON e' un ordinale ma i gradi: un ordinale
+// e' seguito da un nome ("21° secolo"), i gradi da una preposizione, da un
+// avverbio o da niente ("fa 30° all'ombra", "ci sono 30°.").
+static const char *DOPO_GRADI[] = {
+  "a","ad","al","all","alla","alle","allo","ai","agli","con","da","dal","dall",
+  "dalla","di","dei","del","dell","della","e","ed","in","nel","nell","nella",
+  "o","od","per","su","sul","sull","sulla","tra","fra","ma","che","non","circa",
+  "sotto","sopra","oggi","domani","ieri","stanotte","stamattina","stasera",
+  "ora","adesso","ancora","verso","fuori","dentro","qui","qua","il","lo","la",
+  "i","gli","le","un","uno","una","gradi","meno","piu","quando","mentre","se"
+};
+
+// Prova a leggere un ORDINALE che parte da in[i]:
+//   "85esima" (anche esimo/esimi/esime)   "3ª" / "21º" (indicatori ordinali)
+//   "21° secolo"  -> ordinale;  "36°C" / "30° all'ombra" -> NON e' un ordinale
+// Ritorna i caratteri consumati, 0 se non combacia (e allora 'out' non si tocca).
+static int leggiOrdinale(const String &in, int i, int n, String &out) {
+  int j = i, cifre = 0;
+  while (j < n && isDigit((uint8_t)in[j]) && cifre < 7) { j++; cifre++; }
+  if (cifre < 1) return 0;
+  long v = in.substring(i, j).toInt();
+  if (v < 1 || v > 999999) return 0;
+
+  char genere = 0;
+  int  consumed = 0;
+
+  // suffisso scritto per esteso: "esimo" / "esima" / "esimi" / "esime"
+  if (j + 5 <= n) {
+    String s = in.substring(j, j + 5);
+    s.toLowerCase();
+    if (s == "esimo" || s == "esima" || s == "esimi" || s == "esime") {
+      if (!(j + 5 < n && isAlphaNumeric((uint8_t)in[j + 5]))) {
+        genere = s[4];
+        consumed = (j + 5) - i;
+      }
+    }
+  }
+
+  // indicatori ordinali veri: "ª" (0xC2 0xAA) e "º" (0xC2 0xBA). Da non
+  // confondere col grado "°" (0xC2 0xB0), che qui sotto ha la sua regola.
+  if (!consumed && j + 1 < n && (uint8_t)in[j] == 0xC2 &&
+      ((uint8_t)in[j + 1] == 0xAA || (uint8_t)in[j + 1] == 0xBA)) {
+    genere = ((uint8_t)in[j + 1] == 0xAA) ? 'a' : 'o';
+    consumed = (j + 2) - i;
+  }
+
+  // "N°": gradi oppure ordinale? Decide la parola dopo (vedi DOPO_GRADI).
+  if (!consumed && j + 1 < n && (uint8_t)in[j] == 0xC2 &&
+      (uint8_t)in[j + 1] == 0xB0) {
+    int k = j + 2;
+    while (k < n && in[k] == ' ') k++;
+    int p = k;
+    while (p < n && isAlpha((uint8_t)in[p]) && (uint8_t)in[p] < 0x80) p++;
+    if (p == k) return 0;                       // niente parola dopo: gradi
+    if (p < n && (uint8_t)in[p] >= 0x80) return 0;   // parola accentata: gradi
+    String w = in.substring(k, p);
+    w.toLowerCase();
+    if (w == "c" || w == "f") return 0;         // "36 °C"
+    for (unsigned d = 0; d < sizeof(DOPO_GRADI) / sizeof(DOPO_GRADI[0]); d++)
+      if (w == DOPO_GRADI[d]) return 0;
+    genere = 'o';
+    consumed = (j + 2) - i;
+  }
+
+  if (!consumed) return 0;
+  out += ordinaleParola(v, genere);
+  return consumed;
+}
+
 // Abbreviazioni di unita' di misura: "km" -> "chilometri". Senza, le voci le
 // leggono a lettere ("kappa emme") o all'inglese. Le piu' LUNGHE per prime:
-// "km/h" va cercata prima di "km", altrimenti resta "chilometri fratto acca".
+// "km/h" va cercata prima di "km", altrimenti resta "chilometri fratto acca"
+// (stessa cosa per "m2" rispetto a "m", "cm" rispetto a "c...").
 // PER AGGIUNGERNE UNA: una riga qui, singolare e plurale. Il confronto ignora
 // maiuscole e minuscole (i modelli scrivono "km" o "KM" indifferentemente).
-struct UnitaVoce { const char *abbr; const char *sing; const char *plur; };
+// L'ultimo campo e' 'serveNum': se true l'abbreviazione vale solo quando ha un
+// NUMERO davanti. Serve alle sigle di una lettera sola, che altrimenti fanno
+// disastri ("l'acqua" diventerebbe "litriacqua", "3 a 4" -> "3 ampere 4").
+struct UnitaVoce { const char *abbr; const char *sing; const char *plur; bool serveNum; };
 static const UnitaVoce UNITA[] = {
-  { "km/h", "chilometro orario", "chilometri orari" },
-  { "km",   "chilometro",        "chilometri"       },
-  { "kg",   "chilogrammo",       "chilogrammi"      },
+  { "km/h", "chilometro orario",   "chilometri orari",    false },
+  { "km\xC2\xB2", "chilometro quadrato", "chilometri quadrati", false },
+  { "kcal", "chilocaloria",        "chilocalorie",        false },
+  { "kwh",  "chilowattora",        "chilowattora",        false },
+  { "khz",  "chilohertz",          "chilohertz",          false },
+  { "mhz",  "megahertz",           "megahertz",           false },
+  { "ghz",  "gigahertz",           "gigahertz",           false },
+  { "min",  "minuto",              "minuti",              true  },
+  { "cm\xC2\xB2", "centimetro quadrato", "centimetri quadrati", false },
+  { "m\xC2\xB2",  "metro quadrato", "metri quadrati",      false },
+  { "m\xC2\xB3",  "metro cubo",     "metri cubi",          false },
+  { "mq",   "metro quadrato",      "metri quadrati",      false },
+  { "km",   "chilometro",          "chilometri",          false },
+  { "kg",   "chilogrammo",         "chilogrammi",         false },
+  { "kw",   "chilowatt",           "chilowatt",           false },
+  { "kb",   "chilobyte",           "chilobyte",           false },
+  { "mb",   "megabyte",            "megabyte",            false },
+  { "gb",   "gigabyte",            "gigabyte",            false },
+  { "tb",   "terabyte",            "terabyte",            false },
+  { "cm",   "centimetro",          "centimetri",          false },
+  { "mm",   "millimetro",          "millimetri",          false },
+  { "ml",   "millilitro",          "millilitri",          false },
+  { "mg",   "milligrammo",         "milligrammi",         false },
+  { "hz",   "hertz",               "hertz",               false },
+  { "h",    "ora",                 "ore",                 true  },
+  { "m",    "metro",               "metri",               true  },
+  { "l",    "litro",               "litri",               true  },
+  { "g",    "grammo",              "grammi",              true  },
+  { "s",    "secondo",             "secondi",             true  },
 };
 
 // Se in[i] apre una di quelle abbreviazioni COME PAROLA A SE' (non "kmart", non
@@ -189,8 +365,11 @@ static int leggiUnita(const String &in, int i, int n, String &out) {
     int L = (int)strlen(UNITA[u].abbr);
     if (i + L > n) continue;
     bool uguale = true;
-    for (int k = 0; k < L && uguale; k++)
-      if (tolower((uint8_t)in[i + k]) != UNITA[u].abbr[k]) uguale = false;
+    for (int k = 0; k < L && uguale; k++) {
+      uint8_t a = (uint8_t)in[i + k], b = (uint8_t)UNITA[u].abbr[k];
+      if (a >= 'A' && a <= 'Z') a += 32;        // minuscolo solo sull'ASCII:
+      if (a != b) uguale = false;               // "\xC2\xB2" va confrontato grezzo
+    }
     if (!uguale) continue;
     if (i + L < n && isAlphaNumeric((uint8_t)in[i + L])) continue;   // "kmart"
 
@@ -201,6 +380,8 @@ static int leggiUnita(const String &in, int i, int n, String &out) {
     while (j >= 0 && isAlphaNumeric((uint8_t)in[j])) j--;
     String prima = in.substring(j + 1, fine + 1);
     prima.toLowerCase();
+    bool numPrima = prima.length() && isDigit((uint8_t)prima[prima.length() - 1]);
+    if (UNITA[u].serveNum && !numPrima) continue;
     bool sing = (prima == "1" || prima == "un" || prima == "uno" || prima == "una");
     out += sing ? UNITA[u].sing : UNITA[u].plur;
     return L;
@@ -220,6 +401,11 @@ static String normalizzaPerVoce(const String &in) {
     if (isDigit(c) && (i == 0 || !isDigit((uint8_t)in[i - 1]))) {
       int consumed = leggiOrario(in, i, n, out);
       if (consumed > 0) { i += consumed - 1; continue; }
+      // "85esima" -> "ottantacinquesima", "3a" (indicatore ordinale) -> "terza",
+      // "21 grado secolo" -> "ventunesimo secolo". Se non e' un ordinale torna 0
+      // e il grado se lo prende la regola piu' sotto.
+      consumed = leggiOrdinale(in, i, n, out);
+      if (consumed > 0) { i += consumed - 1; continue; }
       // stesso punto di partenza: la data PRIMA della frazione qui sotto, che
       // altrimenti se la mangia ("10 fratto 3 fratto 2026").
       consumed = leggiData(in, i, n, out);
@@ -232,9 +418,17 @@ static String normalizzaPerVoce(const String &in) {
     // Unita' di misura abbreviate: "20 km/h" -> "20 chilometri orari". Prima
     // dello strip del markdown: qui non c'e' markdown di mezzo, e la 'k' non e'
     // un carattere che quel filtro tocca.
-    if (c == 'k' || c == 'K') {
+    if (((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) &&
+        (i == 0 || !isAlphaNumeric((uint8_t)in[i - 1]))) {
       int consumed = leggiUnita(in, i, n, out);
       if (consumed > 0) { i += consumed - 1; continue; }
+    }
+
+    // "3x4" -> "3 per 4" (solo tra due cifre: "x" da sola resta com'e')
+    if ((c == 'x' || c == 'X') && i > 0 && i + 1 < n &&
+        isDigit((uint8_t)in[i - 1]) && isDigit((uint8_t)in[i + 1])) {
+      out += " per ";
+      continue;
     }
 
     // Markdown: i modelli lo usano anche quando il prompt dice di non farlo (i
@@ -243,8 +437,22 @@ static String normalizzaPerVoce(const String &in) {
     // restano: questa normalizzazione vale solo per il parlato.
     if (c == '*' || c == '`' || c == '_' || c == '#') continue;
 
-    // grado "°" (UTF-8 0xC2 0xB0), eventualmente seguito da C/F
+    // grado "°" (UTF-8 0xC2 0xB0), eventualmente seguito da C/F.
+    // Gli ORDINALI ("21° secolo") sono gia' stati presi da leggiOrdinale, qui
+    // sopra: se si arriva fin qui sono gradi davvero (o un "n°" = numero).
     if (c == 0xC2 && i + 1 < n && (uint8_t)in[i + 1] == 0xB0) {
+      // "n° 5" -> "numero 5": la 'n' e' gia' finita in 'out', si toglie.
+      if (i > 0 && (in[i - 1] == 'n' || in[i - 1] == 'N') &&
+          (i < 2 || !isAlphaNumeric((uint8_t)in[i - 2]))) {
+        int k = i + 2;
+        while (k < n && in[k] == ' ') k++;
+        if (k < n && isDigit((uint8_t)in[k])) {
+          out.remove(out.length() - 1);
+          out += "numero";
+          i += 1;
+          continue;
+        }
+      }
       char next = (i + 2 < n) ? in[i + 2] : 0;
       if      (next == 'C' || next == 'c') { out += " gradi centigradi"; i += 2; }
       else if (next == 'F' || next == 'f') { out += " gradi Fahrenheit"; i += 2; }
@@ -268,6 +476,22 @@ static String normalizzaPerVoce(const String &in) {
     if (c == '/' && i > 0 && i + 1 < n &&
         isDigit((uint8_t)in[i - 1]) && isDigit((uint8_t)in[i + 1])) {
       out += " fratto ";
+      continue;
+    }
+
+    // valute: "€" (0xE2 0x82 0xAC), "$", "£" (0xC2 0xA3)
+    if (c == 0xE2 && i + 2 < n && (uint8_t)in[i + 1] == 0x82 &&
+        (uint8_t)in[i + 2] == 0xAC) { out += " euro"; i += 2; continue; }
+    if (c == 0xC2 && i + 1 < n && (uint8_t)in[i + 1] == 0xA3) {
+      out += " sterline"; i += 1; continue;
+    }
+    if (c == '$') { out += " dollari"; continue; }
+
+    // numero negativo: "-5 gradi" -> "meno 5 gradi". Solo a inizio parola, cosi'
+    // gli intervalli ("18-20") e le parole col trattino non si toccano.
+    if (c == '-' && (i == 0 || in[i - 1] == ' ' || in[i - 1] == '(') &&
+        i + 1 < n && isDigit((uint8_t)in[i + 1])) {
+      out += "meno ";
       continue;
     }
 
