@@ -1,0 +1,602 @@
+> ⚠️⚠️ **LEGGIMI PRIMA — QUESTO È `CLAUDE.local.md`** (gitignored, PRIVATO): contiene il
+> contesto pieno di sviluppo + le regole di lavoro. Il repo pubblico ha invece un file
+> `CLAUDE.md` = **panoramica tecnica NEUTRA** (senza "l'utente", senza framing
+> personale/macchina-specifico, senza diario/date).
+>
+> **REGOLA DA RISPETTARE (il progetto va verso GitHub PUBBLICO):**
+> - Aggiorna il contesto di sviluppo QUI, in `CLAUDE.local.md`.
+> - In `CLAUDE.md` (PUBBLICO) riporta SOLO ciò che è adatto a chiunque: MAI riferimenti
+>   personali/a "l'utente", MAI chiavi/segreti, MAI workflow interni o note "istruzioni per
+>   l'AI", MAI il framing "case chiuso/solo-OTA/COM6/percorso-pio".
+> - Il repo è **già pubblico** (LICENSE MIT, storia pulita, API key rigenerate): vedi la
+>   memoria `github-pubblicazione-prep`. Quindi ogni riga aggiunta a `CLAUDE.md` è pubblica.
+
+## ⛔ REGOLA ZERO — NON DISCUTERE, ESEGUI
+
+**Quando affermo una cosa con certezza** ("è un dato di fatto", "ho il log", "prendi per
+certo"), quella cosa è vera e si va avanti da lì. NON proporre spiegazioni alternative, NON
+chiedermi verifiche in più, NON riproporre lo stesso sospetto con altre parole. **Se ripeto
+un ordine, si esegue quello** — non una versione migliorata di testa tua.
+
+Se hai un dubbio tecnico reale: **una riga, una volta sola**, poi fai comunque quello che ho
+chiesto. Se chiedo di ripristinare, ripristina **esattamente** quel punto, senza aggiunte.
+
+**Perché**: le discussioni inutili mi fanno perdere tempo e **mi fanno male alla salute**.
+Non è una preferenza di stile. Le scuse ripetute peggiorano le cose: voglio la correzione,
+non il pentimento. E nelle note/documentazione scrivi **solo ciò che serve a chi legge dopo**
+— i vicoli ciechi tecnici sì, il resoconto dei tuoi errori no.
+
+1) Think before coding. State your assumptions out loud. If the request is ambiguous, ask. If a
+simpler approach exists, push back. Stop when you are confused, name what is unclear, do
+not just pick one interpretation and run.
+
+2) Simplicity first. Write the minimum code that solves the problem. No speculative
+abstractions. No flexibility nobody asked for. The test: would a senior engineer call this
+overcomplicated.
+
+3) Surgical changes. Touch only what the task requires. Do not improve neighboring code. Do
+not refactor what is not broken. Every changed line should trace back to the request.
+
+4) Goal-driven execution. Turn vague instructions into verifiable targets before writing a line.
+“Add validation” becomes “write tests for invalid inputs, then make them pass.”
+
+
+
+# ALEXO — assistente vocale su ESP32-S3
+
+## 🎯 OBIETTIVO GENERALE (perché esiste tutto questo)
+Alexo e gli altri progetti del portfolio sono una **vetrina di competenza** per portare
+traffico e fiducia verso **ESP32 SOS** (assistenza a pagamento = guadagno primario) + il
+**corso**. I social **@esp32sos** e i video fanno crescere pubblico/credibilità → da
+convertire in clienti (sessioni €25-180 via Cal.com/Stripe). Stato, strategia contenuti e
+funnel completi nella memoria auto `vetrina-seo-social`.
+
+Dispositivo "tipo Alexa/Google Home" costruito su ESP32-S3 N16R8.
+Lingua del progetto: **italiano** (codice, commenti, messaggi seriali).
+
+## Architettura (satellite + cloud)
+
+Claude **non** gestisce audio (niente STT/TTS, solo testo+immagini), quindi la
+catena vocale è ibrida — ogni freccia è una chiamata HTTPS dall'ESP32:
+
+```mermaid
+flowchart TD
+    START(["🗣️ Wake word 'Okay Nabu' (locale, offline)<br/>oppure click encoder"])
+    MIC["🎤 Mic ICS-43434 I2S<br/>registra PCM 16 kHz in PSRAM<br/>stop al silenzio ~1.5 s"]
+    STT["STT · Groq Whisper"]
+    LLM["🧠 Claude (modello configurabile)<br/>il cervello · ricerca web"]
+    TTS["TTS · ElevenLabs<br/>MP3 streaming"]
+    OUT["🔊 VS1053 SPI → altoparlante"]
+    TFT["📺 TFT ST7735<br/>chat / teleprompter"]
+    RING["💍 Ring 12 LED WS2812<br/>animazioni di stato"]
+
+    START --> MIC --> STT -->|testo| LLM -->|risposta| TTS --> OUT
+    MIC -. aggiorna .-> TFT
+    LLM -. aggiorna .-> TFT
+    MIC -. stato .-> RING
+
+    classDef cloud fill:#0e2a33,stroke:#00e5ff,color:#dfeef2;
+    classDef ui fill:#1a1030,stroke:#ff2ea6,color:#dfeef2;
+    class STT,LLM,TTS cloud;
+    class TFT,RING ui;
+```
+
+- **Cervello**: API Anthropic, modello `claude-haiku-4-5` (economico/veloce;
+  passare a `claude-opus-5` per risposte più "intelligenti").
+- **STT**: **Groq** Whisper (gratis). **TTS**: **ElevenLabs** (voce clonata).
+  Servono 3 API key (Groq + Anthropic + ElevenLabs); OpenAI è opzionale.
+- **Attivazione**: **wake word locale "Okay Nabu"** (microWakeWord/TFLite Micro,
+  tutto offline sull'S3) **oppure** click dell'**encoder** — in parallelo. La
+  registrazione si chiude da sola dopo **1.5 s di silenzio** (tetto 20 s).
+  Gesti encoder: **click** = avvia/ferma chat; **doppio click** = on/off del ring
+  reattivo al suono; **premuto+giro** = volume; **giro** = scroll. **In MUSICA**
+  (ST_MUSIC) il ramo cambia: **qualsiasi giro** (nudo o premuto) = volume (manopola
+  radio), **click** = stazione successiva (ciclico sulla lista del pannello),
+  **doppio click** = esci dalla radio. (Il click
+  singolo è "differito" ~350ms per distinguerlo dal doppio: la libreria
+  Versatile_RotaryEncoder chiama `handlePress` anche sul 1° click di un doppio →
+  serve la disambiguazione in `encoder.cpp`.) GPIO14 (vecchio push-to-talk)
+  pilota il **backlight del display** (spegnimento a riposo).
+- **Splash di boot**: animazione futuristica HUD su TFT + ring "carica" all'avvio
+  (`bootSplash()` in main.cpp, flag `SPLASH_BOOT`).
+  > Il wake word e' "Okay Nabu" (modello pre-addestrato): l'utente lo pronuncia
+  > bene ed e' preciso. I modelli inglesi "hey jarvis"/"alexa" NON andavano (il
+  > primo per l'accento, il secondo scattava su qualsiasi "-xa"). La parola
+  > **"Alexo" CUSTOM** e' l'upgrade futuro (training microWakeWord via Colab).
+  > Dettagli completi della pipeline wake in [`WAKEWORD.md`](WAKEWORD.md).
+
+## Hardware
+
+| Componente | Modello reale | Ruolo |
+|---|---|---|
+| MCU | ESP32-S3 **N16R8** (16MB flash QIO, 8MB PSRAM **octal/OPI**), clone con bridge USB-UART **CH343** (COM6) | — |
+| Microfono | **ICS-43434** I2S (ATTIVO, `MIC_USE_I2S=1`) — SCK5/WS6/SD7, L/R→GND. Il MAX4466 analogico resta come backend alternativo (`MIC_USE_I2S=0`, GPIO4) | input voce |
+| Audio out | **VS1003** (LC Technology, SPI) — è risultato un VS**1003** (SCI_STATUS versione 3), non un 1053; la libreria li gestisce uguale per l'MP3. **DREQ su GPIO18** (spostato da 47), **XRST su GPIO8** (spostato da 38=builtin LED) | decoder MP3 → linea audio |
+| Ampli | **PAM8302A** Class-D mono (2.5W) | amplifica LOUT/ROUT del VS1003 → altoparlante. SD (shutdown, att. basso) su **GPIO39**: acceso solo durante l'interazione, muto a riposo (no fruscio Class-D) |
+| Display | **ST7735** TFT 1.8" 128x160 SPI (temporaneo, in attesa del 5") | chat/teleprompter a colori. Bus SPI **dedicato HSPI**, separato dal VS1053. **Backlight su GPIO14**: il firmware lo spegne dopo 2 min di inattività e lo riaccende al primo intervento |
+| LED | ring **WS2812** 12 LED NeoPixel | animazioni stato (5V) |
+
+> Nota: il "Sound Sensor LM358" che l'utente possiede NON è adatto alla voce
+> (rileva solo il livello sonoro): si usa il MAX4466.
+
+## ⚠️ STATO ATTUALE (giu 2026) — sistema ASSEMBLATO nel case, solo OTA
+
+Cablaggio **saldato a filo diretto** (no breadboard) dentro un case **chiuso**.
+Alimentazione dal **5Vin** (jumper "IN-OUT" della board chiuso). Mic **I2S
+ICS-43434** montato. **Si flasha SOLO via OTA** (`alexo.local`): l'USB non è
+accessibile senza aprire il case (vedi sezione Build/Flash).
+
+I pin sono tutti in [`include/config.h`](include/config.h) — unica fonte di
+verità, modificare lì.
+
+## Build / Flash
+
+> ⚠️ `pio` **non è nel PATH** su questa macchina: va invocato col percorso
+> completo. Comando di build (PowerShell), da usare sempre:
+>
+> ```powershell
+> & "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 25
+> ```
+
+```powershell
+# build (vedi nota sopra sul percorso completo)
+& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e esp32-s3-devkitc-1
+# flash (OTA, e' il default in platformio.ini -> va su alexo.local)
+& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e esp32-s3-devkitc-1 -t upload
+# flash del FILESYSTEM (pagina del pannello web data/index.html -> LittleFS via OTA)
+# SERVE solo se hai toccato data/. Dopo un -t upload il device si riavvia: attendi
+# che alexo.local torni online prima di uploadfs (altrimenti "Host Not Found").
+& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e esp32-s3-devkitc-1 -t uploadfs
+# monitor seriale (solo se collegato via USB)
+& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" device monitor -p COM6 -b 115200
+# monitor via WiFi col case chiuso (log Telnet, modulo netlog) -> porta 23
+telnet alexo.local
+```
+
+**Log via rete (Telnet)**: col case chiuso l'USB non c'è, quindi per leggere
+l'output (es. la diagnostica `MIC_DIAG`) il firmware espone un **log Telnet sulla
+porta 23** ([`src/netlog.cpp`](src/netlog.cpp)): collegati con `telnet alexo.local`
+(o PuTTY in Raw/Telnet). È non bloccante e non interferisce con l'OTA. Per ora ci
+passa l'output di `micDiag()`; `netlogPrintln()` è riusabile per altri log futuri.
+
+**⚠️ Sistema ASSEMBLATO nel case: si flasha SOLO via OTA.** L'USB non è
+accessibile (board chiusa nel contenitore). `platformio.ini` è già configurato per
+OTA (`upload_port = alexo.local`, `upload_protocol = espota`): `pio ... -t upload`
+va in WiFi senza toccare nulla. La board dev'essere accesa, su WiFi e a riposo.
+USB (COM6) solo come fallback estremo aprendo il case (allora si scambiano le 2
+righe USB/espota in `platformio.ini`); il monitor seriale via USB va chiuso prima
+di ogni upload USB ("Accesso negato"), l'OTA invece non usa la seriale.
+
+**Backup firmware funzionante**: in [`firmware_demo/`](firmware_demo/) ci sono
+immagini `.bin` già compilate del sistema funzionante, per tornare in fretta a una
+build buona durante le prove (flash diretto via `espota.py`, vedi
+[`firmware_demo/README.md`](firmware_demo/README.md)).
+
+> ⚠️ **REGOLA BACKUP (workflow dell'utente)**: dopo aver fatto delle modifiche NON
+> salvare subito il backup `.bin`. Prima l'utente **prova le modifiche dal vivo**;
+> SOLO se confermate funzionanti si crea il backup in `firmware_demo/`. Un backup di
+> una build non testata rischia di "fotografare" una regressione (es. il freeze del
+> mic non-bloccante di lug 2026). Compilare sì (per verificare), backup solo dopo l'OK.
+
+### ⚠️ Config critica (non rimuovere)
+La board `esp32-s3-devkitc-1` è definita **8MB**. Senza queste righe in
+`platformio.ini` il bootloader viene scritto a 8MB e la partizione custom
+(che arriva a ~16MB) lo manda in **boot loop infinito**:
+
+```ini
+board_upload.flash_size  = 16MB          ; FIX boot loop
+board_upload.maximum_size = 16777216
+board_build.arduino.memory_type = qio_opi ; attiva la PSRAM octal (altrimenti 0 byte)
+```
+
+Sintomo del problema: sulla seriale solo messaggi ROM ripetuti +
+`rst:0x3 (RTC_SW_SYS_RST)`, nessun output del programma.
+
+## Struttura
+
+```
+include/
+  config.h           # tutti i pin + parametri hardware (+ flag WAKE_*, REC_*, MIC_DIAG, TFL_SELFTEST) + DEFAULT del pannello web
+  mic.h net.h stt.h llm.h tts.h ui.h sound.h netlog.h wakeword.h tfltest.h
+  encoder.h gobbo.h volume.h music.h
+  localai.h          # servizi AI in casa: raggiungibilita' + nome modello
+  settings.h webui.h # pannello impostazioni web (parametri runtime in NVS)
+  secrets.example.h  # template -> copiare in secrets.h (gitignored)
+src/
+  main.cpp           # macchina a stati (loop su core 1): ascolto->pensa->parla. runConversation = una domanda o tante di fila (chat continua). matchAnyTerm (trigger voce alt) + rispostaPersonalizzata + isAllucinazione (anti-fantasma) + skip se !micHeardVoice
+  mic.cpp            # mic I2S: registra (stop al silenzio ADATTIVO/RMS) + livello ring + micReadChunk/micFlush per il wake + micGetLive + micHeardVoice
+  net.cpp            # connessione WiFi (credenziali da secrets.h) + orologio NTP (timeBegin, fuso Europe/Rome) + nowContextString per Claude
+  stt.cpp            # POST multipart del WAV -> Whisper (Groq, o server in casa) -> testo
+  llm.cpp            # due strade: Anthropic Messages API (+ricerca web) oppure server compatibile OpenAI in casa. Modello+prompt da gSettings, +data/ora NTP nel system. ripuliMarkdown sulla risposta: a video e a voce lo stesso testo
+  tts.cpp            # voce -> VS1053: ElevenLabs (MP3) o server in casa (WAV). normalizzaPerVoce: gradi/%/frazioni + ORARI (leggiOrario) + MIGLIAIA (leggiMigliaia) + DATE (leggiData) + UNITA' abbreviate (leggiUnita: km/km-h/kg, tabella UNITA estendibile) + via il markdown
+  ui.cpp             # animazioni ring NeoPixel su TASK dedicato (core 0)
+  sound.cpp          # bip di feedback (toni WAV generati al volo sul VS1053)
+  gobbo.cpp          # chat/teleprompter sul TFT (task core 0, bus HSPI, canvas 16bit) + schermata OTA HUD verde (renderOtaScreen, % al centro) + anello chat UTF-8 per il pannello web (gobboChatRev/Count/Item)
+  encoder.cpp        # encoder rotativo (lib Versatile_RotaryEncoder, polling su core 0)
+  volume.cpp         # volume VS1053 (premuto+giro encoder / pannello web), salvato in NVS
+  music.cpp          # web-radio MP3 -> VS1053 (http E https via WiFiClientSecure). Stazioni editabili (gSettings.musicStations). SEEK stazione: musicPlay ritorna il delta (CLICK in musica) -> loop in playStation. Ring reattivo alla cassa. Solo MP3 (NO AAC/HLS)
+  localai.cpp        # servizi AI IN CASA (LM Studio/Whisper/Kokoro sul PC): il server risponde? che modello ha caricato? Cache + localRefreshTick per le 3 spie del TFT
+  netlog.cpp         # log via rete (Telnet porta 23): leggere l'output col case chiuso
+  settings.cpp       # parametri RUNTIME (gSettings) caricati/salvati in NVS (default = config.h)
+  webui.cpp          # web server (porta 80) + LittleFS: pannello http://alexo.local/ + API JSON + live mic
+  wakeword.cpp       # WAKE WORD locale (microWakeWord): frontend->modello->detection (gain/cutoff/window da gSettings). Vedi WAKEWORD.md
+  wake_model.h       # modello wake INT8 (g_wake_model): ora "okay_nabu". Sostituibile (drop-in)
+  tfltest.cpp        # self-test TFLite Micro (flag TFL_SELFTEST), usato per validare il runtime
+data/
+  index.html         # pagina del pannello impostazioni (servita da LittleFS; -t uploadfs per caricarla)
+lib/microfrontend/   # microfrontend TFLM (40 feature mel) + kissfft v130, vendorizzato per il wake
+partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
+```
+
+> **Pannello impostazioni web** (`http://alexo.local/`): i parametri "tarabili"
+> (mic/stop-al-silenzio/LED, wake, volume+voci, modello+prompt Claude, termini
+> risposta personalizzata, frasi anti-fantasma Whisper) sono **runtime** in `gSettings` (modulo settings), caricati dall'NVS
+> all'avvio (default = macro `*_DEF` di config.h) e modificabili dal browser senza
+> ricompilare. `webui.cpp` serve la pagina da **LittleFS** + API JSON (`/api/settings`
+> GET/POST, `/api/live`, `/api/reset`, `/api/music/stop`, `/api/chat`). `webuiHandle()`
+> nel loop. **Modifiche alla pagina `data/index.html` richiedono `-t uploadfs`** (oltre a
+> `-t upload` del firmware), entrambi via OTA. Server sincrono: durante un'interazione la
+> pagina non risponde per qualche secondo (normale). Lettura LIVE del mic (`micGetLive`) per
+> tarare le soglie dal telefono senza `MIC_DIAG`+Telnet. **Card "Chat"**: mostra la stessa
+> conversazione del TFT (anello UTF-8 in PSRAM nel gobbo, `/api/chat` in streaming; refresh
+> guidato da `chatRev` in `/api/live`, cioe' a ogni nuovo messaggio, non a timer).
+
+> **Wake word / TFLite Micro**: runtime = lib **Chirale_TensorFlowLite** (in
+> `platformio.ini`); `esp-tflite-micro` scartato (gira male in PlatformIO). Il
+> microfrontend NON e' in Chirale -> vendorizzato in `lib/microfrontend/`. Per
+> cambiare wake word: sostituisci `src/wake_model.h` (`xxd -i` del nuovo `.tflite`,
+> simbolo `g_wake_model`) e aggiorna `WAKE_PROB_CUTOFF`/`WAKE_WINDOW` dal manifest.
+> Flag diagnostici in `config.h`: `WAKE_TEST` (prova la catena leggendo il mic),
+> `TFL_SELFTEST` (hello_world), `MIC_DIAG` (rumore mic) — tutti con OTA+Telnet vivi.
+
+> NB: l'ambiente di diagnosi `env:diag` e `src/diag/blink.cpp` sono stati
+> RIMOSSI (servivano solo a diagnosticare il boot loop). Resta un solo env.
+
+## Segreti
+
+WiFi e API key vanno in `include/secrets.h` (copiato da `secrets.example.h`,
+ignorato da git). Mai committare key.
+
+> 🔒 **REGOLA PERMANENTE (Claude): NON leggere MAI il contenuto di `include/secrets.h`.**
+> Le API key sono state rigenerate (4 lug 2026) e stanno solo lì, in locale. Non servono
+> per lavorare sul progetto: il device le usa, io no. Non aprirlo, non stamparlo, non
+> incollarne il contenuto in chat — così le chiavi restano non compromesse anche lavorando
+> con Claude. Se serve modificare la *struttura* dei segreti, usare `secrets.example.h`
+> (placeholder). Vedi memoria `secrets-non-leggere`.
+
+## Stato / tappe
+
+1. ✅ Setup PlatformIO + fix boot loop + PSRAM octal
+2. ✅ Bring-up (OLED, ring, bottone, VS1053 init) — boota, PSRAM 8MB, flash 16MB
+3. ✅ Microfono MAX4466 — testato OK (16kHz esatti, livello tarato col trimmer)
+4. ✅ WiFi + STT — testato OK (picco ~23k, HTTP 200, trascrizione corretta)
+5. ✅ Cervello Claude (Haiku 4.5) — testato OK (HTTP 200, risposta sensata in italiano)
+6. ✅ TTS ElevenLabs + VS1053 — testato OK (voce chiara, voce clonata dell'utente)
+7. ✅ Rifinitura COMPLETA: macchina a stati (IDLE/ASCOLTO/PENSA/PARLA/ERRORE);
+      animazioni ring su task core 0; **memoria conversazione** (llm.cpp, storico
+      8 msg + reset dopo 2 min); **bip di feedback** (sound.cpp); **ricerca web**
+      (web_search tool di Claude in llm.cpp); **idle reattivo al suono** (luci
+      psichedeliche che ballano col microfono - micPeekLevel in mic.cpp, misura
+      MAD a 16kHz, soglia MIC_NOISE=20).
+8. ✅ **WAKE WORD locale "Okay Nabu"** (microWakeWord/TFLite Micro, tutto offline):
+      mic ripulito (passa-alto ~120Hz + shift 15) → microfrontend 40 feature mel →
+      modello INT8 streaming → media mobile > soglia → avvia la chat (in parallelo
+      al click encoder). **Stop registrazione al silenzio** (1.5s, REC_SILENCE_MS),
+      tetto 20s; **anti auto-ritrigger** (micFlush+wakeReset a fine interazione).
+      Confermato funzionante e preciso dall'utente. Parola "Alexo" custom = upgrade
+      futuro. Pipeline/scelte/tuning in [`WAKEWORD.md`](WAKEWORD.md).
+9. ✅ **Stop-al-silenzio ADATTIVO** (mic.cpp): la soglia "voce" non è più fissa ma
+      RELATIVA al rumore di fondo stimato in continuo (`soglia = noiseFloor*margin +
+      floor`), su ENERGIA MEDIA (RMS) non sul picco → robusto al ventilatore. Il
+      colpevole vero dei disturbi era il **VENTO diretto sul mic** (fix fisico =
+      spugnetta antivento). Param runtime `REC_SILENCE_MARGIN`/`REC_SILENCE_FLOOR`.
+10. ✅ **PANNELLO IMPOSTAZIONI WEB** (`http://alexo.local/`): parametri runtime in
+      NVS (settings.cpp/gSettings) + web server LittleFS (webui.cpp), lettura LIVE
+      del mic, voce alternativa + parole-trigger (multi) + risposta personalizzata
+      editabili. Flash in DUE passi: `-t upload` (firmware) + `-t uploadfs` (pagina).
+11. ✅ **Rifiniture (lug 2026)**:
+      - **Ora reale a Claude**: orologio via **NTP** (net.cpp `timeBegin`, fuso
+        Europe/Rome con ora legale) e data/ora (locale + UTC) iniettate nel system
+        prompt (`nowContextString` -> llm.cpp). Senza, Claude sbagliava ora e fusi.
+      - **Lettura orari nella voce** (tts.cpp `leggiOrario`): `12:30`->"12 e 30",
+        `00:00`->"mezzanotte", `12:00`->"mezzogiorno", `HH:00`->"HH in punto",
+        `00:MM`->"zero MM". Accanto a gradi/%/virgola/frazione gia' presenti.
+      - **Anti-fantasma Whisper**: falsi avvii facevano registrare silenzio ->
+        Whisper allucinava "Grazie". Due difese: (1) skip pre-Whisper se non e'
+        stata sentita voce vera (`micHeardVoice`); (2) filtro `isAllucinazione`
+        con lista editabile dal pannello (`gSettings.hallucTerms`).
+      - **Schermata OTA** (gobbo.cpp `renderOtaScreen`): HUD verde con % GRANDE al
+        centro + barra, disegnata dal task del gobbo (core 0, unico sul bus TFT);
+        il core 1 aggiorna solo `gobboOtaProgress()` dai callback ArduinoOTA.
+12. ✅ **Musica web-radio (lug 2026)** — modulo `music.cpp`: stream MP3 sul VS1053,
+      comando vocale "metti musica <genere/radio>" + tool Claude `riproduci_musica`,
+      stato ST_MUSIC con ring reattivo alla cassa, stazioni editabili dal pannello.
+      **FASE 3 (3 lug)**: (a) **cambio stazione al volo**: **click singolo** in musica =
+      stazione successiva, **doppio click = esci**, giro = volume; `musicPlay` ritorna il
+      delta del seek → loop in `playStation` (ciclico sulla lista del pannello). (b) **HTTPS**
+      per la radio (`WiFiClientSecure.setInsecure()` sugli url https), per le radio IT solo-https.
+      (c) **fix ampli a volume 0** (segue il muto in tempo reale durante la musica). ⚠️ **VS1053
+      decodifica SOLO MP3, NO AAC/HLS**: usare url `audio/mpeg`. ⚠️ **choppiness = SERVER/rete**,
+      non codice/formato/mic. **AGG. 4 lug 2026**: alla prova le radio ITALIANE
+      shoutcast/unitedradio/rai NON reggevano → `MUSIC_STATIONS_DEF` rifatta con stazioni
+      internazionali stabili by-genere (181.fm/SomaFM + Kiss Kiss), vedi
+      [[radio-italiane-url-verificati]]. Audius/Jamendo/Spotify valutati e scartati.
+13. ✅ **Chat nel pannello web (3 lug 2026)** — card "Chat" su `alexo.local` che rispecchia
+      la conversazione del TFT (Tu/Alexo/sistema, ultimi 40 msg). Anello UTF-8 in PSRAM nel
+      gobbo (`gobboChatRev/Count/Item`, 2048/msg = come il TFT → niente troncamento);
+      `/api/chat` in **streaming** (`sendContent`); refresh **guidato dagli eventi** via
+      `chatRev` in `/api/live` (ricarica solo a nuovo messaggio, non a timer). Sola lettura.
+14. ✅ **PUBBLICAZIONE su GitHub (4 lug 2026)** — repo **PRIVATO**
+      [github.com/PeppeMinniti/alexo](https://github.com/PeppeMinniti/alexo) (strategia
+      privato→pubblico: si rende Public solo dopo la verifica dell'utente). Fatto: `LICENSE`
+      MIT, `git init`+push. **Storia azzerata** a **1 solo commit pulito** (`git checkout --orphan`
+      + force-push) così le versioni pre-pulizia non sono navigabili quando sarà pubblico.
+      **Neutralizzati riferimenti personali/dev nel codice** (nome "Peppe", "l'utente lo pronuncia
+      bene", "gemello"→"senza mic", "COM6"/"case chiuso", date-diario nei commenti; le "utente"
+      TECNICHE lasciate). **Audit completo** (chiavi/dati personali/slur): unico residuo trovato e
+      corretto = slur easter-egg nell'esempio di `data/index.html`. Rimosse 2 foto WhatsApp non
+      linkate. **RESTA DA FARE l'utente**: (1) verifica sul sito + Settings→Change visibility→Public;
+      (2) **rigenerare le 3 API key** (compromesse in chat, non nel repo). Dettagli e stato completo
+      nella memoria `github-pubblicazione-prep`.
+15. ✅ **VETRINA SEO + SOCIAL (lug 2026)** — iniziativa di branding per far sì che il **repo
+      GitHub Alexo + il portfolio** (`peppeminniti.it/portfolio/`) facciano da vetrine di
+      competenza e pompino le pagine-obiettivo: **ESP32 SOS** (`peppeminniti.it/assistenza_esp32/`,
+      primaria) + **corso** (home). Social brandizzati **@esp32sos** (IG/TikTok/YouTube).
+      **FASE 1 (repo) + FASE 2 (sito) CHIUSE**: README repo sezione "Autore" con doppia CTA
+      (assistenza pulsante + corso testo), topics, About/Website→assistenza, social-preview,
+      README profilo (repo speciale PeppeMinniti/PeppeMinniti) + Alexo pinnato; **card Alexo nel
+      portfolio** (2ª posizione, → link repo) + fix del link "github.com/" troncato su **70 pagine**;
+      sezione **"Chi ti aiuta"** su ESP32 SOS (prova: Alexo/Radio/portfolio/GitHub) prima dei Prezzi.
+      ⚠️ I siti NON stanno in questo repo: portfolio = Jekyll (repo "Blog" privato) servito su
+      **Aruba** come HTML statico → si edita l'HTML diretto e si carica con **FileZilla** (no rebuild);
+      ESP32 SOS = sito a sé. **SOSPESO**: social-preview del repo per ora a sfondo bianco → l'utente
+      rifà il collage con sfondo nero + versione trasparente, poi si aggiorna. **DA FARE: FASE 3
+      SOCIAL** (bio coerenti @esp32sos + link unico, poi video YouTube/clip). Tutto in memoria
+      [[vetrina-seo-social]].
+
+16. ✅ **ALEXO IN CASA (16 ago 2026)** — tutta la catena vocale può girare sul **PC
+      dell'utente** invece che in cloud. Progetto affiancato: `C:\Users\peppe\Desktop\AI_locale`
+      (ha un suo `CLAUDE.md`, curato da un'altra sessione; **darlo per letto, non riassumerlo**).
+      **Cartella data in LETTURA**: chiedere prima di scriverci — permesso concesso il 16 ago.
+
+      **Firmware**: modulo condiviso `localai.h/cpp` (raggiungibilità con attesa corta +
+      cache 25 s, nome modello via `/v1/models`, `localStripThink` per il `<think>`) e un bivio
+      in testa a `stt.cpp`/`llm.cpp`/`tts.cpp`. 8 campi nuovi nel pannello + `POST
+      /api/local/test` (pulsante "Prova ora") + **3 pallini nell'header del TFT**.
+
+      **Sul PC** (porte scelte per non litigare: 1234 LM Studio, 8188 ComfyUI):
+      | | Dove | Porta | Note |
+      |---|---|---|---|
+      | Cervello | LM Studio | 1234 | `networkInterface` portato da `127.0.0.1` a **`0.0.0.0`**, se torna a localhost Alexo sembra rotto |
+      | Trascrizione | `voce\server_trascrizione.py` (lanciatore **14**) | 8001 | faster-whisper CPU int8. `small` 1,2 s, `large-v3-turbo` 3,0 s (in uso) |
+      | Voce | `voce_alexo\server_voce.py` (lanciatore **15**) | 8002 | Kokoro-82M CPU, voce **`if_sara`**, 0,35 s per 3,3 s di parlato |
+
+      **Trappole pagate**:
+      - **Python**: Kokoro non gira sul 3.14 (`misaki` dichiara `<3.13`, e spacy→thinc→blis non
+        compila). Installato **3.12 affiancato** (`py install 3.12`), il 3.14 resta il predefinito.
+        Venv **separato** `voce_alexo\.venv` per non rompere Chatterbox. Torch **solo-CPU**
+        (250 MB invece di 2,5 GB) — tanto la VRAM la vuole LM Studio.
+      - **espeak-ng 1.52** non si mette nel PATH su Windows: gli script passano
+        `PHONEMIZER_ESPEAK_LIBRARY`/`_PATH` senza toccare le variabili di sistema.
+      - **Niente ffmpeg** (e l'utente lo evita per scelta, vedi `video_lungo.py`): il VS1053
+        legge WAV nativamente, quindi il TTS in casa manda i campioni grezzi.
+      - **Il display non si ridisegnava**: i pallini cambiavano ma `render()` scatta solo se
+        cambia scroll/righe/stato → aggiunti alla condizione.
+      - **Verde ≠ "risponde"**: per il cervello serve anche un modello caricato
+        (`justInTimeModelLoading` è spento), altrimenti accetta la connessione e rifiuta la domanda.
+
+      **Limiti da ricordare**: in casa **niente ricerca web**; con ComfyUI che genera la VRAM
+      è sua e Alexo torna in cloud (previsto). Il campo "modello" del cervello conviene
+      **compilarlo**: vuoto = "quello caricato adesso", e la libreria dell'utente contiene
+      modelli che con Alexo non c'entrano.
+
+      **Qualità**: `qwen3.6-27b-a3b-coder-i1` è un **coder potato** e sull'italiano/conoscenza
+      generale perde (pronomi clitici sbagliati, nomi propri raddoppiati, geografia inventata).
+      Non è tarabile: servirebbe un generalista (~8B Q4 tutto in VRAM, o Gemma 3 12B per
+      l'italiano). Vedi la memoria [[personalita-alexo-scelta-utente]]: **il tono permissivo è
+      voluto**, non è un difetto — guardare la GRAMMATICA, non il contenuto.
+
+17. ✅ **SOLO CASA + AVVISI (16 ago 2026)** — provato dal vivo e **backup fatto**
+      (`firmware_demo/*_2026-08-16_solo-casa.bin`, firmware + littlefs).
+
+      Nasce da una verifica su cosa esce davvero su internet. Le uniche uscite del firmware
+      sono: le tre API cloud (solo se non si va in casa), **NTP** (sempre) e le **radio**
+      (solo se chiedi musica). Il pannello web è autosufficiente, non carica niente da fuori.
+      Il buco era il **ripiego silenzioso**: se il servizio di casa sbagliava si andava in
+      cloud senza dirlo, e le tre spie verdi non se ne accorgevano (guardano l'ultimo
+      controllo, non la frase in corso).
+
+      - **`gSettings.localOnly`** ("solo casa", pannello): stt/llm/tts non escono MAI. Se casa
+        non c'è, lo dice e si ferma. Si applica **al click** (come volume e ring), NON serve
+        Salva: un interruttore di sicurezza che sembra armato e non lo è è peggio che non
+        averlo. Non tocca radio e NTP.
+      - **`localSayCloud` / `localSayBlocked`** (localai.cpp) → riga di avviso in chat, ruolo
+        `ROLE_WARN`. **VERDE sul TFT** (il rosso su ST7735 è illeggibile, provato anche
+        chiaro), **rossa nel pannello**. Compare solo se quel servizio in casa è configurato.
+        **AGG. 16 ago 2026**: `localSayCloud` esce subito anche se **`localOnly` è spento** —
+        l'avviso "[uscito su internet: …]" (tutte e 3 le casistiche stt/llm/tts) si vede SOLO
+        con l'interruttore "solo casa" acceso; a interruttore spento il cloud è il normale e
+        la riga era rumore a ogni frase. `localSayBlocked` non toccato (scatta già solo con
+        localOnly on). **Provato dal vivo e confermato**, backup fatto
+        (`firmware_demo/firmware_2026-08-16_avvisi-solo-casa.bin`; littlefs invariato).
+      - **Memoria azzerata al cambio strada** e nel momento del ripiego: la conversazione
+        fatta in casa non parte verso Anthropic.
+      - **AGG. 17 ago 2026 — "voce sempre in casa"** (`gSettings.ttsLocalOnly`, pannello, si
+        applica al click): l'unica spesa vera è **ElevenLabs** (Groq gratis, Claude compreso
+        nell'abbonamento Pro), quindi serve un interruttore ristretto al **solo TTS**. Acceso:
+        `ttsSpeak` va dritto a `speakLocal` **saltando `localReachable`** e, se il server di casa
+        non ce la fa, **NON ripiega** su ElevenLabs (`localSayBlocked` + `return false` → ring
+        rosso). Catena: Groq → Claude → voce di casa. Spento: comportamento di prima. Il bivio è
+        **disattivato se `localOnly` è acceso** (lì vale già la regola più larga). Campi nuovi:
+        `TTS_LOCAL_ONLY_DEF` in config.h, NVS `locTtsOnly`, JSON `ttsLocalOnly`, checkbox nella
+        card "AI in casa" → **serve anche `-t uploadfs`**.
+        **Seguito (stesso giorno)**: per il TTS **cade la regola generale** "indirizzo pieno +
+        server che risponde = si va in casa". Bastava che il PC fosse acceso e la voce passava di
+        lì **senza che nessuno l'avesse chiesto**. Ora `ttsSpeak` non chiama piu' `localReachable`:
+        decide `ttsUsesLocal()` (= indirizzo compilato **E** (`ttsLocalOnly` o `localOnly`)).
+        Indirizzo pieno e nessun flag = ElevenLabs, PC acceso o no. **`[LOC]` davanti alla
+        risposta** in chat (main.cpp, `gobboPrint`) quando parla il server di casa: le due voci si
+        distinguono a orecchio, ma non basta a dire chi ha sintetizzato. Il testo passato al TTS
+        resta pulito (il prefisso non si sente). ⚠️ Le **3 spie del TFT** continuano a dire
+        "raggiungibile", non "in uso": per la voce, verde ora non vuol dire che ci passa.
+      - **AGG. 17 ago 2026 — errore voce uniformato** (main.cpp): il ritorno di `ttsSpeak` veniva
+        ignorato, quindi se la voce non usciva Alexo taceva e basta (trascrizione e cervello
+        avevano già ring rosso + bip via `fail()`). Ora `if (!detto) fail("Errore voce")`, dopo
+        `ampEnable(false)` così la coda sfuma prima del bip.
+      - **Voce** (tts.cpp): punto delle migliaia (`230.000`) e **date** (`10/3/2026`,
+        `01.12.1992`, `12-09-1989`, `2026-08-16`). Prima le date con la barra finivano nella
+        regola della frazione ("10 fratto 3 fratto 2026"). Regole strette: non toccano `2/3`,
+        `3.14`, `192.168.1.50`, `1.2.3`, `3-4`.
+      - **Sul PC**: `HF_HUB_OFFLINE=1` nei lanciatori 14 e 15 (all'avvio la libreria
+        HuggingFace contattava l'hub anche col modello già in cache: avvio 2,8 s → 0,9 s) e
+        `repo_id="hexgrad/Kokoro-82M"` esplicito in `server_voce.py`.
+
+      **NON risolto, e va lasciato stare**: i modelli in casa a volte mettono **emoji** in
+      fondo alle risposte e Kokoro le pronuncia col nome. Un filtro emoji in `normalizzaPerVoce`
+      è stato scritto e **rimosso**: il fenomeno è legato al modello, non alla voce, e va
+      semmai chiesto nella Personalità dal pannello — che è roba dell'utente, vedi
+      [[personalita-alexo-scelta-utente]].
+
+      **Regole di prova che valgono per il codice di normalizzazione**: le funzioni di
+      `normalizzaPerVoce` si provano **a banco** ricopiandole in Python (scratchpad) coi casi
+      limite, PRIMA di compilare. Ha evitato più di un aggancio sbagliato.
+
+18. ✅ **VOCE SU MISURA PER KOKORO (17 ago 2026)** — ⚠️ **compila, NON ancora provata dal
+      vivo** → niente backup `.bin` finché l'utente non conferma ([[workflow-backup-dopo-test]]).
+      Kokoro non clona, e per l'italiano ha 2 voci sole. Ma le voci sono **tensori 510x1x256**
+      e si **mediano** → terza voce, senza addestrare niente.
+      **Scoperta che cambia il gioco**: i 256 numeri sono **due metà indipendenti** —
+      `ref_s[:, :128]` = TIMBRO (decoder), `ref_s[:, 128:]` = LETTURA (durate/intonazione),
+      in `kokoro/model.py`. Finché si mescola a blocco unico sono UNA manopola e ogni passo
+      che toglie il difetto toglie anche la qualità cercata: vicolo cieco per costruzione.
+      Separandole si risolve in due giri. **Ripartendo si parte da lì.**
+      Strumento: `AI_locale\voce_alexo\miscela_voci.py` (nudo = ricette, `--esplora` = 20 voci
+      femminili pure, `--meta` = metà separate, `--salva` = congela in `voci\<nome>.pt`).
+      **Voce in uso**: `voci\alexo_calda.pt` — timbro `0.25 af_nicole + 0.50 if_sara + 0.25
+      im_nicola`, lettura tutta `af_nicole`, **velocità 0.90**. Cablata in `server_voce.py`
+      (carica da solo tutti i `.pt` di `voci\`; `VELOCITA_DEF` perché **Alexo la velocità non
+      la manda**). ⚠️ Nel pannello il campo "voce locale" va **VUOTO**, o vince quello.
+      Smentito per strada: le voci latine (`ef_dora`/`pf_dora`/`ff_siwis`) NON battono
+      `if_sara` sull'italiano; e le parole che suonano inglesi **non** si aggiustano da
+      `pronunce.txt` (espeak produce già `tˈu` giusto — è la voce a deformarlo).
+      Tetto invalicabile: **niente espressività**, Kokoro non ha un "leggi con dolcezza".
+      Tutto in dettaglio nel `CLAUDE.md` di AI_locale, sezione "Voci su misura per Kokoro".
+
+19. ✅ **CHAT CONTINUA (17 ago 2026)** — ⚠️ **compila, NON ancora provata dal vivo** →
+      niente backup `.bin`. Finita una risposta il mic si riapre da solo: la domanda dopo non
+      vuole di nuovo "Okay Nabu". `gSettings.chatContinua` (pannello, si applica al click,
+      **di fabbrica SPENTA**: cambia il comportamento, si accende scegliendolo).
+      `runInteraction()` ora ritorna `bool` (= ho detto una risposta) e la chiama in ciclo
+      `runConversation()`, unica per il click encoder e per il wake.
+      **Le tre uscite c'erano già tutte**, non è stato inventato niente: nessuno parla →
+      `micHeardVoice()` falso → chiudi; **click** dell'encoder → ferma la registrazione a
+      vuoto → stessa strada; errore → `fail()`. La memoria multi-turno (MAX_HISTORY=8)
+      c'era già: questa toglie solo la wake word, non aggiunge contesto.
+      **Pezzi nuovi**: `ST_FOLLOWUP` (ring **due punti ambra che girano**, header "a te") — di
+      proposito NON il VU-meter, che direbbe "ti sto già registrando"; `micSetNoVoiceMs()` accorcia a
+      **3 s** (`CHAT_FOLLOWUP_MS`) l'attesa di cortesia, **una registrazione sola**;
+      `micVoiceStarted()` legge la soglia adattiva **mentre** registra, così il passaggio
+      ambra→ascolto usa lo stesso criterio dello stop-al-silenzio invece di un livello
+      inventato. ⚠️ In `gobbo.cpp` il click in `ST_FOLLOWUP` va trattato **come in ascolto**,
+      altrimenti finisce nell'`else` e **riavvia** la chat appena chiusa.
+      ⚠️ Prima di riaprire il mic: **400 ms di `micFlush()`** — la coda della voce appena
+      detta rientra nel microfono e senza quello parte una domanda fantasma (stessa difesa
+      dell'uscita dalla musica).
+      **Alla prima prova dal vivo** (17 ago, chat andata bene) l'attesa sembrava "chiudersi e
+      riaprirsi 2-3 volte": era il **respiro** dell'anello, che calando quasi al buio faceva
+      quell'effetto (1,4 s a ciclo → 2 volte nei 3 s di attesa). Ora l'animazione è a
+      **luminosità costante** (due punti che girano): finché non si spegne del tutto non si
+      può scambiare per una chiusura. Aggiunto anche un log Telnet `[chat] continua: giro N` /
+      `[chat] chiusa dopo N giri` — un giro = **una risposta detta**, quindi se un domani
+      sembrasse riaprirsi da sola, quel numero lo dice senza discutere.
+
+21. ✅ **UNITÀ DI MISURA NELLA VOCE (17 ago 2026)** — ⚠️ compila, non ancora provata dal vivo.
+      Alexo diceva "km" invece di "chilometri". `leggiUnita()` in `tts.cpp` + tabella `UNITA`
+      (**km/h, km, kg** — le più lunghe per prime, o "km/h" resterebbe "chilometri fratto
+      acca"). Confronto **case-insensitive**. Vale su **entrambe le voci** (è a monte del
+      bivio cloud/casa), a differenza di `pronunce.txt` che è solo del server di casa.
+      Dettagli che sembrano pignoleria e non lo sono: **singolare solo con "1"/"un/uno/una"**
+      (in italiano "21 km" è plurale, quindi guardare l'ultima cifra sarebbe sbagliato);
+      match solo a **parola intera** ("kmart" e "okm" non si toccano); il **punto NON si
+      consuma** ("230 km." è quasi sempre fine frase, e toglierlo toglierebbe la pausa).
+      Provata a banco in Python su 16 casi limite prima di compilare, come da regola.
+
+22. ✅ **MARKDOWN VIA ANCHE DAL VIDEO (17 ago 2026)** — ⚠️ compila, non ancora provata dal
+      vivo. Il doppio asterisco si vedeva **solo a video** (TFT e pannello): dal parlato era
+      già tolto in `normalizzaPerVoce`, ma il testo mostrato era quello grezzo. Il system
+      prompt che vieta il markdown **non basta** — i modelli lo mettono lo stesso, i locali
+      soprattutto. Ora `ripuliMarkdown()` in `llm.cpp` toglie `* \` # _` **alla fonte**, sulla
+      risposta appena arrivata: così a video e a voce c'è lo stesso testo (conta per il
+      teleprompter, che scorre insieme alla voce) e la **memoria** salva la versione pulita.
+      Lo strip in `tts.cpp` resta come rete di sicurezza (è idempotente e copre la risposta
+      personalizzata, che non passa da `llm.cpp`).
+
+23. ✅ **ORDINALI E ALTRI SIMBOLI NELLA VOCE (20 ago 2026)** — ⚠️ compila, non ancora
+      provata dal vivo → niente backup `.bin`. "85esima" veniva letto **"ottocinquesima"**
+      da **entrambe** le voci (ElevenLabs e Kokoro): le due voci leggono la cifra e poi il
+      suffisso attaccato, e non c'era nessuna regola. L'unico rimedio e' **scrivere
+      l'ordinale per esteso**, quindi in `tts.cpp` ora ci sono i **numeri in lettere**
+      (`cardinaleParola`, 0..999999) e `ordinaleParola(v, genere)`.
+      Regole che sembrano pignoleria e non lo sono: **1-10 irregolari** (primo…decimo);
+      ...**tre** e ...**sei** NON perdono la vocale (ventitreesimo, ventiseiesimo);
+      ...**mila** → **millesimo** (duemillesimo, non "duemilaesimo"); elisioni del cardinale
+      (ventuno, ventotto, centuno, centotto). Provato a banco in Python su 37 numeri.
+      **Cosa viene intercettato** (`leggiOrdinale`): `85esima/esimo/esimi/esime`, gli
+      indicatori veri **`ª`/`º`** (0xC2 0xAA/0xBA), e il **grado `°` usato come ordinale**.
+      Quest'ultimo e' l'unico punto ambiguo: `21° secolo` → ordinale, `fa 30° all'ombra` →
+      gradi. Decide la **parola dopo**: un ordinale e' seguito da un NOME, i gradi da una
+      preposizione/avverbio/niente → lista `DOPO_GRADI` (parole-funzione). Se dopo non c'e'
+      nulla, c'e' C/F, o c'e' una parola accentata (il taglio si ferma sul byte 0xC3) →
+      **gradi**, cioe' il comportamento di prima. Caso che resta storto e si accetta:
+      **"il 3° e il 4°"** in elenco viene letto "gradi" (la "e" e' nella lista).
+      **Altre regole aggiunte nello stesso giro**: `n° 5` → "numero 5" (la 'n' gia' emessa
+      si toglie da `out`); `3x4` → "3 per 4" (solo **tra due cifre**); `-5` → "meno 5"
+      (solo a **inizio parola**, cosi' "18-20" e "Emilia-Romagna" non si toccano);
+      **valute** `€`/`$`/`£`.
+      **Unita' di misura**: la tabella `UNITA` e' passata da 3 a 29 voci (km/h, km², kcal,
+      kwh, khz/mhz/ghz, min, cm², m², m³, mq, km, kg, kw, kb/mb/gb/tb, cm, mm, ml, mg, hz,
+      h, m, l, g, s) e il trigger non e' piu' la sola lettera 'k' ma **qualsiasi lettera a
+      inizio parola**. Campo nuovo **`serveNum`**: le sigle di **una lettera sola** valgono
+      solo con un NUMERO davanti — senza, "l'acqua" diventava "litriacqua". Confronto
+      case-insensitive **solo sull'ASCII** (i byte di `²`/`³` vanno confrontati grezzi).
+      **Verificato per la domanda posta**: `normalizzaPerVoce` sta in `ttsSpeak` **prima**
+      del bivio cloud/casa, quindi tutte le correzioni (vecchie e nuove) valgono su
+      **entrambe** le voci, risposta personalizzata compresa. Non c'e' nessuna strada che
+      parla saltandole.
+      **Lasciati fuori di proposito**: i **numeri romani** ("XXI secolo", "Luigi XIV")
+      — tante sigle comuni sono numeri romani validi (**CD**, MI, MC, CV) e il rischio di
+      rovinare parole vere e' piu' alto del guadagno; e le **abbreviazioni col punto**
+      ("ecc.", "sig.", "pag.") — li' il punto e' anche la pausa e va deciso caso per caso.
+      Si aggiungono su richiesta.
+
+> ⚠️ HW per l'idle reattivo: i NeoPixel accesi sporcavano il mic via
+> alimentazione. Risolto con condensatori di disaccoppiamento: **470µF sul VCC
+> del MAX4466** + **1000µF sul 5V del ring**. Senza, l'idle reattivo non funziona
+> (vedi memoria). Wake-word "Alexo" = idea futura, ancora da decidere.
+
+> **PIPELINE COMPLETA E FUNZIONANTE**: click encoder → mic I2S ICS-43434 →
+> Groq Whisper → Claude Haiku → ElevenLabs → VS1053. Tutti i moduli testati
+> end-to-end.
+> **STT** = **Groq** (gratis): `src/stt.cpp`, `whisper-large-v3-turbo`.
+> **Cervello** = `src/llm.cpp`, Anthropic `claude-haiku-4-5` (modello e system
+> prompt ora RUNTIME da gSettings), memoria multi-turno (MAX_HISTORY=8). **Voce** =
+> `src/tts.cpp`, ElevenLabs `eleven_flash_v2_5`, voce clonata (gSettings.voiceId,
+> default ELEVEN_VOICE_DEF in config.h). **Animazioni** = `ui.cpp`
+> su task pinnato al core 0 (il loop di rete sta sul core 1) — TIME-BASED
+> (millis) per restare fluide. **Bip** = `sound.cpp`.
+>
+> ⚠️ DUE TRAPPOLE HW risolte in Round A:
+> 1. NeoPixel `setBrightness(N basso)` QUANTIZZA il fading (scala globale
+>    N/255 → pochi livelli). Soluzione: setBrightness(255) + valori bassi
+>    direttamente nelle animazioni.
+> 2. VS1053 `stopSong()` invia un "cancel" che sui TONI BREVI incanta il chip
+>    (solo il 1° bip suona). Soluzione: come la TTS, niente stopSong — feed
+>    dati + coda di silenzio (~2KB di zero/endFillByte).
+> Tutte le chiamate HTTPS con TLS `setInsecure()`.
+
+## Convenzioni
+
+- Tutto in italiano. Pin solo in `config.h`. Audio in: mic I2S ICS-43434
+  (`MIC_USE_I2S 1`, attuale); in alternativa MAX4466 analogico su ADC1 (GPIO
+  non-ADC2 per non confliggere con la WiFi). Audio out: VS1053 SPI.
+- Buffer audio in PSRAM (`ps_malloc`).

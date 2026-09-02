@@ -163,7 +163,7 @@ src/
   settings.cpp       # parametri RUNTIME (gSettings) caricati/salvati in NVS (default = config.h)
   webui.cpp          # web server (porta 80) + LittleFS: pannello http://alexo.local/ + API JSON + live mic
   wakeword.cpp       # WAKE WORD locale (microWakeWord): frontend->modello->detection (gain/cutoff/window da gSettings). Vedi WAKEWORD.md
-  wake_model.h       # modello wake INT8 (g_wake_model): "hey_mycroft". Sostituibile (drop-in)
+  wake_model.h       # modello wake INT8 (g_wake_model): "okay_nabu". Sostituibile (drop-in)
   tfltest.cpp        # self-test TFLite Micro (flag TFL_SELFTEST), usato per validare il runtime
 data/
   index.html         # pagina del pannello impostazioni (servita da LittleFS; -t uploadfs per caricarla)

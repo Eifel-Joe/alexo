@@ -1,6 +1,6 @@
 # ALEXO — La wake word locale (microWakeWord)
 
-La parola di attivazione **"Hey Mycroft"** è riconosciuta **dentro l'ESP32-S3**, offline:
+La parola di attivazione **"Okay Nabu"** è riconosciuta **dentro l'ESP32-S3**, offline:
 nessun audio esce di casa per il solo fatto di stare in ascolto. È l'unica intelligenza
 artificiale che gira sul microcontrollore; tutto il resto della catena vocale è altrove
 (cloud o server di casa).
@@ -32,9 +32,9 @@ microfono gli fa perdere il filo e la parola non viene più riconosciuta.
 
 | | Valore | Dove |
 | --- | --- | --- |
-| Modello | microWakeWord **v2 "hey_mycroft"**, INT8, **57248 byte** | `src/wake_model.h` (`g_wake_model`) |
-| Tensor arena | **23628 byte** richiesti, **40 KB allocati in PSRAM** | `WAKE_ARENA_BYTES` in `wakeword.cpp` |
-| Soglia probabilità | **242** su 255 (manifest: 0.95) | `WAKE_PROB_CUTOFF` |
+| Modello | microWakeWord **v2 "okay_nabu"**, INT8, **60264 byte** | `src/wake_model.h` (`g_wake_model`) |
+| Tensor arena | ~26 KB richiesti, **40 KB allocati in PSRAM** | `WAKE_ARENA_BYTES` in `wakeword.cpp` |
+| Soglia probabilità | **246** su 255 (manifest: 0.97) | `WAKE_PROB_CUTOFF` |
 | Finestra media mobile | **5** step | `WAKE_WINDOW` |
 | Guadagno digitale | **3** | `WAKE_GAIN` |
 
@@ -140,28 +140,14 @@ svuotarlo il wake **riparte da solo** su audio stantio.
 
 ## Come si sceglie la parola
 
-Il catalogo dei modelli **già pronti** ne contiene quattro in tutto (`alexa`,
-`hey_jarvis`, `hey_mycroft`, `okay_nabu`), e vanno usati finché bastano: sono precisi
-e non costano tempo.
+"Okay Nabu" è un modello **pre-addestrato** scaricabile già pronto, e questo è il motivo
+principale per cui è quello in uso: è preciso e non costa niente in tempo.
 
-**Perché "Hey Mycroft" e non più "Okay Nabu" (2 settembre 2026).** Peppe ha messo la
-stessa wake word anche sul Balancing Robot, e in una casa sola una parola non può
-accendere due apparecchi. "Okay Nabu" è rimasta al robot perché è l'unica **provata**
-con la sua voce (probabilità 254 su una soglia di 246) e perché il robot deve
-rispondere mentre cammina per le stanze; Alexo sta fermo su un mobile, quindi la
-parola non ancora provata tocca a lui.
-
-Provate e scartate prima, per ragioni istruttive:
+Provati e scartati, per ragioni istruttive:
 
 - **"hey jarvis"** — modello inglese: con la pronuncia italiana veniva colto raramente.
 - **"alexa"** — scelto per assonanza con "Alexo", ma scattava su **qualsiasi** parola
   contenente "-xa". Una wake word troppo corta e troppo comune fa più danni che comodità.
-
-> ⚠️ **Il catalogo pronto è finito.** Delle quattro parole, una è del robot e due sono
-> state scartate: "Hey Mycroft" è l'ultima rimasta. Se anche questa non venisse colta
-> con la pronuncia italiana, l'unica strada resta addestrarne una su misura — e il
-> progetto ufficiale avverte che «allenare un modello che funzioni bene è ancora molto
-> difficile».
 
 ### Se vuoi una parola tutta tua
 

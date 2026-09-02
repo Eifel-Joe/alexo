@@ -30,7 +30,7 @@ di attivazione.
 
 ```mermaid
 flowchart TD
-    START(["🗣️ Wake word 'Hey Mycroft' (locale, offline)<br/>oppure click sull'encoder"])
+    START(["🗣️ Wake word 'Okay Nabu' (locale, offline)<br/>oppure click sull'encoder"])
     MIC["🎤 Microfono I2S<br/>registra la voce · stop automatico al silenzio"]
     STT["📤 Groq · Whisper<br/>voce → testo (STT, gratis)"]
     LLM["🧠 Claude · Anthropic<br/>il cervello · ricerca web"]
@@ -53,7 +53,7 @@ animazione in base allo stato (ascolto / pensa / parla).
 
 ## Funzionalità
 
-- 🗣️ **Wake word locale** "Hey Mycroft" (microWakeWord / TensorFlow Lite Micro, offline)
+- 🗣️ **Wake word locale** "Okay Nabu" (microWakeWord / TensorFlow Lite Micro, offline)
 - 🎛️ **Encoder** come comando unico (click per parlare, giro per scorrere/volume)
 - 🧠 **Memoria della conversazione** + **ricerca web** (via Claude)
 - 💬 **Chat continua** (opzionale): finita la risposta il microfono si riapre da solo,

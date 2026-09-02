@@ -23,7 +23,7 @@ ogni concetto difficile è spiegato con parole semplici e con un esempio.
 7. [Le impostazioni fondamentali (config.h e secrets.h)](#7-le-impostazioni-fondamentali)
 8. [Come funziona il programma, modulo per modulo](#8-come-funziona-il-programma-modulo-per-modulo)
 9. [La "macchina a stati": il ciclo di vita di una domanda](#9-la-macchina-a-stati)
-10. [La wake word "Hey Mycroft" spiegata semplice](#10-la-wake-word-hey-mycroft-spiegata-semplice)
+10. [La wake word "Okay Nabu" spiegata semplice](#10-la-wake-word-okay-nabu-spiegata-semplice)
 11. [Compilare e caricare il firmware](#11-compilare-e-caricare-il-firmware)
 12. [Diagnostica e risoluzione problemi](#12-diagnostica-e-risoluzione-problemi)
 13. [Come personalizzare Alexo](#13-come-personalizzare-alexo)
@@ -48,7 +48,7 @@ Internet a dei servizi specializzati, riceve la risposta e la fa parlare.
 telefonare per averla, e poi te la riferisce. Alexo è quel centralinista.
 
 L'unica cosa "intelligente" che Alexo fa **dentro di sé, offline**, è accorgersi
-quando dici la parola magica ("Hey Mycroft") per svegliarsi. Quello sì, lo fa da
+quando dici la parola magica ("Okay Nabu") per svegliarsi. Quello sì, lo fa da
 solo, senza Internet.
 
 > 🏠 **Il cloud non è obbligatorio.** Se hai un PC in casa abbastanza capace, ognuno
@@ -67,7 +67,7 @@ passaggi. Ogni freccia è una "telefonata" via Internet (HTTPS):
 
 ```mermaid
 flowchart TD
-    START(["🗣️ Dici 'Hey Mycroft' → Alexo si sveglia (in locale, offline)<br/>in alternativa: click sull'encoder"])
+    START(["🗣️ Dici 'Okay Nabu' → Alexo si sveglia (in locale, offline)<br/>in alternativa: click sull'encoder"])
     MIC["🎤 Il microfono registra la tua voce<br/>(finché non fai ~1,5 s di silenzio)"]
     STT["📤 GROQ · Whisper<br/>l'audio diventa TESTO"]
     LLM["🧠 CLAUDE · Anthropic<br/>legge il testo e scrive la RISPOSTA<br/>(può cercare sul web)"]
@@ -317,7 +317,7 @@ src/                   ← il codice vero e proprio
   netlog.cpp           ← invia i log via rete (per leggerli senza cavo USB)
   settings.cpp         ← parametri modificabili "a caldo", salvati in memoria (NVS)
   webui.cpp            ← il web server del pannello impostazioni
-  wakeword.cpp         ← riconosce "Hey Mycroft" (l'unica IA che gira sull'ESP32)
+  wakeword.cpp         ← riconosce "Okay Nabu" (l'unica IA che gira sull'ESP32)
   localai.cpp          ← i servizi AI "in casa": il PC sulla rete risponde?
 
 data/                  ← file serviti dal web server (via LittleFS)
@@ -347,7 +347,7 @@ su un core separato, restano fluide anche mentre Alexo "pensa".
 - `IDLE_REACTIVE` → `1` fa "ballare" i LED col suono quando Alexo è a riposo.
 - `REC_SILENCE_MS 1500` → dopo 1,5 s di silenzio la registrazione si chiude da sola.
 - `REC_MAX_MS 20000` → non registra mai più di 20 secondi.
-- `WAKE_ENABLE 1` → attiva la wake word "Hey Mycroft".
+- `WAKE_ENABLE 1` → attiva la wake word "Okay Nabu".
 - `DISPLAY_SLEEP_MS 120000` → spegne lo schermo dopo 2 minuti di inattività.
 - Vari flag di **diagnostica** (`MIC_DIAG`, `WAKE_TEST`, `TFL_SELFTEST`) che
   vedremo nel capitolo 12.
@@ -634,7 +634,7 @@ volume e ascolta di continuo il microfono per la wake word.
 
 ### La "chat continua" (le caselle tratteggiate)
 
-Di solito, finita la risposta, per fare un'altra domanda devi ridire "Hey Mycroft". Con
+Di solito, finita la risposta, per fare un'altra domanda devi ridire "Okay Nabu". Con
 la **chat continua** accesa (pannello web, **spenta di fabbrica**) il microfono si
 **riapre da solo**: chiedi la cosa dopo e basta, come in una conversazione vera. Nel
 codice è `runConversation()`, che chiama `runInteraction()` **in ciclo** finché c'è
@@ -669,7 +669,7 @@ Si esce in **tre modi**, e non c'è nessuna "trappola" per restare dentro:
 
 ---
 
-## 10. La wake word "Hey Mycroft" spiegata semplice
+## 10. La wake word "Okay Nabu" spiegata semplice
 
 Questa è l'**unica intelligenza che gira dentro Alexo**, senza Internet. Serve a
 farlo svegliare quando dici la parola magica, senza dover toccare la manopola.
@@ -684,7 +684,7 @@ Il percorso, semplificato:
 flowchart TD
     A["🎤 Audio continuo dal microfono"]
     B["Frontend<br/>trasforma l'audio in 40 numeri ogni 10 ms<br/>(le frequenze del momento, come un equalizzatore)"]
-    C["Modello (rete neurale)<br/>quanto assomiglia a 'Hey Mycroft'?<br/>→ un valore 0..255"]
+    C["Modello (rete neurale)<br/>quanto assomiglia a 'Okay Nabu'?<br/>→ un valore 0..255"]
     D{"Media su 5 misure<br/>sopra la soglia?"}
     E["🚀 Avvia la chat<br/>(come un click della manopola)"]
 
@@ -693,12 +693,9 @@ flowchart TD
     D -->|no| A
 ```
 
-**Perché "Hey Mycroft" e non "Alexo"?** Perché è un modello **già pronto**
-(scaricato). Fino al 2 settembre 2026 la parola era **"Okay Nabu"**, ed è cambiata
-per un motivo pratico: la stessa parola è finita anche sul Balancing Robot, e in una
-casa sola non può accenderne due. "Okay Nabu" è rimasta al robot, che è l'unico dei
-due ad averla già provata sul campo. Le altre parole
-inglesi non andavano ("hey jarvis" non veniva colto per l'accento,
+**Perché "Okay Nabu" e non "Alexo"?** Perché "Okay Nabu" è un modello **già
+pronto** (scaricato, molto preciso) e si pronuncia bene. Le parole
+inglesi provate prima non andavano ("hey jarvis" non veniva colto per l'accento,
 "alexa" scattava su qualsiasi parola che finiva in "-xa"). La parola **"Alexo"
 personalizzata** è il prossimo upgrade: bisogna *addestrare* un modello nuovo (si
 fa online con Google Colab, usando voci sintetiche, in circa mezz'ora) e poi
@@ -848,7 +845,7 @@ Tutto senza toccare la logica, solo pochi valori:
   (o dal pannello).
 - **Cambiare la wake word:** si sostituisce il file del modello `src/wake_model.h`
   (con quello di un'altra parola) e si aggiornano i parametri `WAKE_*` in `config.h`.
-  Per addestrare una parola tutta tua vedi la nota in fondo al [capitolo 10](#10-la-wake-word-hey-mycroft-spiegata-semplice).
+  Per addestrare una parola tutta tua vedi la nota in fondo al [capitolo 10](#10-la-wake-word-okay-nabu-spiegata-semplice).
 
 ---
 
@@ -873,7 +870,7 @@ Adesso è: *sposti uno slider dal telefono e guardi l'effetto in tempo reale*.
   accensione), la **reattività** (quanto in fretta i LED si accendono) e la
   **permanenza** (quanto in fretta si spengono), e l'accensione/spegnimento
   dell'effetto luminoso a riposo.
-- **Wake word "Hey Mycroft":** guadagno, soglia di attivazione, finestra della media
+- **Wake word "Okay Nabu":** guadagno, soglia di attivazione, finestra della media
   (quanto dev'essere "sicuro" prima di svegliarsi).
 - **Audio:** volume; la **voce** di default (Voice ID ElevenLabs); la **voce
   alternativa** e le sue **parole-trigger** (più d'una, separate da virgola: se la
@@ -881,7 +878,7 @@ Adesso è: *sposti uno slider dal telefono e guardi l'effetto in tempo reale*.
 - **Cervello:** il **modello** di Claude (haiku = veloce, opus = più intelligente)
   e la **personalità** (il testo che descrive chi è Alexo e come deve rispondere).
 - **Chat continua:** finita una risposta il microfono si riapre da solo, così la
-  domanda dopo non richiede di ridire "Hey Mycroft" (vedi
+  domanda dopo non richiede di ridire "Okay Nabu" (vedi
   [capitolo 9](#9-la-macchina-a-stati)). Spenta di fabbrica; si applica **al click**,
   senza premere Salva.
 - **AI in casa:** indirizzi e nomi modello dei tre servizi sul tuo PC, la
@@ -907,7 +904,7 @@ In cima alla pagina c'è un riquadro che mostra, aggiornati ogni secondo:
 - il **livello** di suono che il mic sente in questo momento,
 - il **rumore di fondo** stimato da Alexo,
 - la **soglia** di accensione (una tacca sulla barra),
-- la **probabilità wake** (quanto "assomiglia" a Hey Mycroft mentre parli),
+- la **probabilità wake** (quanto "assomiglia" a Okay Nabu mentre parli),
 - più WiFi e memoria libera.
 
 Così tari le soglie **guardandole muoversi** — per esempio introduci un rumore di

@@ -96,7 +96,7 @@
 //  l'OTA RESTA ATTIVO: per uscire rimetti 0 e riflasha via OTA. Default 0.
 #define MIC_DIAG         0
 
-// --- Wake word locale "Okay Nabu" (microWakeWord, vedi WAKEWORD.md) ---------
+// --- Wake word locale "Hey Mycroft" (microWakeWord, vedi WAKEWORD.md) -------
 //  1 = wake word attiva (avvio chat con "Hey Mycroft" IN PARALLELO al click
 //  encoder); 0 = avvio SOLO col click. Vedi WAKEWORD.md.
 //  ⚠️ NON e' piu' "Okay Nabu" dal 2026-09-02: quella parola ora accende il

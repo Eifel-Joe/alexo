@@ -12,7 +12,7 @@ La catena vocale è ibrida: il riconoscimento della parola di attivazione è **l
 
 ```mermaid
 flowchart TD
-    START(["🗣️ Wake word 'Hey Mycroft' (locale, offline)<br/>oppure click encoder"])
+    START(["🗣️ Wake word 'Okay Nabu' (locale, offline)<br/>oppure click encoder"])
     MIC["🎤 Mic ICS-43434 I2S<br/>registra PCM 16 kHz in PSRAM<br/>stop al silenzio ~1.5 s"]
     STT["STT · Groq Whisper"]
     LLM["🧠 Claude (modello configurabile)<br/>il cervello · ricerca web"]
@@ -43,7 +43,7 @@ flowchart TD
   passare a `claude-opus-5` per risposte più capaci — runtime dal pannello web).
 - **STT**: **Groq** Whisper (gratis). **TTS**: **ElevenLabs** (supporta voce clonata).
   Servono 3 API key (Groq + Anthropic + ElevenLabs); OpenAI è opzionale.
-- **Attivazione**: **wake word locale "Hey Mycroft"** (microWakeWord/TFLite Micro, tutto
+- **Attivazione**: **wake word locale "Okay Nabu"** (microWakeWord/TFLite Micro, tutto
   offline sull'S3) **oppure** click dell'**encoder** — in parallelo. La registrazione si
   chiude da sola dopo **1.5 s di silenzio** (tetto 20 s).
 - **Chat continua** (`gSettings.chatContinua`, pannello, di fabbrica spenta): finita una
@@ -71,12 +71,10 @@ flowchart TD
 - **Splash di boot**: animazione HUD su TFT + ring "carica" all'avvio (`bootSplash()` in
   main.cpp, flag `SPLASH_BOOT`).
 
-> **Wake word**: "Hey Mycroft" è un modello **pre-addestrato**. Dal 2 set 2026: prima era
-> "Okay Nabu", ceduta al Balancing Robot perché una parola sola non può accendere due
-> apparecchi nella stessa casa, e il robot è l'unico dei due che l'aveva già provata dal
-> vivo. Gli altri modelli inglesi davano problemi (accento; "alexa" scattava su qualsiasi
-> "-xa"), quindi il catalogo pronto è esaurito: una parola **CUSTOM** è l'unico passo che
-> resta (training microWakeWord via Colab). Pipeline completa in [`WAKEWORD.md`](WAKEWORD.md).
+> **Wake word**: "Okay Nabu" è un modello **pre-addestrato** (preciso). I modelli inglesi
+> "hey jarvis"/"alexa" davano problemi (accento; "alexa" scattava su qualsiasi "-xa"). Una
+> parola **"Alexo" CUSTOM** è l'upgrade futuro (training microWakeWord via Colab). Pipeline
+> completa in [`WAKEWORD.md`](WAKEWORD.md).
 
 ## Hardware
 
@@ -163,7 +161,7 @@ src/
   settings.cpp       # parametri RUNTIME (gSettings) caricati/salvati in NVS (default = config.h)
   webui.cpp          # web server (porta 80) + LittleFS: pannello http://alexo.local/ + API JSON + live mic
   wakeword.cpp       # WAKE WORD locale (microWakeWord): frontend->modello->detection (gain/cutoff/window da gSettings). Vedi WAKEWORD.md
-  wake_model.h       # modello wake INT8 (g_wake_model): "hey_mycroft". Sostituibile (drop-in)
+  wake_model.h       # modello wake INT8 (g_wake_model): "okay_nabu". Sostituibile (drop-in)
   tfltest.cpp        # self-test TFLite Micro (flag TFL_SELFTEST), usato per validare il runtime
 data/
   index.html         # pagina del pannello impostazioni (servita da LittleFS; -t uploadfs per caricarla)

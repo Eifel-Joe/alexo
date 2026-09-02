@@ -20,7 +20,7 @@ struct AlexoSettings {
   bool     idleReactive;      // LED "ballano" col suono a riposo (on/off)
   bool     chatContinua;      // dopo una risposta riapre il mic (niente wake word ogni volta)
 
-  // --- Wake word "Okay Nabu" ---
+  // --- Wake word "Hey Mycroft" ---
   int      wakeGain;          // guadagno digitale del percorso wake
   int      wakeProbCutoff;    // soglia probabilita' 0..255
   int      wakeWindow;        // ampiezza finestra mobile (1..16)

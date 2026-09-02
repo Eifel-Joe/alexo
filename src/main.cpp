@@ -458,7 +458,7 @@ static bool runInteraction(bool followUp) {
 
 // --- Conversazione: una domanda, o tante di fila -----------------------------
 //  Con la chat continua accesa, finita una risposta il mic si riapre da solo e
-//  la domanda dopo non vuole di nuovo "Okay Nabu". Si esce da tre parti, tutte
+//  la domanda dopo non vuole di nuovo "Hey Mycroft". Si esce da tre parti, tutte
 //  gia' esistenti: nessuno parla entro CHAT_FOLLOWUP_MS, un click dell'encoder
 //  (ferma la registrazione a vuoto = come non aver parlato), o un errore.
 static void runConversation() {
@@ -713,7 +713,7 @@ void loop() {
 
   // Avvio chat: il click encoder (sopra) resta SEMPRE attivo in parallelo.
 #if WAKE_ENABLE
-  // Wake word "Okay Nabu": ascolto CONTINUO del mic (chunk ~20ms). Al
+  // Wake word "Hey Mycroft": ascolto CONTINUO del mic (chunk ~20ms). Al
   // riconoscimento avvia la chat come un click encoder. Lo STESSO chunk pilota
   // anche il livello del ring: niente doppia lettura I2S (che ruberebbe meta'
   // dell'audio al modello streaming).
