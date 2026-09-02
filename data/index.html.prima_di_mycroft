@@ -213,10 +213,8 @@
       <div class="row">
         <label>Soglia di attivazione (0–255)</label>
         <div class="desc">Quanto dev'essere "sicuro" il riconoscitore per attivarsi. Più alto =
-          meno falsi positivi ma serve pronunciare bene; più basso = più sensibile. Tipico 242
-          (~0.95) per "Hey Mycroft" — era 246 quando la parola era "Okay Nabu": la soglia
-          giusta è scritta nel modello, non è una preferenza. Guarda "wake prob" qui sopra
-          mentre dici la parola.</div>
+          meno falsi positivi ma serve pronunciare bene; più basso = più sensibile. Tipico 246
+          (~0.96). Guarda "wake prob" qui sopra mentre dici la parola.</div>
         <input type="number" id="wakeProbCutoff" min="100" max="255" step="1">
       </div>
       <div class="row">

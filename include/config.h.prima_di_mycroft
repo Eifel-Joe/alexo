@@ -97,20 +97,13 @@
 #define MIC_DIAG         0
 
 // --- Wake word locale "Okay Nabu" (microWakeWord, vedi WAKEWORD.md) ---------
-//  1 = wake word attiva (avvio chat con "Hey Mycroft" IN PARALLELO al click
+//  1 = wake word attiva (avvio chat con "Okay Nabu" IN PARALLELO al click
 //  encoder); 0 = avvio SOLO col click. Vedi WAKEWORD.md.
-//  ⚠️ NON e' piu' "Okay Nabu" dal 2026-09-02: quella parola ora accende il
-//  Balancing Robot, e nella stessa casa non possono averla tutti e due.
 #define WAKE_ENABLE      1
-//  Parametri detection (dal manifest v2 "hey_mycroft"): cutoff probabilita'
-//  0..255 (0.95*255=242) e dimensione della finestra mobile su cui si fa la
-//  media. Entrambi regolabili a caldo dal pannello web: qui c'e' solo il default.
-//  ⚠️ 242 e NON 246: il manifest di "hey_mycroft" dichiara 0.95, quello di
-//  "okay_nabu" dichiarava 0.97. Sono due modelli diversi e la soglia e' una
-//  proprieta' del modello, non una preferenza: lasciandoci il 246 di prima si
-//  chiederebbe a Mycroft piu' sicurezza di quanta ne sia stata tarata, e la
-//  parola verrebbe colta di rado. Vedi src/wake_model.h.
-#define WAKE_PROB_CUTOFF 242
+//  Parametri detection (dal manifest v2 "okay_nabu"): cutoff probabilita' 0..255
+//  (0.97*255=246) e dimensione della finestra mobile su cui si fa la media.
+//  Entrambi regolabili a caldo dal pannello web: qui c'e' solo il default.
+#define WAKE_PROB_CUTOFF 246
 #define WAKE_WINDOW      5
 //  Guadagno digitale del solo percorso wake (il PCM a shift 15 e' troppo basso:
 //  serviva gridare). Moltiplica i campioni prima del frontend, con clamp. Alza
