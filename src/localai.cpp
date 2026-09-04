@@ -2,7 +2,9 @@
 //  ALEXO - Servizi AI in casa: aiutanti condivisi (vedi localai.h).
 // ============================================================================
 #include "localai.h"
+#include "config.h"
 #include "settings.h"
+#include "tts.h"          // ttsUsesLocal(): per la voce "raggiungibile" non basta
 #include "gobbo.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -41,24 +43,42 @@ static String preferredModel(LocalSvc svc) {
   }
 }
 
-// Spezza "http://192.168.1.50:1234/v1" in host e porta (porta 80 se assente).
+// Spezza "http://192.168.1.50:1234/v1" in host, porta e path. La porta torna 0
+// se non e' scritta: e' il segnale che va indovinata (vedi le candidate sotto).
 // Torna false se l'indirizzo e' vuoto o non comincia per http:// .
-static bool parseUrl(const String &url, String &host, uint16_t &port) {
+static bool parseUrl(const String &url, String &host, uint16_t &port, String &path) {
   if (!url.startsWith("http://")) return false;   // niente TLS in casa
   int start = 7;                                  // dopo "http://"
   int slash = url.indexOf('/', start);
   String hostPort = (slash < 0) ? url.substring(start) : url.substring(start, slash);
-  hostPort.trim();
+  path = (slash < 0) ? String("") : url.substring(slash);
+  hostPort.trim(); path.trim();
+  while (path.endsWith("/")) path.remove(path.length() - 1);   // "/v1/" -> "/v1"
   if (hostPort.isEmpty()) return false;
 
   int colon = hostPort.indexOf(':');
-  if (colon < 0) { host = hostPort; port = 80; }
+  if (colon < 0) { host = hostPort; port = 0; }   // porta da indovinare
   else {
     host = hostPort.substring(0, colon);
     port = (uint16_t)hostPort.substring(colon + 1).toInt();
     if (port == 0) return false;
   }
   return !host.isEmpty();
+}
+
+// Porte da provare quando nell'indirizzo non c'e' (vedi LOCAL_TTS_PORTS_AUTO).
+static const uint16_t TTS_PORTS[] = LOCAL_TTS_PORTS_AUTO;
+
+// Il server risponde su host:porta? Attesa cortissima, come tutto il resto qui.
+static bool probe(const String &host, uint16_t port) {
+  // Se l'host e' gia' un indirizzo numerico si evita la risoluzione del nome,
+  // che da sola puo' costare piu' dell'attesa che ci siamo dati.
+  WiFiClient c;
+  IPAddress ip;
+  bool up = ip.fromString(host) ? c.connect(ip, port, LOCAL_PROBE_MS)
+                                : c.connect(host.c_str(), port, LOCAL_PROBE_MS);
+  c.stop();
+  return up;
 }
 
 // --- Stato per servizio -----------------------------------------------------
@@ -73,6 +93,7 @@ struct Svc {
   uint32_t when  = 0;      // quando e' stato provato (0 = mai / da riprovare)
   String   model;          // nome modello saputo dal server
   uint32_t modelWhen = 0;
+  String   base;           // indirizzo risolto (porta indovinata, se mancava)
 };
 static Svc gSvc[LOC_COUNT];
 
@@ -84,22 +105,42 @@ static const char *svcName(LocalSvc svc) {
 static void refresh(LocalSvc svc) {
   Svc &s = gSvc[svc];
 
-  const String base = localBaseUrl(svc);
-  String host; uint16_t port;
-  if (!parseUrl(base, host, port)) {        // spento dal pannello o indirizzo storto
-    s.up = s.ok = false; s.when = millis();
+  const String cfg = localBaseUrl(svc);
+  String host, path; uint16_t port;
+  if (!parseUrl(cfg, host, port, path)) {   // spento dal pannello o indirizzo storto
+    s.up = s.ok = false; s.base = ""; s.when = millis();
     return;
   }
 
   if (s.when && millis() - s.when < LOCAL_CACHE_MS) return;   // esito ancora buono
 
-  // Se l'host e' gia' un indirizzo numerico si evita la risoluzione del nome,
-  // che da sola puo' costare piu' dell'attesa che ci siamo dati.
-  WiFiClient c;
-  IPAddress ip;
-  bool up = ip.fromString(host) ? c.connect(ip, port, LOCAL_PROBE_MS)
-                                : c.connect(host.c_str(), port, LOCAL_PROBE_MS);
-  c.stop();
+  // Porta scritta = una sola prova, quella. Porta mancante = per la VOCE si
+  // provano in ordine quelle dei due server di casa (la prima che risponde
+  // vince), per gli altri vale la 80 come in qualsiasi indirizzo http.
+  uint16_t cand[sizeof(TTS_PORTS) / sizeof(TTS_PORTS[0])];
+  int nc = 0;
+  if (port)                cand[nc++] = port;
+  else if (svc == LOC_TTS) for (unsigned i = 0; i < sizeof(TTS_PORTS) / sizeof(TTS_PORTS[0]); i++)
+                             cand[nc++] = TTS_PORTS[i];
+  else                     cand[nc++] = 80;
+
+  bool up = false;
+  uint16_t used = cand[0];        // se non risponde nessuno resta la prima
+  for (int i = 0; i < nc && !up; i++)
+    if (probe(host, cand[i])) { up = true; used = cand[i]; }
+
+  // Con la porta scritta l'indirizzo resta quello del pannello, virgola per
+  // virgola: chi ce l'ha gia' buono non deve accorgersi di niente.
+  const String prev = s.base;
+  if (port) { s.base = cfg; while (s.base.endsWith("/")) s.base.remove(s.base.length() - 1); }
+  else {
+    if (path.isEmpty() && svc == LOC_TTS) path = LOCAL_TTS_PATH_AUTO;
+    s.base = "http://" + host + ":" + String(used) + path;
+    // Solo quando CAMBIA: il giro di controllo passa di qui ogni ~20 s e un log
+    // a ogni passaggio coprirebbe tutto il resto.
+    if (up && nc > 1 && s.base != prev) Serial.printf("[loc] voce in casa: %s\n", s.base.c_str());
+  }
+
   s.up = up;
   s.when = millis();
 
@@ -118,6 +159,11 @@ static void refresh(LocalSvc svc) {
 
 bool localOn(LocalSvc svc) {
   if (svc >= LOC_COUNT) return false;
+  // La VOCE e' l'eccezione: il server di casa puo' rispondere benissimo e la
+  // risposta andare lo stesso a ElevenLabs, perche' per il TTS decidono gli
+  // interruttori e non la raggiungibilita' (vedi ttsUsesLocal). Un pallino verde
+  // li' direbbe una cosa e ne succederebbe un'altra: verde solo se ci passa.
+  if (svc == LOC_TTS && !ttsUsesLocal()) return false;
   return gSvc[svc].ok;
 }
 
@@ -151,12 +197,24 @@ bool localRefreshTick() {
   return false;                                  // nessun servizio in casa configurato
 }
 
+String localBaseUsed(LocalSvc svc) {
+  if (svc >= LOC_COUNT) return "";
+  const String cfg = localBaseUrl(svc);
+  String host, path; uint16_t port;
+  if (!parseUrl(cfg, host, port, path)) return "";
+  // Porta scritta: niente da indovinare, quindi nessuna prova e nessuna attesa
+  // (la voce con "sempre in casa" ci tiene: e' il suo vantaggio).
+  if (port) { String b = cfg; while (b.endsWith("/")) b.remove(b.length() - 1); return b; }
+  refresh(svc);
+  return gSvc[svc].base;
+}
+
 String localModelName(LocalSvc svc) {
   if (svc >= LOC_COUNT) return "";
   String pref = preferredModel(svc);
   if (pref.length()) return pref;                // scelto a mano dal pannello
 
-  const String base = localBaseUrl(svc);
+  const String base = localBaseUsed(svc);
   if (base.isEmpty()) return "";
 
   Svc &s = gSvc[svc];

@@ -178,7 +178,10 @@ partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
 > in `gSettings` (modulo settings), caricati
 > dall'NVS all'avvio (default = macro `*_DEF` di config.h) e modificabili dal browser senza
 > ricompilare. `webui.cpp` serve la pagina da **LittleFS** + API JSON (`/api/settings`
-> GET/POST, `/api/live`, `/api/reset`, `/api/music/stop`, `/api/chat`, `/api/local/test`). Server sincrono:
+> GET/POST, `/api/live`, `/api/reset`, `/api/music/stop`, `/api/music/seek`, `/api/chat`,
+> `/api/local/test`). Nella card "Musica" due pulsanti **◀ ▶** cambiano stazione (stesso
+> giro ciclico del click sull'encoder); attivi **solo mentre una radio suona** — non
+> avviano niente. Server sincrono:
 > durante un'interazione la pagina non risponde per qualche secondo (normale). Lettura LIVE
 > del mic (`micGetLive`) per tarare le soglie dal browser. **Card "Chat"**: rispecchia la
 > conversazione del TFT (anello UTF-8 in PSRAM nel gobbo, `/api/chat` in streaming; refresh
@@ -198,6 +201,11 @@ partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
 >   vuoto accetta la connessione e poi rifiuta la domanda;
 > - la **temperatura** del solo modello locale è regolabile dal pannello (i server locali
 >   partono da 0.7-0.8, troppo alta per un assistente vocale);
+> - nell'indirizzo della **voce** la porta si puo' **omettere** (`http://<ip-del-PC>`): Alexo
+>   prova in ordine quelle di `LOCAL_TTS_PORTS_AUTO` (config.h: **8002**, poi **8003**) e usa
+>   la prima che risponde, cosi' si cambia server di sintesi accendendo l'uno o l'altro sul PC
+>   senza tornare nel pannello. Porta scritta = si usa quella, senza nessuna prova (e senza
+>   l'attesa che la prova costa). L'indirizzo davvero usato si legge in "Prova ora";
 > - la voce in casa si chiede in **WAV**, non in MP3: il VS1053 lo decodifica nativamente
 >   (come i bip di `sound.cpp`), quindi il server non deve comprimere niente e non serve
 >   ffmpeg. Costa più banda (~380 kbit/s contro 128), irrilevante su WiFi;
@@ -224,7 +232,10 @@ partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
 >   cambio strada** e nel momento del ripiego: quello che è stato detto in casa non parte verso
 >   il cloud insieme alla domanda successiva;
 > - **tre pallini nell'header del TFT** (ordine: trascrizione, cervello, voce) dicono a colpo
->   d'occhio chi sta girando dove: verde = in casa, rosso = in cloud. Il display gira sul core
+>   d'occhio chi sta girando dove: verde = in casa, rosso = in cloud. Per la **voce** non
+>   basta che il server di casa risponda: senza uno dei due interruttori la risposta la legge
+>   ElevenLabs lo stesso, quindi li' il pallino resta **rosso** (`localOn` guarda anche
+>   `ttsUsesLocal`). Il display gira sul core
 >   0 e non può aspettare la rete, quindi legge l'ultimo esito noto; a tenerlo aggiornato è
 >   `localRefreshTick()` nel loop, che riprova **un servizio per volta ogni ~20 s** e subito
 >   dopo svuota il mic (l'attesa del controllo è un buco in cui il wake word non ascolta).

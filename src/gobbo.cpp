@@ -219,8 +219,9 @@ static void addText(const char *text) {
 // cosi' copre eventuali righe che sconfinano sotto l'header.
 //  Tre spie fra "ALEXO" e l'etichetta di stato, nell'ordine della catena vocale:
 //  trascrizione, cervello, voce. VERDE = quel pezzo sta girando sul PC di casa,
-//  ROSSO = sta andando in cloud (perche' spento nel pannello o perche' il PC non
-//  risponde). Lo stato e' l'ULTIMO NOTO: qui siamo sul core 0, che non puo'
+//  ROSSO = sta andando in cloud (perche' spento nel pannello, perche' il PC non
+//  risponde o - solo per la voce - perche' nessun interruttore l'ha mandata in
+//  casa: li' un server acceso non basta, vedi localOn). Lo stato e' l'ULTIMO NOTO: qui siamo sul core 0, che non puo'
 //  fermarsi ad aspettare la rete (ci pensa il loop, vedi localRefreshTick).
 #define DOT_X0     46      // centro del primo pallino
 #define DOT_STEP   12      // distanza fra i centri

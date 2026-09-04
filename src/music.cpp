@@ -241,7 +241,9 @@ String musicCatalogList() {
 // Stop chiesto dal pannello web + stato "sta suonando" (letti dentro musicPlay).
 static volatile bool s_stopWeb = false;
 static volatile bool s_playing = false;
+static volatile int  s_seekWeb = 0;      // cambio stazione chiesto dal pannello web
 void musicRequestStop() { s_stopWeb = true; }
+void musicRequestSeek(int delta) { if (delta) s_seekWeb = (delta > 0) ? 1 : -1; }
 bool musicIsPlaying()   { return s_playing; }
 
 // --- Metadata ICY (nome emittente + titolo brano dallo stream) ---------------
@@ -301,6 +303,7 @@ static void readIcyMetadata(WiFiClient *stream) {
 int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*seekRequested)()) {
   int seekOut = 0;                 // != 0 = uscita per SEEK (delta stazioni); 0 = stop/fine
   s_stopWeb = false;               // ignora richieste di stop "vecchie"
+  s_seekWeb = 0;                   // idem per il cambio stazione dal pannello
   // Sorgente HTTP o HTTPS: molte radio italiane (RTL/R101/Deejay/Rai...) sono su
   // https. WiFiClientSecure deriva da WiFiClient -> uso un riferimento polimorfico
   // e TLS "insecure" (senza validare il cert, come STT/Claude/TTS). Le http (es.
@@ -359,6 +362,7 @@ int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*se
   while (http.connected() || (stream && stream->available())) {
     if (stopRequested && stopRequested()) break;   // click encoder = stop
     if (s_stopWeb) break;                           // pulsante Stop del pannello
+    if (s_seekWeb) { seekOut = s_seekWeb; s_seekWeb = 0; break; }  // pulsanti del pannello
     if (seekRequested) {                            // premuto+giro = cambia stazione
       int sd = seekRequested();
       if (sd != 0) { seekOut = sd; break; }

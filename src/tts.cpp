@@ -572,7 +572,11 @@ static bool ttsStream(HTTPClient &http, VS1053 &player, const String &parlato,
 #define WAV_BYTE_PER_MS 48    // 24000 campioni/s x 2 byte = 48 byte per ms
 #define MP3_BYTE_PER_MS 16    // 128 kbps CBR = 16 byte per ms
 static bool speakLocal(VS1053 &player, const String &parlato) {
-  const String base  = localBaseUrl(LOC_TTS);
+  // Indirizzo "risolto": se nel pannello manca la porta, e' quella che ha
+  // risposto (8002 Kokoro / 8003 Chatterbox). Con la porta scritta e' identico
+  // a quello del pannello e non costa nessuna attesa.
+  const String base  = localBaseUsed(LOC_TTS);
+  if (base.isEmpty()) return false;
   String model = localModelName(LOC_TTS);
   if (model.isEmpty()) model = "tts-1";       // la gran parte dei server lo ignora
 

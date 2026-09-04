@@ -43,6 +43,10 @@ int  musicStationIndexOf(const char *url);
 
 // Chiede lo stop della riproduzione (chiamata dal pannello web, thread-safe).
 void musicRequestStop();
+// Chiede il CAMBIO stazione dal pannello web (pulsanti avanti/indietro): stesso
+// delta del premuto+giro sull'encoder (+1 = successiva, -1 = precedente). Vale
+// solo mentre una radio suona; a musica ferma non fa partire niente.
+void musicRequestSeek(int delta);
 // true mentre uno stream sta suonando (per lo stato nel pannello web).
 bool musicIsPlaying();
 // MAD grezzo e baseline dell'ultimo chunk musicale (per tarare la sensibilita'

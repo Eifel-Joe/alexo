@@ -123,8 +123,15 @@
         <label>Radio in riproduzione</label>
         <div class="desc">Di' ad Alexo <code>metti musica rock</code> (oppure pop, country,
           anni 80, anni 90). Per fermarla: il pulsante qui sotto <b>oppure</b> un click
-          sull'encoder. Stato: <b id="musicState">–</b>.</div>
+          sull'encoder. I due pulsanti <b>◀ ▶</b> passano alla stazione precedente o
+          successiva della lista qui sopra (in tondo), come il click sull'encoder mentre
+          suona: servono solo a cambiare stazione, a radio ferma non fanno partire niente.
+          Stato: <b id="musicState">–</b>.</div>
         <div class="desc" id="musicNow" style="color:var(--cy);font-weight:600;min-height:18px"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="btnMusicPrev" class="ghost" disabled>◀ Precedente</button>
+          <button id="btnMusicNext" class="ghost" disabled>Successiva ▶</button>
+        </div>
         <button id="btnMusicStop" class="ghost" style="margin-top:8px;width:100%" disabled>⏹ Ferma musica</button>
       </div>
     </div>
@@ -359,7 +366,12 @@
           grammatica di OpenAI: qui va l'indirizzo <b>fino a /v1</b>, il resto
           (<code>/audio/speech</code>) lo aggiunge Alexo. Va bene sia MP3 sia <b>WAV</b>,
           che il VS1053 decodifica nativamente ed è quello che mandano i due server di casa.
-          <br><b>Sul PC di casa ce ne sono due, si sceglie cambiando la porta:</b>
+          <br><b>La porta si può omettere</b>: scrivendo solo
+          <code>http://&lt;ip-del-PC&gt;</code> Alexo prova la <b>8002</b> e poi la
+          <b>8003</b> e usa quella che risponde — così si passa da un server all'altro
+          accendendo l'uno o l'altro sul PC, senza tornare qui. Se invece la porta la
+          scrivi, si usa quella e basta (nessuna prova, nessuna attesa in più).
+          <br><b>I due server del PC di casa:</b>
           <br><code>http://&lt;ip-del-PC&gt;:8002/v1</code> — <b>Kokoro</b> (lanciatore 15).
           Sulla CPU, risponde in mezzo secondo e non toglie niente a nessuno: è la voce di
           tutti i giorni.
@@ -369,7 +381,7 @@
           ~19 secondi, e non ci si conversa.
           <br>Vuoto = si usa sempre ElevenLabs.</div>
         <input type="text" id="localTtsUrl" spellcheck="false" autocapitalize="off"
-               placeholder="http://192.168.1.50:8002/v1">
+               placeholder="http://192.168.1.50 (senza porta = 8002 o 8003)">
       </div>
       <div class="row">
         <label>Voce · modello</label>
@@ -555,6 +567,13 @@ async function reset(){
   catch(e){ toast('Errore', false); }
 }
 
+async function musicSeek(d){
+  try{
+    const r=await fetch('/api/music/seek',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({d})});
+    toast(r.ok ? (d>0?'Stazione successiva':'Stazione precedente') : 'La radio è ferma', r.ok);
+  }catch(e){ toast('Non sono riuscito a cambiare stazione', false); }
+}
 async function musicStop(){
   try{ await fetch('/api/music/stop',{method:'POST'}); toast('Musica fermata'); }
   catch(e){ toast('Errore', false); }
@@ -622,7 +641,9 @@ async function localTest(){
     out.textContent=Object.keys(nomi).map(k=>{
       const s=d[k]||{};
       const segno = s.stato==='in casa' ? '✓' : s.stato==='spento' ? '–' : '✗';
-      return segno+' '+nomi[k]+': '+(s.stato||'?')+(s.modello?'  ('+s.modello+')':'');
+      // l'indirizzo conta per la VOCE: dice se ha risposto la 8002 o la 8003
+      const dove = (s.indirizzo && s.stato!=='spento') ? '  '+s.indirizzo : '';
+      return segno+' '+nomi[k]+': '+(s.stato||'?')+(s.modello?'  ('+s.modello+')':'')+dove;
     }).join('\n');
   }catch(e){ out.textContent='Non sono riuscito a fare la prova (dispositivo occupato?)'; }
   btn.disabled=false;
@@ -632,6 +653,8 @@ $('btnLocalTest').addEventListener('click', localTest);
 $('btnSave').addEventListener('click', save);
 $('btnReset').addEventListener('click', reset);
 $('btnMusicStop').addEventListener('click', musicStop);
+$('btnMusicPrev').addEventListener('click', ()=>musicSeek(-1));
+$('btnMusicNext').addEventListener('click', ()=>musicSeek(1));
 
 // Lettura live ogni secondo
 let lastChatRev=-1;
@@ -663,6 +686,8 @@ async function live(){
     const playing = !!d.music;
     $('musicState').textContent = playing ? 'in riproduzione' : 'ferma';
     $('btnMusicStop').disabled = !playing;
+    $('btnMusicPrev').disabled = !playing;   // solo cambio stazione: a radio ferma niente
+    $('btnMusicNext').disabled = !playing;
     // "In onda": emittente + brano (metadata ICY)
     $('musicNow').textContent = playing
       ? ('♪ ' + (d.station ? d.station + ' — ' : '') + (d.nowPlaying || '…'))

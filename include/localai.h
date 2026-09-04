@@ -30,8 +30,11 @@ bool localReachable(LocalSvc svc);
 // pannello per distinguere "spento" da "acceso ma senza modello caricato".
 bool localConnected(LocalSvc svc);
 
-// Ultimo esito NOTO di localReachable, senza provare niente e senza toccare la
-// rete: e' quello che guarda il display (gira sul core 0, non puo' aspettare).
+// Questo pezzo sta girando in casa ADESSO? E' l'ultimo esito NOTO di
+// localReachable, senza provare niente e senza toccare la rete: lo guarda il
+// display (gira sul core 0, non puo' aspettare). Per la VOCE vuole anche che uno
+// dei due interruttori sia acceso: senza, il server di casa puo' rispondere
+// quanto vuole ma a parlare e' ElevenLabs (vedi ttsUsesLocal in tts.h).
 bool localOn(LocalSvc svc);
 
 // Riprova UN servizio, a turno, se e' passato abbastanza tempo. Va chiamata dal
@@ -46,8 +49,17 @@ bool localRefreshTick();
 // toccare il pannello. Torna "" se non riesce a saperlo.
 String localModelName(LocalSvc svc);
 
-// Indirizzo base del servizio (dal pannello), "" se spento.
+// Indirizzo base del servizio COSI' COM'E' SCRITTO nel pannello, "" se spento.
+// Non tocca la rete: serve a sapere se il servizio e' configurato, non a parlarci.
 String localBaseUrl(LocalSvc svc);
+
+// Indirizzo da usare DAVVERO per le richieste. Se nel pannello c'e' la porta e'
+// identico a localBaseUrl e non costa niente. Se la porta manca (solo per la
+// VOCE) sono provate quelle di LOCAL_TTS_PORTS_AUTO e torna quella che risponde
+// - cosi' si passa da Kokoro a Chatterbox accendendo l'uno o l'altro sul PC,
+// senza correggere il campo. Se non risponde nessuna torna la prima, cosi' il
+// messaggio d'errore dice un indirizzo sensato. "" se il servizio e' spento.
+String localBaseUsed(LocalSvc svc);
 
 // Dimentica gli esiti in cache (raggiungibilita' e nome modello): la prossima
 // prova richiede tutto da capo. Serve al pulsante "Prova" del pannello e dopo

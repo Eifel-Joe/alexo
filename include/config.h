@@ -280,6 +280,15 @@
 #define LOCAL_TTS_URL_DEF     ""
 #define LOCAL_TTS_MODEL_DEF   ""
 #define LOCAL_TTS_VOICE_DEF   ""
+//  PORTE DELLA VOCE IN CASA: se nell'indirizzo del pannello la porta NON e'
+//  scritta (es. "http://192.168.1.50"), Alexo prova queste in ordine e usa la
+//  prima che risponde - 8002 = Kokoro (lanciatore 15), 8003 = Chatterbox
+//  (lanciatore 16). Serve a non dover correggere il campo ogni volta che si
+//  avvia l'uno o l'altro. Porta scritta = si usa quella e basta, nessuna prova.
+#define LOCAL_TTS_PORTS_AUTO  { 8002, 8003 }
+//  Percorso di serie quando l'indirizzo e' senza porta (i server di casa parlano
+//  il dialetto OpenAI, che sta sotto /v1).
+#define LOCAL_TTS_PATH_AUTO   "/v1"
 //  SOLO CASA: se acceso, i tre pezzi della catena vocale NON escono mai su
 //  internet. Se il servizio di casa non c'e' o sbaglia, Alexo lo dice e si ferma,
 //  invece di ripiegare sul cloud in silenzio (che manderebbe fuori voce, domanda

@@ -6,6 +6,7 @@
 //    POST /api/settings  -> aggiorna i parametri presenti nel body e salva in NVS
 //    GET  /api/live      -> valori live del mic (livello/fondo/soglia) + stato
 //    POST /api/reset     -> ripristina i default di fabbrica
+//    POST /api/music/seek-> cambia stazione radio (+1 avanti / -1 indietro)
 //    POST /api/local/test-> prova i servizi AI in casa (chi risponde, con che modello)
 //  Il server e' sincrono: durante un'interazione (registrazione/rete) il loop e'
 //  bloccato e la pagina non risponde per qualche secondo -> normale, il pannello
@@ -19,6 +20,7 @@
 #include "mic.h"
 #include "wakeword.h"
 #include "music.h"
+#include "tts.h"      // ttsUsesLocal(): la voce ci passa davvero?
 #include "gobbo.h"
 #include <WebServer.h>
 #include <LittleFS.h>
@@ -181,8 +183,17 @@ static void handleLocalTest() {
     // modello caricato non serve a niente, e va detto invece di far vedere un
     // "risponde" che poi in pratica va lo stesso in cloud.
     String m = localModelName(s);
-    o["stato"] = localReachable(s) ? "in casa" : "risponde, ma nessun modello caricato";
+    // La VOCE risponde ma potrebbe non essere usata: senza uno dei due
+    // interruttori legge ElevenLabs lo stesso, e scrivere "in casa" qui sarebbe
+    // la stessa bugia del pallino verde (vedi localOn).
+    if (s == LOC_TTS && !ttsUsesLocal())
+      o["stato"] = "risponde, ma la voce va a ElevenLabs (interruttore spento)";
+    else
+      o["stato"] = localReachable(s) ? "in casa" : "risponde, ma nessun modello caricato";
     o["modello"] = m.length() ? m : String("(non dichiarato)");
+    // Indirizzo davvero usato: con la porta indovinata (voce) e' l'unico modo di
+    // sapere se ha risposto Kokoro o Chatterbox.
+    o["indirizzo"] = localBaseUsed(s);
   }
   String out; serializeJson(doc, out);
   server.send(200, "application/json", out);
@@ -191,6 +202,24 @@ static void handleLocalTest() {
 // POST /api/music/stop -> ferma la musica in riproduzione (pulsante del pannello).
 static void handleMusicStop() {
   musicRequestStop();
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
+// POST /api/music/seek -> stazione successiva/precedente (pulsanti del pannello).
+// Body {"d":1} o {"d":-1}. Solo mentre una radio suona: e' un cambio stazione, non
+// un comando di avvio (la musica la si chiede a voce).
+static void handleMusicSeek() {
+  int d = 1;
+  if (server.hasArg("plain")) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, server.arg("plain")) && !doc["d"].isNull())
+      d = doc["d"].as<int>();
+  }
+  if (!musicIsPlaying()) {
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"radio ferma\"}");
+    return;
+  }
+  musicRequestSeek(d >= 0 ? 1 : -1);
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
@@ -213,6 +242,7 @@ bool webuiBegin() {
   server.on("/api/chat",     HTTP_GET,  handleChat);
   server.on("/api/reset",    HTTP_POST, handleReset);
   server.on("/api/music/stop", HTTP_POST, handleMusicStop);
+  server.on("/api/music/seek", HTTP_POST, handleMusicSeek);
   server.on("/api/local/test", HTTP_POST, handleLocalTest);
 
   // Pagina statica da LittleFS (data/index.html).
