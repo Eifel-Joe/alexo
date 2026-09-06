@@ -242,7 +242,10 @@ String musicCatalogList() {
 static volatile bool s_stopWeb = false;
 static volatile bool s_playing = false;
 static volatile int  s_seekWeb = 0;      // cambio stazione chiesto dal pannello web
+static volatile bool s_startWeb = false;  // avvio chiesto dal pannello web
 void musicRequestStop() { s_stopWeb = true; }
+void musicRequestStart() { s_startWeb = true; }
+bool musicTakeStartRequest() { bool r = s_startWeb; s_startWeb = false; return r; }
 void musicRequestSeek(int delta) { if (delta) s_seekWeb = (delta > 0) ? 1 : -1; }
 bool musicIsPlaying()   { return s_playing; }
 

@@ -158,7 +158,7 @@ src/
   gobbo.cpp          # chat/teleprompter sul TFT (task core 0, bus HSPI, canvas 16bit) + schermata OTA HUD verde (renderOtaScreen) + anello chat UTF-8 per il pannello web (gobboChatRev/Count/Item)
   encoder.cpp        # encoder rotativo (lib Versatile_RotaryEncoder, polling su core 0)
   volume.cpp         # volume VS1053 (premuto+giro encoder / pannello web), salvato in NVS
-  music.cpp          # web-radio MP3 -> VS1053 (http E https via WiFiClientSecure). Stazioni editabili (gSettings.musicStations). Ring reattivo alla cassa. Solo MP3 (NO AAC/HLS)
+  music.cpp          # web-radio MP3 -> VS1053 (http E https via WiFiClientSecure). Stazioni editabili (gSettings.musicStations). Avvio/stop/cambio stazione anche dal pannello (musicRequestStart/Stop/Seek, letti nel loop di musicPlay o in main). Ring reattivo alla cassa. Solo MP3 (NO AAC/HLS)
   netlog.cpp         # log via rete (Telnet porta 23): leggere l'output senza cavo USB
   settings.cpp       # parametri RUNTIME (gSettings) caricati/salvati in NVS (default = config.h)
   webui.cpp          # web server (porta 80) + LittleFS: pannello http://alexo.local/ + API JSON + live mic
@@ -179,9 +179,12 @@ partitions_custom.csv  # tabella partizioni 16MB OTA (in uso)
 > dall'NVS all'avvio (default = macro `*_DEF` di config.h) e modificabili dal browser senza
 > ricompilare. `webui.cpp` serve la pagina da **LittleFS** + API JSON (`/api/settings`
 > GET/POST, `/api/live`, `/api/reset`, `/api/music/stop`, `/api/music/seek`, `/api/chat`,
-> `/api/local/test`). Nella card "Musica" due pulsanti **◀ ▶** cambiano stazione (stesso
-> giro ciclico del click sull'encoder); attivi **solo mentre una radio suona** — non
-> avviano niente. Server sincrono:
+> `/api/music/start`, `/api/local/test`). Nella card "Musica": **▶ Accendi radio** fa partire
+> la **prima** stazione della lista (attivo solo a radio ferma) e due pulsanti **◀ ▶**
+> cambiano stazione (stesso giro ciclico del click sull'encoder), attivi **solo mentre una
+> radio suona**. L'avvio non parte dentro l'handler HTTP (`musicPlay` blocca il core 1
+> finche' la radio suona, quindi la risposta non partirebbe mai): l'API lascia solo la
+> richiesta e la riproduzione parte dal loop. Server sincrono:
 > durante un'interazione la pagina non risponde per qualche secondo (normale). Lettura LIVE
 > del mic (`micGetLive`) per tarare le soglie dal browser. **Card "Chat"**: rispecchia la
 > conversazione del TFT (anello UTF-8 in PSRAM nel gobbo, `/api/chat` in streaming; refresh

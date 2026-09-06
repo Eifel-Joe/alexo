@@ -43,6 +43,13 @@ int  musicStationIndexOf(const char *url);
 
 // Chiede lo stop della riproduzione (chiamata dal pannello web, thread-safe).
 void musicRequestStop();
+// Chiede di ACCENDERE la radio dal pannello web (pulsante "Accendi radio"): parte
+// la prima stazione della lista. L'handler HTTP non puo' avviarla da se' (musicPlay
+// blocca il core 1 finche' la radio suona), quindi lascia solo la richiesta e la
+// riproduzione parte dal loop di main.cpp.
+void musicRequestStart();
+// Preleva e azzera la richiesta di avvio (letta dal loop). true = radio da accendere.
+bool musicTakeStartRequest();
 // Chiede il CAMBIO stazione dal pannello web (pulsanti avanti/indietro): stesso
 // delta del premuto+giro sull'encoder (+1 = successiva, -1 = precedente). Vale
 // solo mentre una radio suona; a musica ferma non fa partire niente.

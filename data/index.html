@@ -122,17 +122,21 @@
       <div class="row" style="border-bottom:0">
         <label>Radio in riproduzione</label>
         <div class="desc">Di' ad Alexo <code>metti musica rock</code> (oppure pop, country,
-          anni 80, anni 90). Per fermarla: il pulsante qui sotto <b>oppure</b> un click
+          anni 80, anni 90), oppure premi <b>Accendi radio</b>: parte la <b>prima</b> stazione
+          della lista qui sopra. Per fermarla: <b>Ferma musica</b> <b>oppure</b> un click
           sull'encoder. I due pulsanti <b>◀ ▶</b> passano alla stazione precedente o
-          successiva della lista qui sopra (in tondo), come il click sull'encoder mentre
-          suona: servono solo a cambiare stazione, a radio ferma non fanno partire niente.
+          successiva della lista (in tondo), come il click sull'encoder mentre suona:
+          servono solo a cambiare stazione, a radio ferma non fanno partire niente.
           Stato: <b id="musicState">–</b>.</div>
         <div class="desc" id="musicNow" style="color:var(--cy);font-weight:600;min-height:18px"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="btnMusicStart" class="ghost">▶ Accendi radio</button>
+          <button id="btnMusicStop" class="ghost" disabled>⏹ Ferma musica</button>
+        </div>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button id="btnMusicPrev" class="ghost" disabled>◀ Precedente</button>
           <button id="btnMusicNext" class="ghost" disabled>Successiva ▶</button>
         </div>
-        <button id="btnMusicStop" class="ghost" style="margin-top:8px;width:100%" disabled>⏹ Ferma musica</button>
       </div>
     </div>
   </div>
@@ -574,6 +578,12 @@ async function musicSeek(d){
     toast(r.ok ? (d>0?'Stazione successiva':'Stazione precedente') : 'La radio è ferma', r.ok);
   }catch(e){ toast('Non sono riuscito a cambiare stazione', false); }
 }
+async function musicStart(){
+  try{
+    const r=await fetch('/api/music/start',{method:'POST'});
+    toast(r.ok ? 'Radio accesa' : 'Radio già accesa o lista vuota', r.ok);
+  }catch(e){ toast('Non sono riuscito ad accendere la radio', false); }
+}
 async function musicStop(){
   try{ await fetch('/api/music/stop',{method:'POST'}); toast('Musica fermata'); }
   catch(e){ toast('Errore', false); }
@@ -652,6 +662,7 @@ async function localTest(){
 $('btnLocalTest').addEventListener('click', localTest);
 $('btnSave').addEventListener('click', save);
 $('btnReset').addEventListener('click', reset);
+$('btnMusicStart').addEventListener('click', musicStart);
 $('btnMusicStop').addEventListener('click', musicStop);
 $('btnMusicPrev').addEventListener('click', ()=>musicSeek(-1));
 $('btnMusicNext').addEventListener('click', ()=>musicSeek(1));
@@ -685,6 +696,7 @@ async function live(){
     $('vRssi').textContent=d.rssi; $('vHeap').textContent=Math.round(d.heap/1024);
     const playing = !!d.music;
     $('musicState').textContent = playing ? 'in riproduzione' : 'ferma';
+    $('btnMusicStart').disabled = playing;    // accende solo a radio ferma
     $('btnMusicStop').disabled = !playing;
     $('btnMusicPrev').disabled = !playing;   // solo cambio stazione: a radio ferma niente
     $('btnMusicNext').disabled = !playing;

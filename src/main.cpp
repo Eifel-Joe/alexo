@@ -684,6 +684,18 @@ void loop() {
   // Qui siamo a riposo; durante il parlato ci pensa ttsSpeak (stesso core/bus).
   if (vsOk) volumeApplyPending(player);
 
+  // Pulsante "Accendi radio" del pannello web: l'handler HTTP lascia solo la
+  // richiesta (musicPlay blocca il core 1 finche' la radio suona), la partenza
+  // avviene qui, sulla PRIMA stazione della lista; poi si cambia con i pulsanti
+  // (o col click dell'encoder), come per la musica chiesta a voce.
+  if (musicTakeStartRequest() && vsOk) {
+    String murl, mnome;
+    if (musicStationGet(0, murl, mnome)) {
+      MusicStation st = { murl.c_str(), mnome.c_str() };
+      playStation(&st);
+    }
+  }
+
   // DOPPIO click dell'encoder = accende/spegne il ring reattivo al suono (toggle
   // runtime). Lo stato vive in gSettings.idleReactive (default = config.h), cosi'
   // e' condiviso col pannello web e salvato in NVS.

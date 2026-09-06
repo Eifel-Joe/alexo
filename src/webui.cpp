@@ -6,6 +6,7 @@
 //    POST /api/settings  -> aggiorna i parametri presenti nel body e salva in NVS
 //    GET  /api/live      -> valori live del mic (livello/fondo/soglia) + stato
 //    POST /api/reset     -> ripristina i default di fabbrica
+//    POST /api/music/start-> accende la radio (prima stazione della lista)
 //    POST /api/music/seek-> cambia stazione radio (+1 avanti / -1 indietro)
 //    POST /api/local/test-> prova i servizi AI in casa (chi risponde, con che modello)
 //  Il server e' sincrono: durante un'interazione (registrazione/rete) il loop e'
@@ -205,6 +206,23 @@ static void handleMusicStop() {
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
+// POST /api/music/start -> accende la radio sulla prima stazione della lista.
+// Risponde SUBITO: la riproduzione la fa partire il loop di main.cpp, perche'
+// musicPlay blocca il core 1 finche' la radio suona (l'handler HTTP non potrebbe
+// mai rispondere). 409 se sta gia' suonando o se la lista e' vuota.
+static void handleMusicStart() {
+  if (musicIsPlaying()) {
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"radio gia accesa\"}");
+    return;
+  }
+  if (musicStationCount() <= 0) {
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"nessuna stazione\"}");
+    return;
+  }
+  musicRequestStart();
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
 // POST /api/music/seek -> stazione successiva/precedente (pulsanti del pannello).
 // Body {"d":1} o {"d":-1}. Solo mentre una radio suona: e' un cambio stazione, non
 // un comando di avvio (la musica la si chiede a voce).
@@ -241,6 +259,7 @@ bool webuiBegin() {
   server.on("/api/live",     HTTP_GET,  handleLive);
   server.on("/api/chat",     HTTP_GET,  handleChat);
   server.on("/api/reset",    HTTP_POST, handleReset);
+  server.on("/api/music/start", HTTP_POST, handleMusicStart);
   server.on("/api/music/stop", HTTP_POST, handleMusicStop);
   server.on("/api/music/seek", HTTP_POST, handleMusicSeek);
   server.on("/api/local/test", HTTP_POST, handleLocalTest);
