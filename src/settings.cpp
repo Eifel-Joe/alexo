@@ -48,7 +48,7 @@ static void loadDefaults() {
   gSettings.ttsLocalOnly     = (TTS_LOCAL_ONLY_DEF != 0);
 }
 
-// Vincoli di sicurezza (evita valori che romperebbero il firmware).
+// Grenzen zur Sicherheit: sie halten Werte fern, die die Firmware lahmlegen würden.
 static void clamp() {
   if (gSettings.recSilenceMs > 10000)      gSettings.recSilenceMs = 10000;
   if (gSettings.recSilenceMargin < 1.0f)   gSettings.recSilenceMargin = 1.0f;
@@ -75,7 +75,7 @@ static void clamp() {
 
 void settingsBegin() {
   loadDefaults();                     // base = valori di fabbrica
-  prefs.begin("cfg", true);           // sola lettura: leggo solo cio' che esiste
+  prefs.begin("cfg", true);           // nur lesen: gelesen wird nur, was vorhanden ist
   gSettings.recSilenceMs     = prefs.getUInt ("recMs",   gSettings.recSilenceMs);
   gSettings.recSilenceMargin = prefs.getFloat("recMg",   gSettings.recSilenceMargin);
   gSettings.recSilenceFloor  = prefs.getInt  ("recFl",   gSettings.recSilenceFloor);
