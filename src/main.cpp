@@ -121,7 +121,7 @@ static void recLevel(uint8_t l) {
 // GETRENNT WIRD AM ZEILENUMBRUCH, nicht am Komma wie im Original. Das ist eine
 // bewusste Abweichung: die häufigsten deutschen Geisterphrasen sind Abspänne von
 // Untertiteln und tragen selbst ein Komma ("Untertitelung des ZDF für funk,
-// 2017"). Mit der Trennung am Komma liesse sich so ein Satz gar nicht
+// 2017"). Mit der Trennung am Komma ließe sich so ein Satz gar nicht
 // hinschreiben, er zerfiele in zwei Einträge, und weil hier auf GENAUE Gleichheit
 // verglichen wird, träfe keiner davon je zu.
 static bool isAllucinazione(const String &testo) {
@@ -142,12 +142,27 @@ static bool isAllucinazione(const String &testo) {
   return false;
 }
 
+// Beginnt 't' mit dem Begriff, und endet dort auch ein Wort? Das Original
+// prüft ein bloßes Präfix. Auf Italienisch ging das gut, "bene" ist der Anfang
+// keines geläufigen Satzes außer "bene" selbst. Im Deutschen ist "gut" der
+// Anfang von "guten Morgen", "gute Frage", "gute Nacht" - die zweite Stimme
+// spränge also ständig ungewollt an. Das Web-Panel verspricht ohnehin ein WORT
+// ("BEGINNT dein Satz mit einem dieser Wörter"), und genau das wird hier
+// geprüft. Bytes ab 0x80 zählen als Wortzeichen, damit ein Umlaut hinter dem
+// Begriff keine Wortgrenze vortäuscht.
+static bool beginntMitWort(const String &t, const String &term) {
+  if (!t.startsWith(term)) return false;
+  if (t.length() == term.length()) return true;
+  unsigned char n = (unsigned char)t[term.length()];
+  return !((n >= 'a' && n <= 'z') || (n >= '0' && n <= '9') || n >= 0x80);
+}
+
 // Vergleicht 't' (BEREITS klein geschrieben) mit einer durch Komma getrennten
 // Liste von Begriffen (etwa "gut, ok, hallo"). Bei contains=false trifft es zu,
-// wenn 't' mit einem Begriff BEGINNT (so arbeitet die zweite Stimme); bei
-// contains=true, wenn 't' einen Begriff ENTHÄLT. Leere Begriffe werden
-// übergangen; eine leere Liste trifft nie zu und schaltet die Funktion damit
-// ab.
+// wenn 't' mit einem Begriff als ganzem WORT beginnt (so arbeitet die zweite
+// Stimme); bei contains=true, wenn 't' einen Begriff ENTHÄLT. Leere Begriffe
+// werden übergangen; eine leere Liste trifft nie zu und schaltet die Funktion
+// damit ab.
 static bool matchAnyTerm(const String &t, const String &csv, bool contains) {
   int start = 0;
   while (start <= (int)csv.length()) {
@@ -155,7 +170,7 @@ static bool matchAnyTerm(const String &t, const String &csv, bool contains) {
     if (comma < 0) comma = csv.length();
     String term = csv.substring(start, comma);
     term.trim(); term.toLowerCase();
-    if (term.length() > 0 && (contains ? (t.indexOf(term) >= 0) : t.startsWith(term)))
+    if (term.length() > 0 && (contains ? (t.indexOf(term) >= 0) : beginntMitWort(t, term)))
       return true;
     start = comma + 1;
   }
@@ -295,7 +310,7 @@ static void bootSplash() {
     delay(10);
   }
 
-  // 6) Abschliessendes Pulsieren des Rings, das ausklingt
+  // 6) Abschließendes Pulsieren des Rings, das ausklingt
   display.setTextColor(MAG);
   //display.setCursor(bx + bw - 42, by - 11); display.print("PRONTO");
   display.setCursor(bx + bw - 42, by - 11); display.print("");
@@ -488,7 +503,7 @@ static bool runInteraction(bool followUp) {
 }
 
 // --- Gespräch: eine Frage oder viele hintereinander -------------------------
-//  Ist der fortlaufende Chat eingeschaltet, öffnet das Mikrofon nach einer
+//  Ist der fortlaufende Chat eingeschaltet, öffnet sich das Mikrofon nach einer
 //  Antwort von allein, und die nächste Frage braucht nicht erneut "Hey Jarvis".
 //  Es endet auf drei Wegen, die es alle schon gab: niemand spricht innerhalb von
 //  CHAT_FOLLOWUP_MS, ein Klick auf den Drehgeber beendet die leere Aufnahme, was
@@ -631,7 +646,7 @@ void setup() {
   // Weckwort "Hey Jarvis", erkannt im Gerät selbst (siehe WAKEWORD.md). Liefert
   // false, wenn es sich nicht einrichten lässt, etwa ohne PSRAM.
   bool wakeOk = wakeBegin();
-  Serial.printf("[%s] Wake word\n", wakeOk ? "OK " : "off");
+  Serial.printf("[%s] Weckwort\n", wakeOk ? "OK " : "off");
 #endif
 
   // WiFi

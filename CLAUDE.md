@@ -57,7 +57,7 @@ flowchart TD
   Micro, vollständig auf dem S3) **oder** ein Klick auf den **Drehgeber**, beides
   parallel. Die Aufnahme endet von allein nach **1,5 s Stille** (Höchstdauer 20 s).
 - **Fortlaufender Chat** (`gSettings.chatContinua`, im Panel, ab Werk aus): nach
-  einer Antwort öffnet das Mikrofon **von allein**, die nächste Frage braucht das
+  einer Antwort öffnet sich das Mikrofon **von allein**, die nächste Frage braucht das
   Weckwort also nicht erneut. Während er wartet, steht der Ring in
   **`ST_FOLLOWUP`** (zwei umlaufende **bernsteinfarbene** Punkte mit **gleichbleibender**
   Helligkeit — nicht die Aussteuerungsanzeige, die ja "ich nehme dich bereits auf"
@@ -175,6 +175,7 @@ src/
   net.cpp            # WLAN-Verbindung (Zugangsdaten aus secrets.h), NTP-Uhr (timeBegin, Zeitzone Europe/Berlin) und nowContextString für Claude
   stt.cpp            # schickt das WAV als multipart an Whisper (Groq oder den Server zu Hause) und liefert Text
   llm.cpp            # zwei Wege: die Messages API von Anthropic samt Websuche oder ein OpenAI-kompatibler Server zu Hause. Modell und Prompt aus gSettings, dazu Datum und Uhrzeit aus dem NTP im System-Prompt. ripuliMarkdown räumt die Antwort auf (die Modelle verwenden Markdown, auch wenn der Prompt es verbietet), damit auf dem Bildschirm und in der Stimme derselbe Text steht
+  tts.cpp            # Stimme -> stückweise an den VS1053: ElevenLabs (MP3) oder ein Server zu Hause (WAV). normalizzaPerVoce liest Grad, Prozent, Brüche, Währungen, UHRZEITEN (leggiOrario), TAUSENDER (leggiMigliaia), DATEN (leggiData), abgekürzte EINHEITEN (leggiUnita, Tabelle UNITA erweiterbar) und ORDNUNGSZAHLEN in Buchstaben (leggiOrdinale/ordinaleParola) vor und wirft das Markdown hinaus
   localai.cpp        # KI-Dienste ZU HAUSE: antwortet der PC? welches Modell hat er geladen? (mit Zwischenspeicher und einem Kontrollgang für die Punkte auf dem Display)
   ui.cpp             # Animationen des NeoPixel-Rings in einer eigenen Aufgabe (Kern 0)
   sound.cpp          # Rückmeldetöne (WAV, im Betrieb erzeugt und vom VS1053 abgespielt)
@@ -194,6 +195,8 @@ lib/microfrontend/   # die Merkmalsberechnung von TFLM (40 Mel-Merkmale) und kis
 partitions_custom.csv  # die Partitionstabelle für 16 MB mit zwei Anwendungsbereichen (in Benutzung)
 tools/
   pruefe_sprache.py  # sucht italienische Reste in den übersetzten Dateien
+  test_cp437.py      # prüft die Zeichentabelle des Displays gegen den cp437-Codec von Python
+  test_wortgrenzen.py # prüft, dass die Absichtserkennung ganze Wörter vergleicht und nicht Teilzeichenketten
   test_cp437.py      # prüft die Zeichentabelle des Displays gegen den cp437-Codec von Python
 ```
 

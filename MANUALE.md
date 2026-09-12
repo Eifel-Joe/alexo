@@ -343,6 +343,8 @@ data/                  ← Dateien, die der Webserver ausliefert (über LittleFS
 tools/                 ← Hilfswerkzeuge für die Entwicklung
   pruefe_sprache.py    ← sucht italienische Reste in den übersetzten Dateien
   test_cp437.py        ← prüft die Zeichentabelle des Displays
+  test_wortgrenzen.py  ← prüft die Wortgrenzen der Absichtserkennung
+  test_cp437.py        ← prüft die Zeichentabelle des Displays
 ```
 
 **Zwei Kerne (zwei Gehirne im Prozessor).** Der ESP32-S3 hat zwei Rechenkerne. Alexo
@@ -502,9 +504,10 @@ Das "klügste" Stück. Es schickt deinen Text an die Schnittstelle von **Anthrop
 (ab Werk das Modell `claude-haiku-4-5`, schnell und günstig) und bekommt die Antwort.
 Die wichtigsten Punkte:
 
-- **Der System-Prompt:** eine "dauerhafte Anweisung" sagt Claude, dass es Alexo ist
-  und kurz und umgangssprachlich antworten soll (zwei bis drei Sätze, keine
-  Aufzählungen und keine Emojis, denn es wird ja vorgelesen).
+- **Der System-Prompt:** eine "dauerhafte Anweisung" sagt Claude, dass es Jarvis
+  ist und förmlich, knapp und mit ruhiger Höflichkeit antworten soll, den Nutzer
+  mit "Sir" anredend (zwei bis drei Sätze, keine Aufzählungen und keine Emojis,
+  denn es wird ja vorgelesen).
 - **Das Gedächtnis des Gesprächs:** es behält die letzten acht Nachrichten, du kannst
   also nachfragen ("und in München?", nachdem du nach dem Wetter in Hamburg gefragt
   hast). Nach zwei Minuten ohne Bedienung wird es geleert und ein neues Gespräch
@@ -536,7 +539,7 @@ stehen, die Umwandlung gilt nur für die Stimme.
 Dazu gehört auch das **Lesen von Uhrzeiten** (die Funktion `leggiOrario`): "12:30"
 wird zu "12 Uhr 30", "00:00" zu "Mitternacht", "12:00" zu "Mittag", "14:00" zu
 "14 Uhr" und "00:30" zu "null Uhr 30". Ohne das sagte die Stimme "zwölf Doppelpunkt
-dreissig".
+dreißig".
 
 > Bei der Übersetzung sind rund 150 Zeilen entfallen, die Ordnungszahlen
 > ausschrieben. Im Italienischen schrieb man "21° secolo" mit dem Gradzeichen, und es
@@ -831,7 +834,7 @@ pio run -e esp32-s3-devkitc-1 -t upload
 ```
 
 > Unter Windows, wenn `pio` nicht im Suchpfad liegt, rufe es mit dem vollen Pfad auf.
-> Schliesse vor dem Aufspielen über USB einen etwaigen seriellen Monitor, sonst gilt
+> Schließe vor dem Aufspielen über USB einen etwaigen seriellen Monitor, sonst gilt
 > die Schnittstelle als belegt ("Zugriff verweigert").
 
 ### Alle weiteren Male: über WLAN, wenn du magst
@@ -975,7 +978,7 @@ ansehen*.
 - **Gehirn:** das **Modell** von Claude (Haiku ist schnell, Opus am klügsten) und die
   **Persönlichkeit**, also der Text, der beschreibt, wer Alexo ist und wie er antworten
   soll.
-- **Fortlaufender Chat:** nach einer Antwort öffnet das Mikrofon von allein, die
+- **Fortlaufender Chat:** nach einer Antwort öffnet sich das Mikrofon von allein, die
   nächste Frage braucht also nicht erneut "Hey Jarvis" (siehe
   [Kapitel 9](#9-der-ablauf)). Ab Werk aus; wirkt **beim Klick**, ohne Speichern.
 - **KI zu Hause:** Adressen und Modellnamen der drei Dienste auf deinem PC, die

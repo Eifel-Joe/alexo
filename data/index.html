@@ -620,7 +620,7 @@ async function musicStart(){
   try{
     const r=await fetch('/api/music/start',{method:'POST'});
     toast(r.ok ? 'Radio eingeschaltet' : 'Radio läuft bereits oder die Liste ist leer', r.ok);
-  }catch(e){ toast('Radio liess sich nicht einschalten', false); }
+  }catch(e){ toast('Radio ließ sich nicht einschalten', false); }
 }
 async function musicStop(){
   try{ await fetch('/api/music/stop',{method:'POST'}); toast('Musik angehalten'); }

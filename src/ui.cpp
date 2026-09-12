@@ -82,7 +82,7 @@ static void animSpeaking(uint32_t t) {
 // anfängt. Es bleibt so, bis gesprochen wird (dann folgt ST_LISTENING) oder der
 // Chat sich schließt. Die warme Farbe unterscheidet den Zustand von allen
 // anderen.
-// Die HELLIGKEIT IST ABSICHTLICH KONSTANT: die erste Fassung liess den ganzen
+// Die HELLIGKEIT IST ABSICHTLICH KONSTANT: die erste Fassung ließ den ganzen
 // Ring atmen, und weil er dabei fast bis zur Dunkelheit abfiel, sah es aus, als
 // schlösse und öffnete sich der Chat in jedem Zyklus, also zwei- bis dreimal in
 // den drei Sekunden Wartezeit. Etwas, das sich bewegt, OHNE je auszugehen, kann

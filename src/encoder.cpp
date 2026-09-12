@@ -1,7 +1,7 @@
 // ============================================================================
 //  ALEXO - Drehgeber (siehe encoder.h).
 //  Darunter liegt die Bibliothek Versatile_RotaryEncoder (ruiseixasm): eine
-//  robuste Auswertung durch regelmässiges Abfragen samt vollständiger
+//  robuste Auswertung durch regelmäßiges Abfragen samt vollständiger
 //  Behandlung der Tastenereignisse. Die öffentliche Schnittstelle bleibt
 //  unverändert (encoderTake / encoderButtonHeld / ...), gobbo.cpp und main.cpp
 //  müssen also nicht angefasst werden.

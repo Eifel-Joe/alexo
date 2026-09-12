@@ -68,13 +68,13 @@ bool wakeBegin() {
   cfg.pcan_gain_control.gain_bits = 21;
   cfg.log_scale.enable_log = 1;
   cfg.log_scale.scale_shift = 6;
-  if (!FrontendPopulateState(&cfg, &fe, 16000)) { wlogln("[wake] Merkmalsberechnung liess sich nicht einrichten"); return false; }
+  if (!FrontendPopulateState(&cfg, &fe, 16000)) { wlogln("[wake] Merkmalsberechnung ließ sich nicht einrichten"); return false; }
 
   // --- Modell ---
   const tflite::Model *model = tflite::GetModel(g_wake_model);
   if (model->version() != TFLITE_SCHEMA_VERSION) { wlogln("[wake] TFLite-Schema passt nicht"); return false; }
   arena = (uint8_t *)ps_malloc(WAKE_ARENA_BYTES);
-  if (!arena) { wlogln("[wake] Speicher im PSRAM liess sich nicht reservieren"); return false; }
+  if (!arena) { wlogln("[wake] Speicher im PSRAM ließ sich nicht reservieren"); return false; }
   // Das Modell im Strombetrieb nutzt RESOURCE VARIABLES (den Operator VAR_HANDLE)
   // für den Zustand zwischen zwei Auswertungen. Dafür braucht es einen kleinen
   // eigenen Speicherbereich und MicroResourceVariables, die dem Interpreter
@@ -172,7 +172,7 @@ bool wakeFeed(const int16_t *samples, size_t n) {
   return detected;
 }
 
-// --- Test der Kette ohne Mikrofon -------------------------------------------
+// --- Test der Kette auf dem Mikrofonton -------------------------------------
 #if WAKE_TEST
 void wakeSelfTest() {
   static bool tried = false;

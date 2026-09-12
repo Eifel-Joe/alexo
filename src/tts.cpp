@@ -145,7 +145,7 @@ static int leggiData(const String &in, int i, int n, String &out) {
 // sie, wird dieselbe Zahl ohne Punkte ("230000") an 'out' angehängt und die
 // Zahl der verbrauchten Zeichen zurückgegeben, sonst 0.
 // WARUM: ElevenLabs richtet sich Zahlen selbst her, die Stimmen zu Hause nicht.
-// Kokoro liest den Punkt wörtlich ("zweihundertdreissig Punkt nullnullnull").
+// Kokoro liest den Punkt wörtlich ("zweihundertdreißig Punkt nullnullnull").
 // Regel: 1-3 Ziffern, dann eine oder mehrere Gruppen von GENAU 3 Ziffern nach
 // einem Punkt, und nach der letzten Gruppe weder Ziffer noch weiterer Punkt. So
 // bleiben der englische Dezimalpunkt ("3.14", die Gruppe hat keine 3 Ziffern)
@@ -178,7 +178,9 @@ static int leggiMigliaia(const String &in, int i, int n, String &out) {
 // ignoriert Groß- und Kleinschreibung (die Modelle schreiben "km" oder "KM").
 // Das letzte Feld ist 'serveNum': steht dort true, gilt die Abkürzung nur mit
 // einer ZAHL davor. Das brauchen die einbuchstabigen Kürzel, die sonst Unsinn
-// anrichten ("das Gramm" würde zu "das Grammramm").
+// anrichten: aus "Antwort: g" würde "Antwort: Gramm", aus "Punkt h" "Punkt
+// Stunde". Mit einer Zahl davor ("3 h") ist dagegen wirklich die Einheit
+// gemeint.
 struct UnitaVoce { const char *abbr; const char *sing; const char *plur; bool serveNum; };
 static const UnitaVoce UNITA[] = {
   { "km/h", "Kilometer pro Stunde", "Kilometer pro Stunde", false },

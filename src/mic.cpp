@@ -54,10 +54,10 @@ bool micVoiceStarted()            { return g_heardNow; }
 // niedrig, hat aber vereinzelt sehr hohe Spitzen, auch nach dem Hochpass.
 // Das Vorgehen ist zweiteilig: erstens führt ein Grundpegel die Basis von selbst
 // nach; zweitens folgt die Helligkeit statt einem harten Schwellwert (der
-// entweder die Empfindlichkeit zunichte machte oder ein Dauerflackern durchliess)
-// einer HÜLLKURVE mit LANGSAMEM ANSTIEG. Ein einzelner Impuls über ein Bild
-// schafft es nicht hinauf, es blitzt also nichts; ein echtes Geräusch, das
-// mehrere Bilder dauert, leuchtet voll aus.
+// entweder die Empfindlichkeit zunichte machte oder ein Dauerflackern durchließ)
+// einer HÜLLKURVE mit LANGSAMEM ANSTIEG. Ein einzelner Impuls über einen Block
+// (etwa 20 ms) schafft es nicht hinauf, es blitzt also nichts; ein echtes
+// Geräusch, das mehrere Blöcke dauert, leuchtet voll aus.
 //  MIC_LVL_MARGIN und MIC_LVL_FLOOR sind jetzt zur LAUFZEIT änderbar
 //  (gSettings.micLvlMargin und micLvlFloor über das Web-Panel); die
 //  Werkseinstellungen stehen in config.h.
@@ -138,7 +138,7 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t), 
 
   // Hochpass erster Ordnung (etwa 120 Hz) im 24-Bit-Bereich: entfernt den
   // Gleichanteil und das tieffrequente Driften, die in der Messung (Schritt 0)
-  // den grössten Teil des Grundrauschens des ICS-43434 ausmachten. Sprache
+  // den größten Teil des Grundrauschens des ICS-43434 ausmachten. Sprache
   // oberhalb von 120 Hz läuft unversehrt durch. Der Zustand wird bei jeder
   // Aufnahme zurückgesetzt, der kurze Einschwingvorgang am Anfang fällt nicht ins
   // Gewicht.
@@ -172,7 +172,7 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t), 
       // --- Abbruch bei Stille mit SELBSTTÄTIG NACHGEFÜHRTER SCHWELLE --------
       //  Statt eines festen Pegels misst sich "Sprache" am Grundrauschen.
       //  Der Grundpegel (Lüfter, Wind) wird laufend von noiseFloor geschätzt.
-      //  Dieser fällt schnell (er hängt sich an Stille und gleichmässiges
+      //  Dieser fällt schnell (er hängt sich an Stille und gleichmäßiges
       //  Rauschen) und steigt nur sehr langsam, damit Sprache ihn nicht
       //  mitzieht: er bleibt das Rauschen und wird nicht zur Sprache.
       //  Benutzt wird die MITTLERE ENERGIE (RMS) des Blocks, nicht der
@@ -219,7 +219,7 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t), 
 // ICS-43434 stehen linksbündig in 32 Bit), und es wird hochgerechnet, was jede
 // Einstellung von I2S_SHIFT ergäbe (out16 = v24 >> (SHIFT-8)). Bei Ruhe soll AC16
 // niedrig sein (etwa 10 bis 30), beim Sprechen soll PEAK16 gesund aussehen,
-// einige Tausend, ohne bei 32767 anzustossen.
+// einige Tausend, ohne bei 32767 anzustoßen.
 void micDiag() {
   static bool intro = false;
   if (!intro) {

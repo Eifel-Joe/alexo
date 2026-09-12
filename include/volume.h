@@ -2,7 +2,8 @@
 // ============================================================================
 //  ALEXO - Lautstärke des VS1053 (Skala 0..100, in NVS gespeichert).
 //
-//  Zwei Kerne: der Drehgeber läuft in der AUFGABE der Anzeige (Kern 0) und
+//  Zwei Kerne: der Drehgeber läuft in der AUFGABE des Teleprompters (gobbo.cpp,
+//  Kern 0) und
 //  sammelt die Wünsche mit volumeRequest(); der VS1053 hängt am SPI-Bus von
 //  Kern 1, deshalb wendet IMMER Kern 1 sie mit volumeApplyPending() an (im Loop
 //  bei Ruhe und während der Sprachausgabe, solange Alexo spricht). So streiten

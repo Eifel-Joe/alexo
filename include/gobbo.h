@@ -55,7 +55,7 @@ void gobboOtaProgress(uint8_t percent);
 
 // Angaben zum laufenden Titel (ICY-Metadaten des Radios): erscheinen in der
 // eigenen Anzeige "RADIO", sobald der Zustand ST_MUSIC ist (drei Zeilen in
-// Schriftgrösse 2 als Laufschrift: Sender / Titel / Interpret). Von Kern 1
+// Schriftgröße 2 als Laufschrift: Sender / Titel / Interpret). Von Kern 1
 // aufrufbar (music.cpp).
 void gobboNowPlaying(const char *station, const char *title, const char *artist);
 

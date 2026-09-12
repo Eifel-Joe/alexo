@@ -31,7 +31,7 @@ static Adafruit_ST7735 *D  = nullptr;
 static GFXcanvas16     *CV = nullptr;   // Bildspeicher im RAM, danach aufs TFT übertragen
 
 #define COLS         21      // Zeichen je Zeile (128 px / 6 px je Zeichen)
-#define LINEH         8      // Zeilenhöhe in Pixel (Schriftgrösse 1)
+#define LINEH         8      // Zeilenhöhe in Pixel (Schriftgröße 1)
 #define VIEWW   TFT_WIDTH    // 128
 #define VIEWH   TFT_HEIGHT   // 160
 #define HEADER_H     14      // feste Leiste oben: Titel und Zustand
@@ -277,7 +277,7 @@ static void drawHeader() {
   strncpy(lbl, ST_LABEL[s], sizeof(lbl) - 1);
   lbl[sizeof(lbl) - 1] = 0;
   utf8ToCp437(lbl);
-  int x = VIEWW - (int)strlen(lbl) * 6 - 2;   // 6 px je Zeichen (Schriftgrösse 1)
+  int x = VIEWW - (int)strlen(lbl) * 6 - 2;   // 6 px je Zeichen (Schriftgröße 1)
   CV->setTextColor(ST_COL[s]);
   CV->setCursor(x, 3);
   CV->print(lbl);
@@ -335,7 +335,7 @@ static void renderOtaScreen(uint8_t pct) {
   const char *sub = g_otaData ? "DATA" : "FW";
   CV->setCursor((W - (4+(int)strlen(sub)) * 12) / 2, 15); CV->print("OTA "); CV->print(sub);
 
-  // Prozentwert GROSS in der Mitte (Schriftgrösse 4 = 24 px je Ziffer)
+  // Prozentwert GROSS in der Mitte (Schriftgröße 4 = 24 px je Ziffer)
   if (pct > 100) pct = 100;
   char num[8]; snprintf(num, sizeof(num), "%u%%", (unsigned)pct);
   CV->setTextSize(4);
@@ -381,13 +381,13 @@ static uint32_t np_changeMs    = 0;
 #define NP_SPEED_K     0.14f   // Pixel je Sekunde mehr für jedes überstehende Pixel
 #define NP_SPEED_MAX  45.0f    // höchste Geschwindigkeit, darüber ist nichts mehr zu lesen
 
-// Eine Zeile in Schriftgrösse 2: mittig, wenn sie hineinpasst, sonst als
+// Eine Zeile in Schriftgröße 2: mittig, wenn sie hineinpasst, sonst als
 // Laufschrift mit einer zweiten Kopie nach einer Lücke, damit der Umlauf
 // nahtlos wirkt. Die Geschwindigkeit rechnet die Funktion aus dem Text aus.
 static void drawNpLine(int y, const char *s, uint16_t col) {
   CV->setTextSize(2);
   CV->setTextColor(col);
-  int textW = (int)strlen(s) * 12;              // 6 px mal Schriftgrösse 2
+  int textW = (int)strlen(s) * 12;              // 6 px mal Schriftgröße 2
   if (textW == 0) return;
   if (textW <= VIEWW - 4) {
     CV->setCursor((VIEWW - textW) / 2, y); CV->print(s);   // passt: mittig und stehend

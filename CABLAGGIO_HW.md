@@ -176,8 +176,10 @@ von einem GPIO.
 > gerade, damit sie zu dieser Tabelle passen**: dreht man die beiden Werte um, kehrt sich
 > die Blätterrichtung um. So, wie es jetzt ist, blättert es richtig herum.
 
-Was er tut: Drehen blättert im Chat nach oben und unten; ein Druck auf die Taste führt
-zurück ans laufende Ende.
+Was er tut: Drehen blättert im Chat nach oben und unten; ein Druck auf die Taste
+startet beziehungsweise beendet den Chat (läuft das Radio, springt er zum nächsten
+Sender). Ein eigenes Zurück ans laufende Ende braucht es nicht, jede neue Nachricht
+schaltet ohnehin dorthin.
 
 **Widerstände und Kondensatoren am Drehgeber:**
 - Der **KY-040** hat bereits zwei Pull-up-Widerstände (10 kΩ) an CLK und DT an Bord. Bei

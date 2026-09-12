@@ -20,7 +20,7 @@ struct AlexoSettings {
   float    micLvlAttack;      // reagierende LED: Anstiegsgeschwindigkeit 0..1
   float    micLvlRelease;     // reagierende LED: Abklinggeschwindigkeit 0..1
   bool     idleReactive;      // LED "tanzen" bei Ruhe zum Ton (ein/aus)
-  bool     chatContinua;      // nach einer Antwort öffnet das Mikrofon erneut (kein Weckwort jedes Mal)
+  bool     chatContinua;      // nach einer Antwort öffnet sich das Mikrofon erneut (kein Weckwort jedes Mal)
 
   // --- Weckwort "Hey Jarvis" ---
   int      wakeGain;          // digitale Verstärkung des Weckwort-Wegs

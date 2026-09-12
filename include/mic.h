@@ -24,7 +24,7 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t) =
 // Höchste Wartezeit in ms, bevor aufgegeben wird, wenn KEINE Stimme zu hören
 // ist. Gilt nur für die NÄCHSTE Aufnahme, danach gilt wieder die normale
 // Wartezeit (REC_MIN_MS + silenceMs + 1 s). Der fortlaufende Chat braucht das:
-// nach einer Antwort öffnet das Mikrofon erneut, und wenn binnen weniger
+// nach einer Antwort öffnet sich das Mikrofon erneut, und wenn binnen weniger
 // Sekunden niemand spricht, schließt es wieder, ohne die Wartezeit zu
 // verlängern, wenn der Chat von Hand gestartet wurde.
 void micSetNoVoiceMs(uint32_t ms);

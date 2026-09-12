@@ -32,7 +32,7 @@ String musicCatalogList();
 
 // Spielt den MP3-Strom über den VS1053, bis stopRequested() true liefert (Klick
 // auf den Drehgeber), musicRequestStop() gerufen wird (Schaltfläche im
-// Web-Panel) oder der Strom abreisst. Liefert seekRequested() einen Unterschied
+// Web-Panel) oder der Strom abreißt. Liefert seekRequested() einen Unterschied
 // != 0 (gedrückt und gedreht während der Musik), bricht die Wiedergabe ab und
 // GIBT diesen Unterschied ZURÜCK, damit der Aufrufer zu einem anderen Sender
 // wechselt; 0, wenn die Wiedergabe zu Ende ist oder angehalten wurde. Blockiert

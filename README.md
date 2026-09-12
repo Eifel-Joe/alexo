@@ -62,7 +62,7 @@ wechselt die Animation je nach Zustand (zuhören, denken, sprechen).
 - 🗣️ **Weckwort im Gerät** "Hey Jarvis" (microWakeWord / TensorFlow Lite Micro, ohne Internet)
 - 🎛️ **Drehgeber** als einzige Bedienung (Klick zum Sprechen, Drehen zum Blättern und für die Lautstärke)
 - 🧠 **Gedächtnis für das Gespräch** und **Websuche** über Claude
-- 💬 **Fortlaufender Chat** (abschaltbar): nach der Antwort öffnet das Mikrofon von
+- 💬 **Fortlaufender Chat** (abschaltbar): nach der Antwort öffnet sich das Mikrofon von
   allein, die nächste Frage braucht das Weckwort nicht erneut
 - 🏠 **KI zu Hause** (abschaltbar): Spracherkennung, Gehirn und Stimme können auf einem
   **PC im eigenen Netz** laufen statt in der Cloud, mit einem Schalter "nie ins

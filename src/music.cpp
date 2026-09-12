@@ -137,6 +137,23 @@ static bool beginntWort(const String &t, const String &key) {
   }
 }
 
+// true, wenn 'key' als Genre in 't' vorkommt - als eigenes Wort oder als
+// vorderer Teil einer Zusammensetzung mit einem Musikwort. Das Italienische
+// stellt das Genre als eigenes Wort hinter das Substantiv, im Deutschen
+// wächst es damit zusammen ("spiel Rockmusik"). Ohne diesen Zusatz
+// fiele "Rockmusik" durch: containsWord sähe das 'm' hinter "rock" als
+// Wortzeichen, gleichzeitig setzte das enthaltene "musik" aber strong=true, und
+// der Rückfall weiter unten spielte wortlos den ERSTEN Sender der Liste.
+static bool genreTreffer(const String &t, const String &key) {
+  if (containsWord(t, key)) return true;
+  static const char *FUGEN[] = { "musik", "lieder", "songs", "sender", "radio" };
+  for (const char *f : FUGEN) {
+    String zusammen = key; zusammen += f;
+    if (containsWord(t, zusammen)) return true;
+  }
+  return false;
+}
+
 // Zerlegt eine Zeile "Schlüssel | Name | URL" in ihre drei Felder (mit
 // Leerzeichen abgeschnitten, der Schlüssel klein geschrieben). Liefert false,
 // wenn die Zeile unbrauchbar ist, weil ein Feld fehlt.
@@ -191,7 +208,7 @@ const MusicStation *musicMatch(const String &t) {
     start = nl + 1;
     if (line.length() == 0 || !parseStationLine(line, key, nome, url)) continue;
     if (!haveFirst) { firstNome = nome; firstUrl = url; haveFirst = true; }
-    if (containsWord(t, key)) {                 // Genre erkannt (als ganzes Wort)
+    if (genreTreffer(t, key)) {                 // Genre erkannt (Wort oder Zusammensetzung)
       s_mUrl = url; s_mNome = nome;
       s_mHit.url = s_mUrl.c_str(); s_mHit.nome = s_mNome.c_str();
       return &s_mHit;
@@ -317,7 +334,7 @@ static void parseStreamTitle(const char *meta) {
   if (full.length() == 0 || full == s_nowPlaying) return;
   s_nowPlaying = full;   // vollständig "Interpret - Titel" (für /api/live im Panel)
 
-  // "Interpret - Titel" für die Anzeige AUF SENDUNG auf zwei Zeilen aufteilen.
+  // "Interpret - Titel" für die Anzeige RADIO auf zwei Zeilen aufteilen.
   String artist = "", title = full;
   int sep = full.indexOf(" - ");
   if (sep >= 0) {

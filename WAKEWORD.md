@@ -88,9 +88,10 @@ Modell verbinden und die Wahrscheinlichkeit ausgeben. *Prüfung:* beim Aussprech
 Wortes steigt die Wahrscheinlichkeit. Dieser Schritt zeigt, dass die ganze Kette
 arbeitet.
 
-**5 · Schwelle, gleitender Mittelwert und Auslösung.** Liegt der Wert über N Schritte in
-Folge über der Schwelle, beginnt das Gespräch, an derselben Stelle wie beim Klick auf
-den Drehgeber. Dazu die **Sperrzeit**: nach einer Auslösung wird das Fenster geleert,
+**5 · Schwelle, gleitender Mittelwert und Auslösung.** Liegt der Mittelwert über die
+letzten `WAKE_WINDOW` Schritte über der Schwelle, beginnt das Gespräch, an derselben
+Stelle wie beim Klick auf den Drehgeber. Ein einzelner sehr hoher Wert kann also
+genügen; es müssen nicht alle Schritte des Fensters über der Schwelle liegen. Dazu die **Sperrzeit**: nach einer Auslösung wird das Fenster geleert,
 sonst startete dasselbe Wort gleich drei Gespräche.
 
 **6 · Feinarbeit.** Taubheit während des Gesprächs, sauberer Wiedereinstieg ins Zuhören
@@ -203,7 +204,7 @@ Drei Schalter in `config.h`, und jeder lässt die Aktualisierung über Funk offe
 | --- | --- |
 | `MIC_DIAG` | die Rauschpegel des Mikrofons, um die Verstärkung zu wählen |
 | `TFL_SELFTEST` | arbeitet die Laufzeitumgebung von TFLite Micro? (Testmodell `hello_world`) |
-| `WAKE_TEST` | lässt die Kette auf künstlichem Ton laufen, **ohne Mikrofon**: prüft Merkmalsberechnung und Modell und zeigt Fehlauslösungen vor dem Test am lebenden Gerät |
+| `WAKE_TEST` | lässt die Kette auf dem **Mikrofonton** laufen und gibt jede Sekunde die höchste Wahrscheinlichkeit aus: zum Abstimmen der Schwelle vor dem Test am lebenden Gerät |
 
 Drei Lehren, die das Abstimmen gekostet hat:
 

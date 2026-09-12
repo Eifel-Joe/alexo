@@ -13,7 +13,7 @@ Kommentare und Dokumentation. Ein Commit pro abgeschlossenem Task.
 - Dateien sind UTF-8 ohne BOM mit CRLF. Beides bleibt erhalten.
 - Bezeichner, Dateinamen, Ordnernamen, URLs und API-Feldnamen werden nicht
   verändert.
-- Nach jedem Task: `PLATFORMIO_CORE_DIR=C:/Users/Nutzer/.platformio-alexo pio run -e esp32-s3-devkitc-1`
+- Nach jedem Task: `PLATFORMIO_CORE_DIR=<eigener Paketordner> pio run -e esp32-s3-devkitc-1`
 
 ---
 

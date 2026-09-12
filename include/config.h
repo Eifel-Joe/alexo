@@ -100,7 +100,7 @@
                                 //  an). Die Aufnahme legt zusätzlich einen Hochpass bei
                                 //  etwa 120 Hz an (siehe mic.cpp), der den Gleichanteil
                                 //  und das tieffrequente Brummen entfernt, also den
-                                //  grössten Teil des Rauschens.
+                                //  größten Teil des Rauschens.
 //  Messbetrieb für das Mikrofon (Schritt 0 des Weckworts): auf 1 setzen, über
 //  Funk flashen, den seriellen Monitor öffnen. Die Firmware bleibt dann im
 //  Messbetrieb und gibt das Grundrauschen mit 24 Bit aus, dazu, was jede
@@ -152,7 +152,7 @@
 #define REC_SILENCE_MARGIN  1.6f  // Faktor auf den Grundpegel (höher, wenn Rauschen als Sprache gilt)
 #define REC_SILENCE_FLOOR    150  // kleinster absoluter Abstand in RMS (höher, wenn es zu spät abbricht)
 #define REC_MIN_MS          800   // Schonfrist am Anfang: vorher nicht abbrechen, damit man loslegen kann
-//  FORTLAUFENDER CHAT: nach einer Antwort öffnet das Mikrofon von allein, die
+//  FORTLAUFENDER CHAT: nach einer Antwort öffnet sich das Mikrofon von allein, die
 //  nächste Frage braucht also nicht erneut das Weckwort. Beendet wird er durch
 //  Schweigen (CHAT_FOLLOWUP_MS) oder einen Klick auf den Drehgeber. Der Schalter
 //  sitzt im Panel; hier steht die Werkseinstellung. Sie ist aus, weil es das
@@ -163,11 +163,11 @@
 //  das Testmodell "hello_world" (Sinus) und die Merkmalsberechnung, die Ausgabe
 //  geht über Telnet. Die Aktualisierung über Funk bleibt aktiv.
 #define TFL_SELFTEST     0
-//  Test der Weckwortkette ohne Mikrofon: 1 = Merkmalsberechnung, Modell und
-//  Wahrscheinlichkeit laufen über künstlichen Ton (Stille oder Sinus) und die
-//  Wahrscheinlichkeit wird ausgegeben, OHNE Mikrofon. Damit lassen sich die Kette
-//  und Fehlauslösungen prüfen, bevor man am lebenden Gerät testet. Die
-//  Aktualisierung über Funk bleibt aktiv.
+//  Test der Weckwortkette: 1 = Merkmalsberechnung, Modell und Wahrscheinlichkeit
+//  laufen auf dem MIKROFONTON, und die höchste Wahrscheinlichkeit wird jede
+//  Sekunde ausgegeben. Damit lässt sich die Schwelle abstimmen und die Kette
+//  prüfen, bevor man am lebenden Gerät testet. Die Aktualisierung über Funk
+//  bleibt aktiv.
 #define WAKE_TEST        0
 
 // --- VS1053 (Tonausgabe, SPI-Bus) -------------------------------------------
@@ -206,8 +206,9 @@
 //  KY-040 oder ähnlich: CLK->A, DT->B, SW->Taste. Mit 3V3 versorgen.
 //  Die Anschlüsse sind frei und unbedenklich gewählt (kein Strapping, kein USB,
 //  kein ADC2, kein PSRAM).
-//  Drehen = im Chat nach oben und unten blättern; Tastendruck = zurück zum
-//  laufenden Ende.
+//  Drehen = im Chat nach oben und unten blättern; Tastendruck = Chat starten
+//  beziehungsweise beenden (bei Radio: nächster Sender). Ein eigenes Zurück ans
+//  laufende Ende braucht es nicht, jede neue Nachricht schaltet ohnehin dorthin.
 #define ENC_A_PIN        16     // CLK (A) - GPIO16/15 vertauscht: A und B sind beim Löten getauscht
 #define ENC_B_PIN        15     // DT  (B)
 #define ENC_SW_PIN       17     // SW  (Taste, optional)
