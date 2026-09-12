@@ -10,7 +10,7 @@
 //  - Gegen das Flimmern (das TFT hat keinen Bildspeicher wie ein OLED) wird
 //    alles auf eine Fläche mit 16 Bit im RAM gezeichnet und dann in EINEM Zug
 //    als ganzes Bild übertragen.
-//  - Farben nach Rolle: "Du:" gelb, "Alexo:" weiss, Systemmeldungen rot.
+//  - Farben nach Rolle: "Du:" gelb, "Alexo:" weiß, Systemmeldungen rot.
 //  - Zwei Betriebsarten:
 //      AUTOMATISCH: folgt der Stimme (die gerade gelesene Zeile bleibt bei
 //               READ_ANCHOR) oder steht am Ende, wenn nicht gesprochen wird.
@@ -93,7 +93,7 @@ static uint8_t  curRole  = ROLE_ALEXO;// Rolle, die die laufenden pushLine setze
 //  braucht es keine Sperre. g_chatRev springt bei jeder Nachricht weiter, damit
 //  das Panel den Chat NUR bei einer neuen nachlädt.
 #define WEBCHAT_MAX 40
-#define WEBCHAT_LEN 2048          // wie GobboMsg.text: dieselbe Grösse wie beim TFT, nichts wird abgeschnitten
+#define WEBCHAT_LEN 2048          // wie GobboMsg.text: dieselbe Größe wie beim TFT, nichts wird abgeschnitten
 struct WebMsg { uint8_t role; char text[WEBCHAT_LEN]; };
 static WebMsg  *webChat  = nullptr;
 static int      webStart = 0, webCount = 0;
@@ -151,7 +151,7 @@ static uint8_t cpFromUnicode(uint32_t u) {
     // Umlaute und Eszett: CP437 kennt diese Glyphen, die Tabelle bisher
     // nicht - ohne die folgenden Zeilen wird auf dem Display aus jedem
     // deutschen Sonderzeichen ein '?'. Werte gegen den cp437-Codec
-    // geprueft, siehe tools/test_cp437.py.
+    // geprüft, siehe tools/test_cp437.py.
     case 0x00E4: return 0x84;  // ä
     case 0x00F6: return 0x94;  // ö
     case 0x00FC: return 0x81;  // ü
@@ -161,7 +161,7 @@ static uint8_t cpFromUnicode(uint32_t u) {
     case 0x00DF: return 0xE1;  // ß
     case 0x00C9: return 0x90;  // É
     case 0x00B0: return 0xF8;  // °
-    // grosse Akzentbuchstaben, die CP437 nicht kennt -> der Grundbuchstabe
+    // große Akzentbuchstaben, die CP437 nicht kennt -> der Grundbuchstabe
     case 0x00C0: case 0x00C1: return 'A';   // À Á
     case 0x00C8: case 0x00CA: return 'E';   // È Ê
     case 0x00CC: case 0x00CD: return 'I';   // Ì Í
@@ -169,7 +169,8 @@ static uint8_t cpFromUnicode(uint32_t u) {
     case 0x00D9: case 0x00DA: return 'U';   // Ù Ú
     // typografische Satzzeichen
     case 0x2018: case 0x2019: return '\'';  // ' '
-    case 0x201C: case 0x201D: return '"';   // " "
+    case 0x201C: case 0x201D:
+    case 0x201E: return '"';               // " " und das deutsche "
     case 0x2013: case 0x2014: return '-';   // - -
     case 0x2026: return '.';                // ...
     default: return '?';
@@ -244,8 +245,8 @@ static void addText(const char *text) {
 // darunter eine Trennlinie in der Farbe des Zustands. Sie wird NACH dem Chat
 // gezeichnet und deckt damit Zeilen ab, die unter die Leiste ragen.
 //  Zwischen "ALEXO" und der Beschriftung stehen drei Punkte in der Reihenfolge
-//  der Sprachkette: Spracherkennung, Gehirn, Stimme. GRÜN heisst, dieses Glied
-//  läuft auf dem PC zu Hause, ROT heisst, es geht in die Cloud, weil es im Panel
+//  der Sprachkette: Spracherkennung, Gehirn, Stimme. GRÜN heißt, dieses Glied
+//  läuft auf dem PC zu Hause, ROT heißt, es geht in die Cloud, weil es im Panel
 //  aus ist, weil der PC nicht antwortet oder, allein bei der Stimme, weil kein
 //  Schalter sie nach Hause geschickt hat. Dort genügt ein laufender Server
 //  nicht, siehe localOn. Angezeigt wird der ZULETZT BEKANNTE Stand: wir sind hier
@@ -267,7 +268,15 @@ static void drawHeader() {
   CV->setCursor(2, 3);
   CV->print("ALEXO");
   drawDots();
-  const char *lbl = ST_LABEL[s];
+  // Die Beschriftung geht durch dieselbe Umwandlung wie der Chat. Sie steht als
+  // UTF-8 im Quelltext ("höre"), das Display kann aber nur CP437. Ohne diesen
+  // Schritt erschiene der Umlaut als zwei Rahmenzeichen, und strlen() zählte ein
+  // Byte zu viel, sodass die Breitenrechnung gleich mit danebenläge. Über den
+  // Umweg der Kopie arbeitet auch jede künftige Beschriftung mit Umlauten.
+  char lbl[16];
+  strncpy(lbl, ST_LABEL[s], sizeof(lbl) - 1);
+  lbl[sizeof(lbl) - 1] = 0;
+  utf8ToCp437(lbl);
   int x = VIEWW - (int)strlen(lbl) * 6 - 2;   // 6 px je Zeichen (Schriftgrösse 1)
   CV->setTextColor(ST_COL[s]);
   CV->setCursor(x, 3);
@@ -278,7 +287,7 @@ static void drawHeader() {
 static void render() {
   if (!CV) return;
   CV->fillScreen(ST77XX_BLACK);
-  CV->setTextSize(1);   // die Radioanzeige nutzt Grösse 2, Chat und Leiste hier Grösse 1
+  CV->setTextSize(1);   // die Radioanzeige nutzt Größe 2, Chat und Leiste hier Größe 1
   int sy = (int)(posY + 0.5f);
   for (int i = 0; i < nLines; i++) {
     int y = HEADER_H + i * LINEH - sy;       // der Chat liegt unter der Leiste
@@ -350,7 +359,7 @@ static void renderOtaScreen(uint8_t pct) {
 }
 
 // --- Anzeige "RADIO" (laufender Titel) --------------------------------------
-//  Ruhiger Hintergrund, oben "RADIO", darunter drei Zeilen in Grösse 2 mit
+//  Ruhiger Hintergrund, oben "RADIO", darunter drei Zeilen in Größe 2 mit
 //  Abstand: Sender, Titel, Interpret. Ist eine Zeile breiter als das Display,
 //  läuft sie von rechts nach links durch. Die Zeichenketten, bereits in CP437,
 //  setzt die Aufgabe aus einer Nachricht mit kind==4. np_changeMs wird bei jedem
@@ -527,7 +536,7 @@ static void gobboTask(void *) {
     // Während der MUSIK regelt jedes Drehen, gedrückt oder nicht, die
     // LAUTSTÄRKE, wie am Knopf eines Radios. Der Senderwechsel liegt NICHT mehr
     // auf gedrückt und gedreht, das war unbequem, sondern auf dem einfachen
-    // KLICK (siehe unten). Ausserhalb der Musik gilt: gedrückt und gedreht ist
+    // KLICK (siehe unten). Außerhalb der Musik gilt: gedrückt und gedreht ist
     // die Lautstärke, freies Drehen blättert.
     if (g_state == (uint8_t)ST_MUSIC) {
       if (d != 0) volumeRequest(d);                          // in der Musik: jedes Drehen regelt die Lautstärke
@@ -543,7 +552,7 @@ static void gobboTask(void *) {
     //   sonst          -> startet den Chat
     // Im Zustand "du dran" (fortlaufender Chat, es wird auf die nächste Frage
     // gewartet) zählt der Klick wie beim Zuhören und beendet die Aufnahme. Da
-    // keine Stimme zu hören war, schliesst Kern 1 das Gespräch, der Klick ist
+    // keine Stimme zu hören war, schließt Kern 1 das Gespräch, der Klick ist
     // also der sofortige Ausweg. Ohne diesen Zweig landete er im else und würde
     // einen gerade geschlossenen Chat erneut starten.
     if (encoderButtonPressed()) {
@@ -553,7 +562,7 @@ static void gobboTask(void *) {
       else                                       g_talkReq = true; // startet den Chat
     }
     // Ein DOPPELKLICK in der MUSIK verlässt das Radio und kehrt zum Chat zurück;
-    // musicPlay liest gobboTakeTalkRequest als Halt. Ausserhalb der Musik
+    // musicPlay liest gobboTakeTalkRequest als Halt. Außerhalb der Musik
     // übernimmt main.cpp den Doppelklick (er schaltet das Reagieren des Rings um),
     // dort ist Kern 1 nicht blockiert.
     if (g_state == (uint8_t)ST_MUSIC && encoderDoublePressed()) {

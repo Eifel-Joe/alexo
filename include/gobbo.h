@@ -54,9 +54,9 @@ void gobboClear();
 void gobboOtaProgress(uint8_t percent);
 
 // Angaben zum laufenden Titel (ICY-Metadaten des Radios): erscheinen in der
-// eigenen Anzeige "AUF SENDUNG", sobald der Zustand ST_MUSIC ist (drei Zeilen in
-// Größe 2 als Laufschrift: Sender / Titel / Interpret). Von Kern 1 aufrufbar
-// (music.cpp).
+// eigenen Anzeige "RADIO", sobald der Zustand ST_MUSIC ist (drei Zeilen in
+// Schriftgrösse 2 als Laufschrift: Sender / Titel / Interpret). Von Kern 1
+// aufrufbar (music.cpp).
 void gobboNowPlaying(const char *station, const char *title, const char *artist);
 
 // Art der laufenden Aktualisierung über Funk: true = Dateisystem und Webseite
@@ -78,7 +78,7 @@ bool gobboStopRequested();
 void gobboClearStopRequest();
 // Rastungen aus "gedrückt und gedreht", gesammelt WÄHREND der Musik
 // (Senderwechsel): liefert den Unterschied vorwärts/rückwärts und setzt ihn
-// zurück. 0, wenn kein Wechsel gewünscht ist. Nur in ST_MUSIC aktiv, ausserhalb
+// zurück. 0, wenn kein Wechsel gewünscht ist. Nur in ST_MUSIC aktiv, außerhalb
 // der Musik bleibt "gedrückt und gedreht" die Lautstärke.
 int32_t gobboTakeMusicSeek();
 

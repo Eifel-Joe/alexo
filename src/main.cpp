@@ -113,24 +113,31 @@ static void recLevel(uint8_t l) {
 // Typische Halluzinationen von Whisper auf Stille und Rauschen: enthält die
 // Aufnahme keine Sprache, "erfindet" Whisper solche Sätze. Sie werden verworfen,
 // damit kein Gespräch mit einem Geistersatz beginnt. Die Liste lässt sich im
-// Web-Panel bearbeiten (gSettings.hallucTerms, durch Komma getrennt). Verglichen
+// Web-Panel bearbeiten (gSettings.hallucTerms, eine Phrase je Zeile). Verglichen
 // wird der bereinigte Text, also klein geschrieben und ohne Satzzeichen und
 // Leerzeichen an den Rändern, und es muss GENAU einer der Sätze der Liste sein
 // (oder der Text ist leer).
+//
+// GETRENNT WIRD AM ZEILENUMBRUCH, nicht am Komma wie im Original. Das ist eine
+// bewusste Abweichung: die häufigsten deutschen Geisterphrasen sind Abspänne von
+// Untertiteln und tragen selbst ein Komma ("Untertitelung des ZDF für funk,
+// 2017"). Mit der Trennung am Komma liesse sich so ein Satz gar nicht
+// hinschreiben, er zerfiele in zwei Einträge, und weil hier auf GENAUE Gleichheit
+// verglichen wird, träfe keiner davon je zu.
 static bool isAllucinazione(const String &testo) {
   String s = testo; s.toLowerCase(); s.trim();
   while (s.length() && strchr(".!?,;:- ", s[s.length() - 1])) s.remove(s.length() - 1);
   s.trim();
   if (s.length() == 0) return true;
-  const String &csv = gSettings.hallucTerms;
+  const String &liste = gSettings.hallucTerms;
   int start = 0;
-  while (start <= (int)csv.length()) {
-    int comma = csv.indexOf(',', start);
-    if (comma < 0) comma = csv.length();
-    String term = csv.substring(start, comma);
+  while (start <= (int)liste.length()) {
+    int nl = liste.indexOf('\n', start);
+    if (nl < 0) nl = liste.length();
+    String term = liste.substring(start, nl);
     term.trim(); term.toLowerCase();
     if (term.length() > 0 && s.equals(term)) return true;
-    start = comma + 1;
+    start = nl + 1;
   }
   return false;
 }
@@ -391,7 +398,7 @@ static bool runInteraction(bool followUp) {
   // Stattdessen still zurück zur Ruhe.
   // Im fortlaufenden Chat ist das zugleich der übliche Ausgang: sind die drei
   // Sekunden verstrichen, ohne dass jemand spricht, oder beendet ein Klick die
-  // leere Aufnahme, endet es hier und das Gespräch schliesst sich.
+  // leere Aufnahme, endet es hier und das Gespräch schließt sich.
   if (!micHeardVoice()) {
     Serial.println(">> keine Sprache erkannt: übergangen, ohne Whisper zu fragen");
     if (vsOk) ampEnable(false);
@@ -451,7 +458,7 @@ static bool runInteraction(bool followUp) {
   if (risposta.isEmpty()) { fail("Fehler beim Denken"); return false; }
 
   Serial.printf(">> ALEXO: \"%s\"\n", risposta.c_str());
-  // Ein vorangestelltes "[LOC]" heisst, dass der Server zu Hause diese Antwort
+  // Ein vorangestelltes "[LOC]" heißt, dass der Server zu Hause diese Antwort
   // spricht. Das steht nur auf dem Bildschirm, im Chat auf dem TFT und im Panel;
   // der Text an die Sprachausgabe bleibt unberührt.
   gobboPrint(ttsUsesLocal() ? String("[LOC] ") + risposta : risposta);

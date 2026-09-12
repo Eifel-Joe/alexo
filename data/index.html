@@ -368,7 +368,7 @@
           der meisten Server, mehr Abwechslung, dafür schweift es hin und wieder ab.
           <b>Hoch</b> (über 1): zum Erfinden von Geschichten. Die Wirkung <b>summiert
           sich</b>: ein ungewöhnliches Wort am Anfang zieht den ganzen Satz hinter sich her.
-          Mit dem, was das Modell <i>weiss</i>, hat das nichts zu tun, nur damit, wie viel es
+          Mit dem, was das Modell <i>weiß</i>, hat das nichts zu tun, nur damit, wie viel es
           riskiert. Gilt allein für das Modell zu Hause, die Cloud nutzt ihre eigene.</div>
         <input type="number" id="localLlmTemp" min="0" max="2" step="0.05">
       </div>
@@ -504,10 +504,12 @@
         <div class="desc">Enthält die Aufnahme nur Stille oder Rauschen, "erfindet" die
           Spracherkennung mitunter Sätze; typisch sind <b>Vielen Dank</b>, <b>Untertitel der
           Amara.org-Community</b> und ähnliche Abspänne. Ist die Transkription <b>genau</b>
-          einer davon, verwirft Alexo sie, ohne zu antworten. Eine je Zeile oder durch
-          <b>Komma</b> getrennt. Verglichen wird klein geschrieben und ohne Satzzeichen an den
-          Rändern, "Danke." und "danke" sind also dasselbe. Umlaute bitte klein schreiben, der
-          Vergleich setzt nur ASCII-Buchstaben um. <b>Leer</b> schaltet den Filter ab.</div>
+          einer davon, verwirft Alexo sie, ohne zu antworten. <b>Eine Phrase je
+          Zeile.</b> Getrennt wird am Zeilenumbruch und nicht am Komma, damit auch
+          Abspänne mit Jahreszahl hineinpassen ("... für funk, 2017"). Verglichen wird
+          klein geschrieben und ohne Satzzeichen an den Rändern, "Danke." und "danke"
+          sind also dasselbe. Umlaute bitte klein schreiben, der Vergleich setzt nur
+          ASCII-Buchstaben um. <b>Leer</b> schaltet den Filter ab.</div>
         <textarea id="hallucTerms" spellcheck="false"></textarea>
       </div>
     </div>

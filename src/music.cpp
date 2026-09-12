@@ -32,7 +32,7 @@
 //  die geringere VERSTÄRKUNG (der nahe Lautsprecher übersteuert sonst) und
 //  EIGENE Werte für Anstieg und Abklingen. Die Makros unten rühren gSettings
 //  NICHT an, die übrigen Zustände bleiben also so abgestimmt, wie sie waren.
-//  Die Stellschrauben: MUSIC_LVL_DIV (Verstärkung; höher heisst zurückhaltender),
+//  Die Stellschrauben: MUSIC_LVL_DIV (Verstärkung; höher heißt zurückhaltender),
 //  MUSIC_ATTACK (Anstieg beim Schlag), MUSIC_RELEASE (das Abklingen danach),
 //  MUSIC_BASE_MULT und MUSIC_FLOOR (Schwelle über der Stille). s_musMad und
 //  s_musBase erscheinen in /api/live.
@@ -100,8 +100,6 @@ static uint8_t musicLevel(const int16_t *s, size_t n) {
 }
 #endif  // MUSIC_RING_REACTIVE
 
-static inline bool has(const String &t, const char *w) { return t.indexOf(w) >= 0; }
-
 // true, wenn 'key' in 't' als GANZES WORT vorkommt und nicht an andere Buchstaben
 // oder Ziffern geklebt: so löst "rock" nicht innerhalb von "Rocksaum" aus und
 // "pop" nicht in "populär". Zweifelsfälle übernimmt dann Claude. 't' und 'key'
@@ -120,6 +118,22 @@ static bool containsWord(const String &t, const String &key) {
     char after  = (i + kl < (int)t.length()) ? t[i + kl] : ' ';
     if (!isWordCh(before) && !isWordCh(after)) return true;   // saubere Wortgrenzen
     from = i + 1;                                             // steckte in einem Wort: weitersuchen
+  }
+}
+
+// true, wenn 'key' in 't' am ANFANG eines Wortes steht. Anders als containsWord
+// darf das Wort weitergehen: "spiel" trifft in "spiele" und "spielst", aber
+// NICHT in "Beispiel", wo ein Buchstabe davorsteht. Das braucht die deutsche
+// Beugung, die Endungen anhängt, während containsWord dafür zu streng wäre.
+static bool beginntWort(const String &t, const String &key) {
+  int kl = key.length();
+  if (kl == 0) return false;
+  int from = 0;
+  while (true) {
+    int i = t.indexOf(key, from);
+    if (i < 0) return false;
+    if (!isWordCh((i > 0) ? t[i - 1] : ' ')) return true;   // sauberer Wortanfang
+    from = i + 1;                                           // steckte mittendrin: weitersuchen
   }
 }
 
@@ -145,10 +159,22 @@ const MusicStation *musicMatch(const String &t) {
   // Es braucht eine erkennbare ABSICHT, sonst würde "ich mag Rock" das Radio
   // starten. "strong" ist ein Wort, das eindeutig auf Musik zielt; "verb" ist ein
   // Wort fürs Abspielen, das nur zusammen mit einem Genre zählt.
-  bool strong = has(t, "musik") || has(t, "radio") || has(t, "lied") ||
-                has(t, "song");
-  bool verb   = has(t, "spiel") || has(t, "leg auf") || has(t, "mach an") ||
-                has(t, "play") || has(t, "hör") || has(t, "will");
+  //
+  // ACHTUNG, hier steckte ein Fehler der Übersetzung: das Original suchte diese
+  // Wörter als bloße Teilzeichenkette. Im Italienischen war das harmlos, denn
+  // das dortige Wort für Musik steckt in keinem Alltagswort. Deutsch bildet
+  // dagegen Zusammensetzungen, und damit traf "musik" in "Musiker" und "lied"
+  // in "Mitglied". Weil ein strong-Treffer allein genügt, startete die Frage
+  // "wer war der beste Musiker?" das Radio, statt Claude zu erreichen. Deshalb:
+  //   strong -> containsWord, das ganze Wort. "musik" ja, "musiker" nein.
+  //   verb   -> beginntWort, der Wortanfang. "spiele" ja, "Beispiel" nein.
+  //            Ausnahme "will": es steht am Anfang von "Willkommen", hier zählt
+  //            deshalb nur das ganze Wort.
+  bool strong = containsWord(t, "musik") || containsWord(t, "radio") ||
+                containsWord(t, "lied")  || containsWord(t, "song");
+  bool verb   = beginntWort(t, "spiel")   || beginntWort(t, "leg auf") ||
+                beginntWort(t, "mach an") || beginntWort(t, "play") ||
+                beginntWort(t, "hör")     || containsWord(t, "will");
   if (!strong && !verb) return nullptr;
 
   // Geht die bearbeitbare Liste durch (gSettings.musicStations, ein Sender je

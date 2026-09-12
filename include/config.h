@@ -110,29 +110,29 @@
 //  und erneut über Funk flashen. Werkseinstellung 0.
 #define MIC_DIAG         0
 
-// --- Weckwort "Hey Jarvis", erkannt im Geraet selbst (microWakeWord) --------
+// --- Weckwort "Hey Jarvis", erkannt im Gerät selbst (microWakeWord) --------
 //  Siehe WAKEWORD.md.
 //  1 = Weckwort aktiv (der Chat startet mit "Hey Jarvis" GENAUSO wie mit einem
 //  Klick auf den Drehgeber); 0 = Start NUR per Klick.
-//  GEAENDERT am 2026-09-12: vorher "Hey Mycroft", davor "Okay Nabu". "Okay
-//  Nabu" gehoert dem Balancing Robot, zwei Geraete im selben Haus koennen
+//  GEÄNDERT am 2026-09-12: vorher "Hey Mycroft", davor "Okay Nabu". "Okay
+//  Nabu" gehört dem Balancing Robot, zwei Geräte im selben Haus können
 //  dasselbe Weckwort nicht teilen.
 #define WAKE_ENABLE      1
 //  Erkennungsparameter (aus dem Manifest v2 "hey_jarvis"): Schwelle der
-//  Wahrscheinlichkeit 0..255 und Breite des gleitenden Fensters, ueber das
-//  gemittelt wird. Beides laesst sich im Web-Panel im Betrieb aendern, hier
+//  Wahrscheinlichkeit 0..255 und Breite des gleitenden Fensters, über das
+//  gemittelt wird. Beides lässt sich im Web-Panel im Betrieb ändern, hier
 //  steht nur die Werkseinstellung.
 //  ACHTUNG: 247 und NICHT 242. Die Schwelle ist eine Eigenschaft des Modells,
 //  keine Geschmacksfrage: das Manifest von "hey_jarvis" nennt 0.97 (0.97*255),
 //  das von "hey_mycroft" nannte 0.95. Bliebe hier die 242 stehen, verlangte man
-//  von Jarvis weniger Sicherheit als abgestimmt wurde, und es gaebe mehr
-//  Fehlausloesungen. Siehe src/wake_model.h.
+//  von Jarvis weniger Sicherheit als abgestimmt wurde, und es gäbe mehr
+//  Fehlauslösungen. Siehe src/wake_model.h.
 #define WAKE_PROB_CUTOFF 247
 #define WAKE_WINDOW      5
-//  Digitale Verstaerkung allein des Weckwort-Wegs (das PCM mit Verschiebung 15
-//  ist zu leise, man muesste schreien). Multipliziert die Abtastwerte vor der
-//  Merkmalsberechnung, mit Begrenzung. Hoeher, wenn man immer noch lauter
-//  sprechen muss; niedriger, wenn es faelschlich ausloest.
+//  Digitale Verstärkung allein des Weckwort-Wegs (das PCM mit Verschiebung 15
+//  ist zu leise, man müsste schreien). Multipliziert die Abtastwerte vor der
+//  Merkmalsberechnung, mit Begrenzung. Höher, wenn man immer noch lauter
+//  sprechen muss; niedriger, wenn es fälschlich auslöst.
 #define WAKE_GAIN        3
 
 // --- Sprachaufnahme (nach dem Auslösen durch Weckwort oder Klick) -----------
@@ -247,8 +247,8 @@
 #define MIC_LVL_ATTACK_DEF  0.12f  // Anstieg: wie schnell sie angehen
 #define MIC_LVL_RELEASE_DEF 0.25f  // Abklingen: wie schnell sie ausgehen
 //  Standardstimme bei ElevenLabs (Voice ID).
-//  Dies ist noch die Stimme aus dem Originalprojekt. Fuer den Jarvis-Klang
-//  eine eigene Stimme im ElevenLabs-Konto waehlen und ihre Kennung im
+//  Dies ist noch die Stimme aus dem Originalprojekt. Für den Jarvis-Klang
+//  eine eigene Stimme im ElevenLabs-Konto wählen und ihre Kennung im
 //  Web-Panel eintragen; das Modell eleven_flash_v2_5 ist mehrsprachig.
 #define ELEVEN_VOICE_DEF    "fTHp5NEBwS4InadKS0Ci"
 //  ZWEITE Stimme samt Auslösewort: beginnt der Satz mit VOICE_TRIGGER_DEF,
@@ -256,21 +256,33 @@
 //  zweite Stimme ab. Verglichen wird klein geschrieben.
 #define ELEVEN_VOICE_ALT_DEF "CiwzbDpaN3pQXjTgx3ML"
 #define VOICE_TRIGGER_DEF    "gut"
-//  Geisterphrasen von Whisper (durch Komma getrennt): stimmt die Transkription
-//  GENAU mit einer davon überein, wird sie stillschweigend verworfen. Das sind
-//  die typischen Halluzinationen auf Stille. Leer = Filter aus. Verglichen wird
+//  Geisterphrasen von Whisper (eine je Zeile): stimmt die Transkription GENAU
+//  mit einer davon überein, wird sie stillschweigend verworfen. Das sind die
+//  typischen Halluzinationen auf Stille. Leer = Filter aus. Verglichen wird
 //  klein geschrieben und ohne Satzzeichen an den Rändern.
-//  ACHTUNG: kein Komma innerhalb einer Phrase, es trennt die Einträge. Die
-//  üblichen Abspann-Halluzinationen "... des ZDF für funk, 2017" stehen deshalb
-//  ohne Jahreszahl hier. Umlaute klein schreiben: der Vergleich setzt nur
-//  ASCII-Buchstaben auf Kleinschreibung.
+//  Getrennt wird am ZEILENUMBRUCH und nicht am Komma wie im Original, denn die
+//  häufigsten deutschen Geisterphrasen sind Abspänne von Untertiteln und
+//  tragen selbst ein Komma. Siehe isAllucinazione in main.cpp.
+//  Umlaute klein schreiben: der Vergleich setzt nur ASCII-Buchstaben um.
 #define HALLUC_TERMS_DEF \
-    "vielen dank,vielen dank fürs zuschauen,vielen dank für's zuschauen," \
-    "danke,danke schön,dankeschön,danke fürs zuschauen," \
-    "untertitel der amara.org-community,untertitel von stephanie geiges," \
-    "untertitelung des zdf für funk,untertitel im auftrag des zdf," \
-    "mehr infos auf www.zdf.de,copyright wdr," \
-    "tschüss,auf wiedersehen,bis zum nächsten mal,das war's,so das war's"
+    "vielen dank\n" \
+    "vielen dank fürs zuschauen\n" \
+    "vielen dank für's zuschauen\n" \
+    "danke\n" \
+    "danke schön\n" \
+    "dankeschön\n" \
+    "untertitel der amara.org-community\n" \
+    "untertitel von stephanie geiges\n" \
+    "untertitelung des zdf für funk, 2017\n" \
+    "untertitel im auftrag des zdf für funk, 2017\n" \
+    "untertitelung im auftrag des zdf, 2021\n" \
+    "mehr infos auf www.zdf.de\n" \
+    "copyright wdr\n" \
+    "tschüss\n" \
+    "auf wiedersehen\n" \
+    "bis zum nächsten mal\n" \
+    "das war's\n" \
+    "so das war's"
 //  Gehirn: Standardmodell von Claude und die "Persönlichkeit" (System-Prompt).
 //  claude-haiku-4-5 = schnell und günstig; claude-sonnet-5 = Mittelweg;
 //  claude-opus-5 = klüger, dafür langsamer und teurer.
@@ -328,8 +340,8 @@
 #define LOCAL_LLM_URL_DEF     ""
 #define LOCAL_LLM_MODEL_DEF   ""
 //  Temperatur allein des Modells ZU HAUSE (die Cloud nutzt ihre eigene). Niedrig
-//  heisst, es bleibt beim wahrscheinlichsten Wort, die Antworten sind nah am
-//  Thema und wiederholbar; hoch heisst, es wagt mehr, wird abwechslungsreicher,
+//  heißt, es bleibt beim wahrscheinlichsten Wort, die Antworten sind nah am
+//  Thema und wiederholbar; hoch heißt, es wagt mehr, wird abwechslungsreicher,
 //  schweift aber auch eher ab. Server zu Hause starten meist bei 0,7 bis 0,8.
 #define LOCAL_LLM_TEMP_DEF    0.3f
 #define LOCAL_STT_URL_DEF     ""
