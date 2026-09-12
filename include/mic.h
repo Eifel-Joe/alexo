@@ -25,7 +25,7 @@ size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t) =
 // ist. Gilt nur für die NÄCHSTE Aufnahme, danach gilt wieder die normale
 // Wartezeit (REC_MIN_MS + silenceMs + 1 s). Der fortlaufende Chat braucht das:
 // nach einer Antwort öffnet das Mikrofon erneut, und wenn binnen weniger
-// Sekunden niemand spricht, schliesst es wieder, ohne die Wartezeit zu
+// Sekunden niemand spricht, schließt es wieder, ohne die Wartezeit zu
 // verlängern, wenn der Chat von Hand gestartet wurde.
 void micSetNoVoiceMs(uint32_t ms);
 
@@ -41,7 +41,7 @@ bool micVoiceStarted();
 void micFlush();
 
 // Liest bis zu 'maxn' rohe PCM-Abtastwerte mit 16 Bit vom Mikrofon (ein oder
-// mehrere i2s_read, blockierend etwa maxn/16 ms). "Roh" heisst nur verschoben,
+// mehrere i2s_read, blockierend etwa maxn/16 ms). "Roh" heißt nur verschoben,
 // OHNE Hochpass: das braucht das Weckwort, dessen Merkmalsberechnung eigene
 // Filter mitbringt (Filterbank ab 125 Hz).
 // Liefert die tatsächlich gelesenen Abtastwerte, 0 wenn nichts verfügbar ist.

@@ -1,6 +1,6 @@
 // ============================================================================
-//  ALEXO - Selbsttest fuer TFLite Micro. Siehe tfltest.h und WAKEWORD.md
-//  (Schritt 2). Laesst das Modell "hello_world" (Sinus) laufen, um zu zeigen,
+//  ALEXO - Selbsttest für TFLite Micro. Siehe tfltest.h und WAKEWORD.md
+//  (Schritt 2). Lässt das Modell "hello_world" (Sinus) laufen, um zu zeigen,
 //  dass TFLM auf dem S3 arbeitet.
 // ============================================================================
 #include "config.h"
@@ -17,7 +17,7 @@
 #include "tfl_hello_model.h"   // const unsigned char g_model[] (aus dem Chirale-Repo)
 // Merkmalsberechnung von TFLM (die Bibliothek liegt unter lib/microfrontend):
 // erzeugt die 40 Mel-Merkmale, die das Weckwort-Modell erwartet. Hier nur, um zu
-// zeigen, dass sie sich uebersetzen und ausfuehren laesst.
+// zeigen, dass sie sich übersetzen und ausführen lässt.
 #include "tensorflow/lite/experimental/microfrontend/lib/frontend.h"
 #include "tensorflow/lite/experimental/microfrontend/lib/frontend_util.h"
 
@@ -105,7 +105,7 @@ void tflSelfTest() {
 
   // Merkmalsberechnung: wird eingerichtet und auf einen Testsinus (440 Hz)
   // angewendet; ausgegeben werden die Zahl der Merkmale und die ersten davon.
-  // Das bestaetigt, dass sie sich uebersetzen und ausfuehren laesst.
+  // Das bestätigt, dass sie sich übersetzen und ausführen lässt.
   if (!fe_tried) frontendOnce();
   if (fe_ready) {
     static int16_t pcm[480];

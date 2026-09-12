@@ -93,7 +93,7 @@ static String sttPost(const String &url, const String &model, const String &apiK
   JsonDocument doc;
   DeserializationError e = deserializeJson(doc, resp);
   if (e) {
-    Serial.printf("[stt] JSON ungueltig: %s\n", e.c_str());
+    Serial.printf("[stt] JSON ungültig: %s\n", e.c_str());
     return "";
   }
   String text = doc["text"] | "";

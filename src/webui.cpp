@@ -80,7 +80,7 @@ static void handlePostSettings() {
   if (!server.hasArg("plain")) { server.send(400, "text/plain", "no body"); return; }
   JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) {
-    server.send(400, "text/plain", "JSON ungueltig"); return;
+    server.send(400, "text/plain", "JSON ungültig"); return;
   }
   // Ändert nur die enthaltenen Felder, das Panel darf auch eine Auswahl senden.
   if (!doc["recSilenceMs"].isNull())     gSettings.recSilenceMs     = doc["recSilenceMs"].as<uint32_t>();
@@ -147,7 +147,7 @@ static void handleLive() {
 // GET /api/chat -> die letzten Nachrichten des Chats (desselben, durch den man
 // auf dem TFT blättert) als JSON.
 // Ausgeliefert wird STÜCKWEISE, eine Nachricht nach der anderen. So muss im RAM
-// keine Zeichenkette entstehen, die so gross ist wie der ganze Chat (bis zu
+// keine Zeichenkette entstehen, die so groß ist wie der ganze Chat (bis zu
 // 40 mal 2 KB). Das JSON hat die Form [{"r":Rolle,"t":"Text"}].
 static void handleChat() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -219,7 +219,7 @@ static void handleMusicStop() {
 // zum Antworten. 409, wenn bereits etwas läuft oder die Liste leer ist.
 static void handleMusicStart() {
   if (musicIsPlaying()) {
-    server.send(409, "application/json", "{\"ok\":false,\"err\":\"Radio laeuft bereits\"}");
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"Radio läuft bereits\"}");
     return;
   }
   if (musicStationCount() <= 0) {
@@ -241,7 +241,7 @@ static void handleMusicSeek() {
       d = doc["d"].as<int>();
   }
   if (!musicIsPlaying()) {
-    server.send(409, "application/json", "{\"ok\":false,\"err\":\"Radio laeuft nicht\"}");
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"Radio läuft nicht\"}");
     return;
   }
   musicRequestSeek(d >= 0 ? 1 : -1);
@@ -279,7 +279,7 @@ bool webuiBegin() {
     // Rückfall: fehlt die Seite in LittleFS, wenigstens ein brauchbarer Hinweis.
     if (LittleFS.exists("/index.html")) { server.send(404, "text/plain", "not found"); return; }
     server.send(200, "text/html",
-      "<h3>ALEXO</h3><p>Die Seite liegt nicht in LittleFS. Dateisystem uebertragen: "
+      "<h3>ALEXO</h3><p>Die Seite liegt nicht in LittleFS. Dateisystem übertragen: "
       "<code>pio run -t uploadfs</code>. Die JSON-Schnittstelle arbeitet unter "
       "/api/settings.</p>");
   });

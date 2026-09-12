@@ -256,7 +256,7 @@ void localForget() {
 
 // --- Unmissverständlich sagen (siehe localai.h) -----------------------------
 //  Wohin jedes Glied geht, wenn es das Haus verlässt. Das dient allein dazu, es
-//  in der roten Zeile im Klartext zu nennen, damit man weiss, WER die Daten
+//  in der roten Zeile im Klartext zu nennen, damit man weiß, WER die Daten
 //  bekommen hat.
 static const char *cloudName(LocalSvc svc) {
   return svc == LOC_STT ? "Groq" : svc == LOC_LLM ? "Claude" : "ElevenLabs";
@@ -278,7 +278,7 @@ void localSayCloud(LocalSvc svc) {
 
 void localSayBlocked(LocalSvc svc) {
   if (svc >= LOC_COUNT) return;
-  // Es gibt ZWEI Schalter, die den Weg nach draussen versperren, und die Meldung
+  // Es gibt ZWEI Schalter, die den Weg nach draußen versperren, und die Meldung
   // muss den nennen, der tatsächlich gesperrt hat: liest man "nur zu Hause",
   // während dieser Schalter aus ist, sucht man einen Fehler, den es nicht gibt.
   // "Nur zu Hause" ist die weiter gefasste Regel und hat Vorrang; ist sie aus,
@@ -294,10 +294,10 @@ void localSayBlocked(LocalSvc svc) {
 }
 
 String localStripThink(const String &s) {
-  // Behalten wird, was NACH dem letzten schliessenden Element kommt: was das
+  // Behalten wird, was NACH dem letzten schließenden Element kommt: was das
   // Modell davor auch gegrübelt hat, die Antwort ist das, was folgt. Das deckt
   // auch die Vorlagen ab, die das Nachdenken selbst eröffnen und nur das
-  // schliessende Element mitschicken.
+  // schließende Element mitschicken.
   int end = s.lastIndexOf("</think>");
   if (end < 0) return s;
   String out = s.substring(end + 8);

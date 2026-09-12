@@ -80,7 +80,7 @@ static void animSpeaking(uint32_t t) {
 // g_level wird hier mit Absicht NICHT benutzt: die Aussteuerungsanzeige ist das
 // Zeichen, dass Alexo bereits aufnimmt, hier wartet er aber noch darauf, dass man
 // anfängt. Es bleibt so, bis gesprochen wird (dann folgt ST_LISTENING) oder der
-// Chat sich schliesst. Die warme Farbe unterscheidet den Zustand von allen
+// Chat sich schließt. Die warme Farbe unterscheidet den Zustand von allen
 // anderen.
 // Die HELLIGKEIT IST ABSICHTLICH KONSTANT: die erste Fassung liess den ganzen
 // Ring atmen, und weil er dabei fast bis zur Dunkelheit abfiel, sah es aus, als

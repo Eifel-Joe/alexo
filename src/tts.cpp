@@ -1,13 +1,13 @@
 // ============================================================================
 //  ALEXO - Text-to-Speech -> MP3-Strom an den VS1053
-//  Das eintreffende MP3 wird stueckweise an den VS1053 gegeben, waehrend es
-//  ankommt (geringe Verzoegerung, kein riesiger Puffer). Zwei Wege:
+//  Das eintreffende MP3 wird stückweise an den VS1053 gegeben, während es
+//  ankommt (geringe Verzögerung, kein riesiger Puffer). Zwei Wege:
 //    CLOUD  ElevenLabs (geklonte Stimme)
 //    ZU HAUSE  OpenAI-kompatibler Server im eigenen Netz (siehe localai.h),
-//           ohne Schluessel
+//           ohne Schlüssel
 //  Zu Hause wird nur gesprochen, wenn im Panel eine Adresse steht UND der PC
-//  antwortet; macht der lokale Server einen Fehler, uebernimmt ElevenLabs. In
-//  beiden Faellen braucht es MP3: mehr decodiert der VS1053 nicht.
+//  antwortet; macht der lokale Server einen Fehler, übernimmt ElevenLabs. In
+//  beiden Fällen braucht es MP3: mehr decodiert der VS1053 nicht.
 // ============================================================================
 #include "tts.h"
 #include "secrets.h"
@@ -22,10 +22,10 @@
 #include "ui.h"
 #include <math.h>
 
-// Pegel des LED-Rings WAEHREND der Sprachausgabe: liest das Mikrofon (wie bei
+// Pegel des LED-Rings WÄHREND der Sprachausgabe: liest das Mikrofon (wie bei
 // Musik) und leitet daraus einen Aussteuerungswert ab. WENIGER empfindlich als
-// bei Musik (grosser VOICE_LVL_DIV), weil die Stimme laut ist. Hochpass, MAD,
-// automatischer Grundpegel und Huellkurve; faellt in den Pausen ab.
+// bei Musik (großer VOICE_LVL_DIV), weil die Stimme laut ist. Hochpass, MAD,
+// automatischer Grundpegel und Hüllkurve; fällt in den Pausen ab.
 #define VOICE_LVL_DIV   30.0f
 #define VOICE_FLOOR     90.0f
 static uint8_t voiceLevel(const int16_t *s, size_t n) {
@@ -51,19 +51,19 @@ static uint8_t voiceLevel(const int16_t *s, size_t n) {
   return (uint8_t)(env + 0.5f);
 }
 
-// Die Standardstimme ist zur LAUFZEIT aenderbar (gSettings.voiceId, ueber das
+// Die Standardstimme ist zur LAUFZEIT änderbar (gSettings.voiceId, über das
 // Web-Panel); die Werkseinstellung steht in config.h (ELEVEN_VOICE_DEF).
 #define ELEVEN_MODEL    "eleven_flash_v2_5"       // schnell, 0,5 Credits je Zeichen
-#define TTS_MS_PER_CHAR 65        // geschaetzte Sprechdauer: ms je Zeichen
-                                  // (fuer den Gleichlauf Anzeige<->Stimme)
+#define TTS_MS_PER_CHAR 65        // geschätzte Sprechdauer: ms je Zeichen
+                                  // (für den Gleichlauf Anzeige<->Stimme)
 
-// Bereitet den Text fuer die AUSSPRACHE auf (nur fuer die Sprachausgabe, NICHT
-// fuer das Display: dort bleiben "36°C" und "19,5" stehen). Schreibt die Zeichen
-// aus, die die Stimmen falsch lesen. Fuer einen neuen Fall: eine weitere
+// Bereitet den Text für die AUSSPRACHE auf (nur für die Sprachausgabe, NICHT
+// für das Display: dort bleiben "36°C" und "19,5" stehen). Schreibt die Zeichen
+// aus, die die Stimmen falsch lesen. Für einen neuen Fall: eine weitere
 // Bedingung in der Schleife. Der Eingangstext ist UTF-8 (etwa "°" = 0xC2 0xB0).
 // Versucht ab in[i] eine UHRZEIT "H:MM" oder "HH:MM" zu lesen. Passt sie, wird
-// die gesprochene Form an 'out' angehaengt und die Zahl der verbrauchten Zeichen
-// zurueckgegeben, sonst 0 (und 'out' bleibt unberuehrt). Regeln:
+// die gesprochene Form an 'out' angehängt und die Zahl der verbrauchten Zeichen
+// zurückgegeben, sonst 0 (und 'out' bleibt unberührt). Regeln:
 //   00:00 -> "Mitternacht"   12:00 -> "Mittag"
 //   HH:00 -> "HH Uhr"        HH:MM -> "HH Uhr MM"   (Stunde 0 -> "null")
 // Grenzen: Stunde 0-23, Minute zweistellig 0-59; danach darf keine weitere
@@ -93,23 +93,23 @@ static int leggiOrario(const String &in, int i, int n, String &out) {
 }
 
 // Versucht ab in[i] ein DATUM zu lesen. Passt es, wird die gesprochene Form
-// "T <Monat> JJJJ" an 'out' angehaengt und die Zahl der verbrauchten Zeichen
-// zurueckgegeben, sonst 0. Der Monat wird zum Wort, Tag und Jahr bleiben
+// "T <Monat> JJJJ" an 'out' angehängt und die Zahl der verbrauchten Zeichen
+// zurückgegeben, sonst 0. Der Monat wird zum Wort, Tag und Jahr bleiben
 // Ziffern: die Stimmen lesen die von allein richtig, und so muss hier niemand
-// Zahlen ausschreiben koennen.
-//   10/3/2026 - 01.12.1992 - 12-09-1989  ->  "10 Maerz 2026" usw.
+// Zahlen ausschreiben können.
+//   10/3/2026 - 01.12.1992 - 12-09-1989  ->  "10 März 2026" usw.
 //   2026-08-16 (umgekehrt, wie Maschinen es schreiben) -> "16 August 2026"
 // Das Trennzeichen darf / . oder - sein, muss aber beide Male DASSELBE sein:
 // "1.500/3" ist kein Datum.
 // WARUM: ohne diese Regel las die Bruchregel weiter unten Datumsangaben mit
-// Schraegstrich als "10 durch 3 durch 2026", und die mit Punkt oder Bindestrich
-// wurden Zeichen fuer Zeichen vorgelesen.
-// Die Grenzen sind ENG, damit echte Brueche ("3/4") und Tausender ("1.500.000")
+// Schrägstrich als "10 durch 3 durch 2026", und die mit Punkt oder Bindestrich
+// wurden Zeichen für Zeichen vorgelesen.
+// Die Grenzen sind ENG, damit echte Brüche ("3/4") und Tausender ("1.500.000")
 // nicht hineinfallen: Tag 1-31, Monat 1-12, Jahr GENAU vierstellig.
 static const char *MESI_VOCE[] = { "Januar", "Februar", "März", "April",
                                    "Mai", "Juni", "Juli", "August",
                                    "September", "Oktober", "November", "Dezember" };
-// Liest ab j bis zu 'max' Ziffern; liefert deren Anzahl (0 = keine) und rueckt j vor.
+// Liest ab j bis zu 'max' Ziffern; liefert deren Anzahl (0 = keine) und rückt j vor.
 static int cifreDa(const String &in, int n, int &j, int max) {
   int c = 0;
   while (j < n && isDigit((uint8_t)in[j]) && c < max) { j++; c++; }
@@ -142,15 +142,15 @@ static int leggiData(const String &in, int i, int n, String &out) {
 }
 
 // Versucht ab in[i] eine Zahl mit TAUSENDERPUNKT zu lesen ("230.000"). Passt
-// sie, wird dieselbe Zahl ohne Punkte ("230000") an 'out' angehaengt und die
-// Zahl der verbrauchten Zeichen zurueckgegeben, sonst 0.
+// sie, wird dieselbe Zahl ohne Punkte ("230000") an 'out' angehängt und die
+// Zahl der verbrauchten Zeichen zurückgegeben, sonst 0.
 // WARUM: ElevenLabs richtet sich Zahlen selbst her, die Stimmen zu Hause nicht.
-// Kokoro liest den Punkt woertlich ("zweihundertdreissig Punkt nullnullnull").
+// Kokoro liest den Punkt wörtlich ("zweihundertdreissig Punkt nullnullnull").
 // Regel: 1-3 Ziffern, dann eine oder mehrere Gruppen von GENAU 3 Ziffern nach
 // einem Punkt, und nach der letzten Gruppe weder Ziffer noch weiterer Punkt. So
 // bleiben der englische Dezimalpunkt ("3.14", die Gruppe hat keine 3 Ziffern)
 // und Netzwerkadressen ("192.168.1.50", nach der letzten Gruppe folgt noch ein
-// Punkt) aussen vor.
+// Punkt) außen vor.
 static int leggiMigliaia(const String &in, int i, int n, String &out) {
   int j = i, cifre = 0;
   while (j < n && isDigit((uint8_t)in[j]) && cifre < 4) { j++; cifre++; }
@@ -170,15 +170,15 @@ static int leggiMigliaia(const String &in, int i, int n, String &out) {
   return j - i;
 }
 
-// Abkuerzungen von Masseinheiten: "km" -> "Kilometer". Ohne das lesen die
-// Stimmen sie buchstabierend oder englisch. Die LAENGSTEN zuerst: "km/h" muss
-// vor "km" stehen, sonst bleibt "Kilometer durch h" uebrig (dasselbe gilt fuer
-// "m2" gegenueber "m" und "cm" gegenueber "c...").
-// FUER EINE WEITERE: eine Zeile hier, Einzahl und Mehrzahl. Der Vergleich
-// ignoriert Gross- und Kleinschreibung (die Modelle schreiben "km" oder "KM").
-// Das letzte Feld ist 'serveNum': steht dort true, gilt die Abkuerzung nur mit
-// einer ZAHL davor. Das brauchen die einbuchstabigen Kuerzel, die sonst Unsinn
-// anrichten ("das Gramm" wuerde zu "das Grammramm").
+// Abkürzungen von Masseinheiten: "km" -> "Kilometer". Ohne das lesen die
+// Stimmen sie buchstabierend oder englisch. Die LÄNGSTEN zuerst: "km/h" muss
+// vor "km" stehen, sonst bleibt "Kilometer durch h" übrig (dasselbe gilt für
+// "m2" gegenüber "m" und "cm" gegenüber "c...").
+// FÜR EINE WEITERE: eine Zeile hier, Einzahl und Mehrzahl. Der Vergleich
+// ignoriert Groß- und Kleinschreibung (die Modelle schreiben "km" oder "KM").
+// Das letzte Feld ist 'serveNum': steht dort true, gilt die Abkürzung nur mit
+// einer ZAHL davor. Das brauchen die einbuchstabigen Kürzel, die sonst Unsinn
+// anrichten ("das Gramm" würde zu "das Grammramm").
 struct UnitaVoce { const char *abbr; const char *sing; const char *plur; bool serveNum; };
 static const UnitaVoce UNITA[] = {
   { "km/h", "Kilometer pro Stunde", "Kilometer pro Stunde", false },
@@ -212,11 +212,11 @@ static const UnitaVoce UNITA[] = {
   { "s",    "Sekunde",             "Sekunden",            true  },
 };
 
-// Beginnt bei in[i] eine dieser Abkuerzungen ALS EIGENES WORT (nicht "kmart",
+// Beginnt bei in[i] eine dieser Abkürzungen ALS EIGENES WORT (nicht "kmart",
 // nicht "okm"), wird die gesprochene Form geschrieben und die Zahl der zu
-// verbrauchenden Zeichen zurueckgegeben.
+// verbrauchenden Zeichen zurückgegeben.
 // Einzahl nur, wenn davor genau "1" oder "ein/eine/einen/einem" steht: "21 km"
-// ist Mehrzahl, ein Blick auf die letzte Ziffer genuegt also nicht.
+// ist Mehrzahl, ein Blick auf die letzte Ziffer genügt also nicht.
 // Der Punkt wird NICHT verbraucht: "230 km." ist meist ein Satzende, und ohne
 // den Punkt fiele die Pause weg.
 static int leggiUnita(const String &in, int i, int n, String &out) {
@@ -233,7 +233,7 @@ static int leggiUnita(const String &in, int i, int n, String &out) {
     if (!uguale) continue;
     if (i + L < n && isAlphaNumeric((uint8_t)in[i + L])) continue;   // "kmart"
 
-    // Was steht davor: Leerzeichen ueberspringen, dann das Wort oder die Zahl.
+    // Was steht davor: Leerzeichen überspringen, dann das Wort oder die Zahl.
     int j = i - 1;
     while (j >= 0 && in[j] == ' ') j--;
     int fine = j;
@@ -258,7 +258,7 @@ static String normalizzaPerVoce(const String &in) {
     uint8_t c = (uint8_t)in[i];
 
     // Uhrzeit "HH:MM" -> gesprochene Form. Nur am ANFANG einer Zahl (das Zeichen
-    // davor ist keine Ziffer), damit laengere Zahlen nicht zerrissen werden.
+    // davor ist keine Ziffer), damit längere Zahlen nicht zerrissen werden.
     if (isDigit(c) && (i == 0 || !isDigit((uint8_t)in[i - 1]))) {
       int consumed = leggiOrario(in, i, n, out);
       if (consumed > 0) { i += consumed - 1; continue; }
@@ -271,7 +271,7 @@ static String normalizzaPerVoce(const String &in) {
       if (consumed > 0) { i += consumed - 1; continue; }
     }
 
-    // Abgekuerzte Masseinheiten: "20 km/h" -> "20 Kilometer pro Stunde". Vor dem
+    // Abgekürzte Masseinheiten: "20 km/h" -> "20 Kilometer pro Stunde". Vor dem
     // Entfernen des Markdowns: hier steht kein Markdown dazwischen, und das 'k'
     // ist kein Zeichen, das jener Filter anfasst.
     if (((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) &&
@@ -291,12 +291,12 @@ static String normalizzaPerVoce(const String &in) {
     // Markdown: die Modelle verwenden es auch, wenn der Prompt es verbietet (die
     // zu Hause besonders). Gesprochen wird aus "**Nordrhein-Westfalen**" ein
     // Gestammel oder ein Vorlesen der Sternchen, deshalb fallen die Zeichen hier
-    // weg. Auf dem BILDSCHIRM bleiben sie: diese Aufbereitung gilt nur fuer das
+    // weg. Auf dem BILDSCHIRM bleiben sie: diese Aufbereitung gilt nur für das
     // Gesprochene.
     if (c == '*' || c == '`' || c == '_' || c == '#') continue;
 
-    // Grad "°" (UTF-8 0xC2 0xB0), moeglicherweise gefolgt von C oder F.
-    // Im Deutschen steht das Zeichen immer fuer Grad, nie fuer eine Ordnungszahl
+    // Grad "°" (UTF-8 0xC2 0xB0), möglicherweise gefolgt von C oder F.
+    // Im Deutschen steht das Zeichen immer für Grad, nie für eine Ordnungszahl
     // wie im Italienischen ("21° secolo"). Einzige Ausnahme ist "n°" = Nummer.
     if (c == 0xC2 && i + 1 < n && (uint8_t)in[i + 1] == 0xB0) {
       // "n° 5" -> "Nummer 5": das 'n' steht schon in 'out' und wird entfernt.
@@ -329,15 +329,15 @@ static String normalizzaPerVoce(const String &in) {
     if (c == '%') { out += " Prozent"; continue; }
 
     // Bruch zwischen Ziffern: "10/3" -> "10 durch 3"
-    // Achtung: greift nur Ziffer/Ziffer. Datumsangaben "10/3/2026" wuerden zu
-    // "10 durch 3 durch 2026", deshalb laeuft die Datumsregel vorher.
+    // Achtung: greift nur Ziffer/Ziffer. Datumsangaben "10/3/2026" würden zu
+    // "10 durch 3 durch 2026", deshalb läuft die Datumsregel vorher.
     if (c == '/' && i > 0 && i + 1 < n &&
         isDigit((uint8_t)in[i - 1]) && isDigit((uint8_t)in[i + 1])) {
       out += " durch ";
       continue;
     }
 
-    // Waehrungen: "€" (0xE2 0x82 0xAC), "$", "£" (0xC2 0xA3)
+    // Währungen: "€" (0xE2 0x82 0xAC), "$", "£" (0xC2 0xA3)
     if (c == 0xE2 && i + 2 < n && (uint8_t)in[i + 1] == 0x82 &&
         (uint8_t)in[i + 2] == 0xAC) { out += " Euro"; i += 2; continue; }
     if (c == 0xC2 && i + 1 < n && (uint8_t)in[i + 1] == 0xA3) {
@@ -346,7 +346,7 @@ static String normalizzaPerVoce(const String &in) {
     if (c == '$') { out += " Dollar"; continue; }
 
     // Negative Zahl: "-5 Grad" -> "minus 5 Grad". Nur am Wortanfang, damit
-    // Bereiche ("18-20") und Woerter mit Bindestrich unberuehrt bleiben.
+    // Bereiche ("18-20") und Wörter mit Bindestrich unberührt bleiben.
     if (c == '-' && (i == 0 || in[i - 1] == ' ' || in[i - 1] == '(') &&
         i + 1 < n && isDigit((uint8_t)in[i + 1])) {
       out += "minus ";
@@ -358,34 +358,34 @@ static String normalizzaPerVoce(const String &in) {
   return out;
 }
 
-// Nimmt das MP3 aus der bereits offenen Antwort und gibt es stueckweise an den
-// VS1053, waehrend es ankommt. Auf beiden Wegen (Cloud und zu Hause) gleich,
-// verschieden ist nur, wie der Ton angefordert wurde. Schliesst die Verbindung
+// Nimmt das MP3 aus der bereits offenen Antwort und gibt es stückweise an den
+// VS1053, während es ankommt. Auf beiden Wegen (Cloud und zu Hause) gleich,
+// verschieden ist nur, wie der Ton angefordert wurde. Schließt die Verbindung
 // selbst.
 static bool ttsStream(HTTPClient &http, VS1053 &player, const String &parlato,
                       uint32_t bytePerMs) {
   uint32_t t0 = millis();
   int len = http.getSize();             // -1 wenn unbekannt (chunked)
   WiFiClient *stream = http.getStreamPtr();
-  player.setVolume(volumeVsValue());   // Nutzerlautstaerke in den hoerbaren Bereich
+  player.setVolume(volumeVsValue());   // Nutzerlautstärke in den hörbaren Bereich
 
   // Der Ton startet gleich: der Bildlauf der Anzeige wird an die DAUER des Tons
-  // gekoppelt. Wie viele Byte eine Millisekunde ergeben, haengt vom Format ab
+  // gekoppelt. Wie viele Byte eine Millisekunde ergeben, hängt vom Format ab
   // und sagt der Aufrufer: MP3 mit 128 kbit/s = 16, WAV 24 kHz 16 Bit Mono = 48.
   // Kommt ein Content-Length (len>0), stimmt die Dauer genau; ist die Antwort
-  // chunked (len<0), bleibt die Schaetzung aus der Textlaenge.
+  // chunked (len<0), bleibt die Schätzung aus der Textlänge.
   uint32_t durMs = (len > 0) ? (uint32_t)len / bytePerMs
                              : (uint32_t)parlato.length() * TTS_MS_PER_CHAR;
   gobboScrollOver(durMs);
   Serial.printf("[tts] Tondauer: %lu ms (%s)\n", (unsigned long)durMs,
-                len > 0 ? "genau aus Content-Length" : "aus Textlaenge geschaetzt");
+                len > 0 ? "genau aus Content-Length" : "aus Textlänge geschätzt");
 
   uint8_t buf[512];
   size_t total = 0;
   uint32_t idle = millis();
   uint32_t lastLvl = 0;
   while (http.connected() || (stream && stream->available())) {
-    volumeApplyPending(player);   // Lautstaerke nachfuehren, WAEHREND Alexo spricht
+    volumeApplyPending(player);   // Lautstärke nachführen, WÄHREND Alexo spricht
     // Ring REAGIERT auf die Stimme: alle ~30 ms wird das Mikrofon gelesen und der
     // Pegel gesetzt (cyan), wie bei Musik, nur weniger empfindlich. Gedrosselt,
     // damit der VS1053 weiter genug Daten bekommt.
@@ -424,16 +424,16 @@ static bool ttsStream(HTTPClient &http, VS1053 &player, const String &parlato,
 }
 
 // Stimme ZU HAUSE: OpenAI-kompatibler Server (/audio/speech) im eigenen Netz,
-// ohne Schluessel. Angefordert wird WAV, nicht MP3: der VS1053 decodiert es
-// direkt (die Toene aus sound.cpp sind schon WAV), und so muss der Server nichts
+// ohne Schlüssel. Angefordert wird WAV, nicht MP3: der VS1053 decodiert es
+// direkt (die Töne aus sound.cpp sind schon WAV), und so muss der Server nichts
 // komprimieren. Das bedeutet weniger Wartezeit und kein ffmpeg auf dem PC.
 // Es kostet mehr Bandbreite, rund 380 statt 128 kbit/s, was im heimischen WLAN
-// nicht auffaellt.
+// nicht auffällt.
 // Liefert false bei Misserfolg: der Aufrufer weicht dann auf ElevenLabs aus.
 #define WAV_BYTE_PER_MS 48    // 24000 Abtastwerte/s x 2 Byte = 48 Byte je ms
 #define MP3_BYTE_PER_MS 16    // 128 kbit/s CBR = 16 Byte je ms
 static bool speakLocal(VS1053 &player, const String &parlato) {
-  // "Aufgeloeste" Adresse: fehlt im Panel der Port, ist es der, der geantwortet
+  // "Aufgelöste" Adresse: fehlt im Panel der Port, ist es der, der geantwortet
   // hat (8002 Kokoro / 8003 Chatterbox). Steht der Port dort, ist die Adresse
   // dieselbe wie im Panel und kostet keine Wartezeit.
   const String base  = localBaseUsed(LOC_TTS);
@@ -471,7 +471,7 @@ static bool speakLocal(VS1053 &player, const String &parlato) {
 }
 
 // Wohin die Stimme geht, entscheidet ein SCHALTER, nicht die Frage, ob der
-// Server zu Hause laeuft. Ein erreichbarer, aber nicht angeforderter Server darf
+// Server zu Hause läuft. Ein erreichbarer, aber nicht angeforderter Server darf
 // nichts umleiten: ohne gesetzten Schalter geht es zu ElevenLabs, auch wenn der
 // PC an ist. main.cpp braucht das ebenfalls, um "[LOC]" vor die Antwort auf dem
 // Bildschirm zu setzen.
@@ -488,9 +488,9 @@ bool ttsSpeak(VS1053 &player, const String &text, const String &voiceId) {
   String parlato = normalizzaPerVoce(text);
 
   // Stimme zu Hause: nur wenn ein Schalter es verlangt ("Stimme immer zu Hause"
-  // oder "nur zu Hause"). Vorher wird nicht auf Erreichbarkeit geprueft (spart
+  // oder "nur zu Hause"). Vorher wird nicht auf Erreichbarkeit geprüft (spart
   // Wartezeit) und danach nicht auf ElevenLabs ausgewichen: genau darum geht es
-  // bei dem Schalter, die Freikontingente nicht hinter dem Ruecken dessen zu
+  // bei dem Schalter, die Freikontingente nicht hinter dem Rücken dessen zu
   // verbrauchen, der ihn eingeschaltet hat.
   if (ttsUsesLocal()) {
     if (speakLocal(player, parlato)) return true;
@@ -505,7 +505,7 @@ bool ttsSpeak(VS1053 &player, const String &text, const String &voiceId) {
 
   localSayCloud(LOC_TTS);
 
-  // Stimme: die uebergebene, sonst die Voreinstellung (aus dem Web-Panel).
+  // Stimme: die übergebene, sonst die Voreinstellung (aus dem Web-Panel).
   String voce = voiceId.isEmpty() ? gSettings.voiceId : voiceId;
 
   // JSON-Rumpf

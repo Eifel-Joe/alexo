@@ -314,12 +314,12 @@ Es ist in viele kleine Dateien geteilt, jede mit einer Aufgabe. Man nennt das
 
 ```
 include/               ← die "Etiketten" (Deklarationen) und die Einstellungen
-  config.h             ← ★ ALLE Anschluesse und Werte. Hier wird geaendert.
-  secrets.example.h    ← die Vorlage fuer Passwoerter und Schluessel (nach secrets.h kopieren)
-  *.h                  ← je ein "Etikett" fuer jedes Modul unten
+  config.h             ← ★ ALLE Anschlüsse und Werte. Hier wird geändert.
+  secrets.example.h    ← die Vorlage für Passwörter und Schlüssel (nach secrets.h kopieren)
+  *.h                  ← je ein "Etikett" für jedes Modul unten
 
 src/                   ← der eigentliche Code
-  main.cpp             ← der DIRIGENT: er haelt alles zusammen
+  main.cpp             ← der DIRIGENT: er hält alles zusammen
   mic.cpp              ← nimmt vom Mikrofon auf
   net.cpp              ← verbindet sich mit dem WLAN
   stt.cpp              ← schickt den Ton an Groq und bekommt den Text
@@ -329,20 +329,20 @@ src/                   ← der eigentliche Code
   ui.cpp               ← belebt den LED-Ring
   gobbo.cpp            ← zeichnet den Chat auf das Display
   encoder.cpp          ← liest den Drehgeber
-  volume.cpp           ← verwaltet die Lautstaerke und merkt sie sich
-  sound.cpp            ← erzeugt die Rueckmeldetoene
-  netlog.cpp           ← schickt das Protokoll ueber das Netz (lesbar ohne USB-Kabel)
-  settings.cpp         ← Werte, die sich im Betrieb aendern lassen, gespeichert im NVS
+  volume.cpp           ← verwaltet die Lautstärke und merkt sie sich
+  sound.cpp            ← erzeugt die Rückmeldetöne
+  netlog.cpp           ← schickt das Protokoll über das Netz (lesbar ohne USB-Kabel)
+  settings.cpp         ← Werte, die sich im Betrieb ändern lassen, gespeichert im NVS
   webui.cpp            ← der Webserver des Einstellungs-Panels
-  wakeword.cpp         ← erkennt "Hey Jarvis" (die einzige KI, die auf dem ESP32 laeuft)
+  wakeword.cpp         ← erkennt "Hey Jarvis" (die einzige KI, die auf dem ESP32 läuft)
   localai.cpp          ← die KI-Dienste zu Hause: antwortet der PC im Netz?
 
-data/                  ← Dateien, die der Webserver ausliefert (ueber LittleFS)
+data/                  ← Dateien, die der Webserver ausliefert (über LittleFS)
   index.html           ← die Seite des Einstellungs-Panels
 
-tools/                 ← Hilfswerkzeuge fuer die Entwicklung
-  pruefe_sprache.py    ← sucht italienische Reste in den uebersetzten Dateien
-  test_cp437.py        ← prueft die Zeichentabelle des Displays
+tools/                 ← Hilfswerkzeuge für die Entwicklung
+  pruefe_sprache.py    ← sucht italienische Reste in den übersetzten Dateien
+  test_cp437.py        ← prüft die Zeichentabelle des Displays
 ```
 
 **Zwei Kerne (zwei Gehirne im Prozessor).** Der ESP32-S3 hat zwei Rechenkerne. Alexo
@@ -388,9 +388,9 @@ Und darin trägt man die echten Werte ein:
 ```cpp
 #define WIFI_SSID        "der-name-deines-wlans"
 #define WIFI_PASSWORD    "dein-passwort"
-#define GROQ_API_KEY       "gsk_..."     // fuer Whisper (Stimme zu Text), kostenlos
-#define ANTHROPIC_API_KEY  "sk-ant-..."  // fuer Claude (das Gehirn)
-#define ELEVENLABS_API_KEY "sk_..."      // fuer die Stimme (Text zu Stimme)
+#define GROQ_API_KEY       "gsk_..."     // für Whisper (Stimme zu Text), kostenlos
+#define ANTHROPIC_API_KEY  "sk-ant-..."  // für Claude (das Gehirn)
+#define ELEVENLABS_API_KEY "sk_..."      // für die Stimme (Text zu Stimme)
 ```
 
 > ⚠️ Die Schlüssel sind wie Passwörter: **nie** in öffentliche Dateien schreiben und
@@ -405,7 +405,7 @@ mit 8 MB. Ohne diese Zeilen gerät das Gerät in eine **Startschleife** und boot
 endlos neu:
 
 ```ini
-board_upload.flash_size  = 16MB           ; sagt die Wahrheit ueber die Groesse
+board_upload.flash_size  = 16MB           ; sagt die Wahrheit über die Größe
 board_upload.maximum_size = 16777216
 board_build.arduino.memory_type = qio_opi ; schaltet die 8 MB PSRAM ein
 ```
@@ -683,14 +683,14 @@ geschieht. Wie ein Brettspiel mit festen Feldern.
 
 ```mermaid
 flowchart TD
-    BEREIT["BEREIT<br/>in Ruhe"] -->|Weckwort oder Klick| ZUHOEREN["ZUHÖREN<br/>nimmt die Stimme auf"]
-    ZUHOEREN -->|Abbruch bei Stille| DENKEN["DENKEN<br/>Whisper und Claude"]
+    BEREIT["BEREIT<br/>in Ruhe"] -->|Weckwort oder Klick| ZUHÖREN["ZUHÖREN<br/>nimmt die Stimme auf"]
+    ZUHÖREN -->|Abbruch bei Stille| DENKEN["DENKEN<br/>Whisper und Claude"]
     DENKEN -->|Antwort steht| SPRECHEN["SPRECHEN<br/>ElevenLabs → VS1053"]
     SPRECHEN -->|Ton zu Ende| BEREIT
     SPRECHEN -.->|wenn der fortlaufende Chat an ist| DUDRAN["DU DRAN<br/>wartet auf die nächste Frage"]
-    DUDRAN -.->|du sprichst| ZUHOEREN
+    DUDRAN -.->|du sprichst| ZUHÖREN
     DUDRAN -.->|3 s Stille oder Klick| BEREIT
-    ZUHOEREN -->|kein WLAN| FEHLER
+    ZUHÖREN -->|kein WLAN| FEHLER
     DENKEN -->|nicht verstanden| FEHLER
     FEHLER -->|Ton und rote Meldung| BEREIT
 ```
@@ -843,7 +843,7 @@ Das ist bequem, wenn er bereits eingebaut steht oder schwer zu erreichen ist. In
 im WLAN und in Ruhe sein.
 
 Während der Aktualisierung erscheint auf dem Display eine **eigene Anzeige**: eine
-grüne Anzeigetafel mit dem grossen Prozentwert in der Mitte und dem Hinweis "NICHT
+grüne Anzeigetafel mit dem großen Prozentwert in der Mitte und dem Hinweis "NICHT
 AUSSCHALTEN", damit du den Fortschritt auf einen Blick siehst.
 
 > **Hast du die Seite des Web-Panels geändert** (`data/index.html`), musst du neben der

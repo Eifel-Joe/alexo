@@ -1,15 +1,15 @@
 // ============================================================================
-//  ALEXO - Weckwort "Hey Jarvis", erkannt im Geraet selbst (microWakeWord).
+//  ALEXO - Weckwort "Hey Jarvis", erkannt im Gerät selbst (microWakeWord).
 //  Siehe wakeword.h und WAKEWORD.md.
 //
 //  Die Kette: PCM mit 16 kHz -> Merkmalsberechnung (40 Mel-Merkmale je 10 ms)
 //  -> Umwandlung nach int8 -> INT8-Modell im Strombetrieb (Eingang [1,stride,40],
 //  es sammelt 'stride' Frames und ruft dann Invoke) -> Wahrscheinlichkeit als
-//  uint8 -> gleitender Mittelwert ueber WAKE_WINDOW groesser als
+//  uint8 -> gleitender Mittelwert über WAKE_WINDOW größer als
 //  WAKE_PROB_CUTOFF -> erkannt. Ablauf und Konstanten sind micro_wake_word aus
 //  ESPHome nachgebildet.
 //
-//  Wird nur uebersetzt, wenn WAKE_ENABLE oder WAKE_TEST gesetzt ist, sonst
+//  Wird nur übersetzt, wenn WAKE_ENABLE oder WAKE_TEST gesetzt ist, sonst
 //  bleiben nur wirkungslose Rumpffunktionen.
 // ============================================================================
 #include "wakeword.h"
@@ -76,9 +76,9 @@ bool wakeBegin() {
   arena = (uint8_t *)ps_malloc(WAKE_ARENA_BYTES);
   if (!arena) { wlogln("[wake] Speicher im PSRAM liess sich nicht reservieren"); return false; }
   // Das Modell im Strombetrieb nutzt RESOURCE VARIABLES (den Operator VAR_HANDLE)
-  // fuer den Zustand zwischen zwei Auswertungen. Dafuer braucht es einen kleinen
+  // für den Zustand zwischen zwei Auswertungen. Dafür braucht es einen kleinen
   // eigenen Speicherbereich und MicroResourceVariables, die dem Interpreter
-  // uebergeben werden, so wie ESPHome es macht. Ohne das schlaegt AllocateTensors
+  // übergeben werden, so wie ESPHome es macht. Ohne das schlägt AllocateTensors
   // fehl.
   static alignas(16) uint8_t var_arena[1024];
   tflite::MicroAllocator *ma = tflite::MicroAllocator::Create(var_arena, sizeof(var_arena));
@@ -107,10 +107,10 @@ bool wakeReady() { return s_ready; }
 uint8_t wakeLastProb() { return last_prob; }
 
 void wakeReset() {
-  // Setzt den Erkennungszustand nach einem Wortwechsel zurueck: das Fenster der
+  // Setzt den Erkennungszustand nach einem Wortwechsel zurück: das Fenster der
   // Wahrscheinlichkeiten, die gesammelten Frames und den Zustand der
-  // Merkmalsberechnung (Rauschunterdrueckung und PCAN). So loest der alte Ton
-  // nach einer Antwort das Weckwort nicht faelschlich aus.
+  // Merkmalsberechnung (Rauschunterdrückung und PCAN). So löst der alte Ton
+  // nach einer Antwort das Weckwort nicht fälschlich aus.
   recent_n = 0; recent_idx = 0; current_step = 0; last_prob = 0;
   if (s_ready) FrontendReset(&fe);
 }
@@ -122,7 +122,7 @@ bool wakeFeed(const int16_t *samples, size_t n) {
   size_t pos = 0;
   while (pos < n) {
     size_t chunk = n - pos; if (chunk > 2048) chunk = 2048;
-    // Verstaerkung des Weckwort-Wegs anwenden (mit Begrenzung): hebt den Pegel
+    // Verstärkung des Weckwort-Wegs anwenden (mit Begrenzung): hebt den Pegel
     // normal gesprochener Sprache an.
     for (size_t j = 0; j < chunk; j++) {
       int32_t v = (int32_t)samples[pos + j] * gSettings.wakeGain;
@@ -153,7 +153,7 @@ bool wakeFeed(const int16_t *samples, size_t n) {
     if (interp->Invoke() != kTfLiteOk) { wlogln("[wake] Invoke fehlgeschlagen"); continue; }
     last_prob = interp->output(0)->data.uint8[0];
 
-    // gleitendes Fenster, Mittelwert ueber der Schwelle (Werte zur Laufzeit aus
+    // gleitendes Fenster, Mittelwert über der Schwelle (Werte zur Laufzeit aus
     // dem Web-Panel)
     const int win = gSettings.wakeWindow;   // in settings bereits auf 1..16 begrenzt
     recent[recent_idx] = last_prob;
@@ -176,13 +176,13 @@ bool wakeFeed(const int16_t *samples, size_t n) {
 #if WAKE_TEST
 void wakeSelfTest() {
   static bool tried = false;
-  if (!tried) { tried = true; if (!wakeBegin()) wlogln("[wake] Einrichten fuer den Test fehlgeschlagen"); }
+  if (!tried) { tried = true; if (!wakeBegin()) wlogln("[wake] Einrichten für den Test fehlgeschlagen"); }
   if (!s_ready) return;
 
-  // DAUERHAFTES Zuhoeren: liest einen kurzen Block (etwa 20 ms) vom Mikrofon und
-  // gibt ihn sofort an die Kette. Der Aufruf gehoert in eine ENGE Schleife ohne
-  // Verzoegerung, damit das Modell im Strombetrieb einen durchgehenden Fluss
-  // bekommt und das Weckwort nicht verpasst. Gibt jede Sekunde die hoechste
+  // DAUERHAFTES Zuhören: liest einen kurzen Block (etwa 20 ms) vom Mikrofon und
+  // gibt ihn sofort an die Kette. Der Aufruf gehört in eine ENGE Schleife ohne
+  // Verzögerung, damit das Modell im Strombetrieb einen durchgehenden Fluss
+  // bekommt und das Weckwort nicht verpasst. Gibt jede Sekunde die höchste
   // Wahrscheinlichkeit aus und meldet jede Erkennung.
   static int16_t buf[320];          // 20 ms bei 16 kHz
   static uint8_t maxp = 0;
@@ -200,7 +200,7 @@ void wakeSelfTest() {
   if (millis() - lastPrint > 1000) {
     lastPrint = millis();
     char l[80];
-    snprintf(l, sizeof(l), "[wakeTest] (1 s) hoechste Wahrscheinlichkeit=%u/255", maxp);
+    snprintf(l, sizeof(l), "[wakeTest] (1 s) höchste Wahrscheinlichkeit=%u/255", maxp);
     wlogln(l);
     maxp = 0;
   }

@@ -1,13 +1,13 @@
 // ============================================================================
-//  ALEXO - Gehirn. Zwei Wege, dasselbe Gedaechtnis des Gespraechs:
+//  ALEXO - Gehirn. Zwei Wege, dasselbe Gedächtnis des Gesprächs:
 //    CLOUD  Anthropic Messages API (Claude) samt Websuche auf deren Servern
 //    ZU HAUSE  OpenAI-kompatibler Server im eigenen Netz (LM Studio & Co.),
-//           ohne Websuche und ohne Schluessel: siehe localai.h
+//           ohne Websuche und ohne Schlüssel: siehe localai.h
 //  Zu Hause wird nur gerechnet, wenn im Panel eine Adresse steht UND der PC
 //  antwortet. In jedem anderen Fall (Adresse leer, PC aus, Fehler des lokalen
-//  Servers) geht es zurueck in die Cloud - sichtbar in Rot im Chat, und ohne
-//  das zu Hause entstandene Gedaechtnis mitzunehmen. Bei eingeschaltetem
-//  "nur zu Hause" findet dieser Rueckweg gar nicht statt.
+//  Servers) geht es zurück in die Cloud - sichtbar in Rot im Chat, und ohne
+//  das zu Hause entstandene Gedächtnis mitzunehmen. Bei eingeschaltetem
+//  "nur zu Hause" findet dieser Rückweg gar nicht statt.
 // ============================================================================
 #include "llm.h"
 #include "secrets.h"
@@ -19,16 +19,16 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-//  Modell und Persoenlichkeit (System-Prompt) sind zur LAUFZEIT aenderbar
-//  (gSettings.llmModel / systemPrompt, ueber das Web-Panel); die Werkseinstellung
+//  Modell und Persönlichkeit (System-Prompt) sind zur LAUFZEIT änderbar
+//  (gSettings.llmModel / systemPrompt, über das Web-Panel); die Werkseinstellung
 //  steht in config.h.
-#define LLM_MAX_TOKENS 1024            // Luft fuer Denken und Suche
+#define LLM_MAX_TOKENS 1024            // Luft für Denken und Suche
 #define WEB_MAX_USES   3               // max. Suchen pro Anfrage (begrenzt die Kosten)
-//  Das Modell zu Hause muss bei der ersten Frage womoeglich erst GELADEN werden
-//  (Dutzende Sekunden): die Wartezeit ist hier groesser als in der Cloud.
+//  Das Modell zu Hause muss bei der ersten Frage womöglich erst GELADEN werden
+//  (Dutzende Sekunden): die Wartezeit ist hier größer als in der Cloud.
 #define LOCAL_TIMEOUT  40000
 
-// --- Speicherverwaltung fuer ArduinoJson im PSRAM ---------------------------
+// --- Speicherverwaltung für ArduinoJson im PSRAM ---------------------------
 struct PsramAllocator : ArduinoJson::Allocator {
   void *allocate(size_t n) override { return ps_malloc(n); }
   void  deallocate(void *p) override { free(p); }
@@ -36,7 +36,7 @@ struct PsramAllocator : ArduinoJson::Allocator {
 };
 static PsramAllocator psramAlloc;
 
-// --- Gedaechtnis des Gespraechs (letzte N Nachrichten) ----------------------
+// --- Gedächtnis des Gesprächs (letzte N Nachrichten) ----------------------
 #define MAX_HISTORY 8   // Nachrichten gesamt = 4 Wechsel Nutzer/Assistent
 static String histRole[MAX_HISTORY];
 static String histText[MAX_HISTORY];
@@ -61,10 +61,10 @@ void llmReset() { histN = 0; }
 // Deklaration unterscheidet sich (Anthropic oder OpenAI).
 static String musicToolDesc() {
   return String(
-      "Startet Musik oder Radio, wenn der Nutzer Musik HOEREN moechte, auch bei "
-      "vagen Wuenschen oder solchen nach Stimmung (etwa \"spiel was Entspanntes\", "
-      "\"froehliche Musik\", \"ein bisschen Jazz\"). NICHT verwenden bei Wissensfragen "
-      "oder normaler Unterhaltung. Waehle das PASSENDSTE 'genere' aus dieser "
+      "Startet Musik oder Radio, wenn der Nutzer Musik HÖREN möchte, auch bei "
+      "vagen Wünschen oder solchen nach Stimmung (etwa \"spiel was Entspanntes\", "
+      "\"fröhliche Musik\", \"ein bisschen Jazz\"). NICHT verwenden bei Wissensfragen "
+      "oder normaler Unterhaltung. Wähle das PASSENDSTE 'genere' aus dieser "
       "Liste: ") + musicCatalogList() + ".";
 }
 
@@ -79,14 +79,14 @@ static String askAnthropic(const String &sys, String *musicReq, bool *ok) {
   req["max_tokens"] = LLM_MAX_TOKENS;
   req["system"]     = sys;
 
-  // Werkzeug Websuche (laeuft bei Anthropic, Grundvariante fuer Haiku 4.5)
+  // Werkzeug Websuche (läuft bei Anthropic, Grundvariante für Haiku 4.5)
   JsonObject tool = req["tools"].add<JsonObject>();
   tool["type"]     = "web_search_20250305";
   tool["name"]     = "web_search";
   tool["max_uses"] = WEB_MAX_USES;
 
-  // Werkzeug MUSIK (laeuft bei uns): ist es angefordert (musicReq != nullptr),
-  // kann Claude Musik starten statt zu antworten. Es waehlt ein Genre aus dem
+  // Werkzeug MUSIK (läuft bei uns): ist es angefordert (musicReq != nullptr),
+  // kann Claude Musik starten statt zu antworten. Es wählt ein Genre aus dem
   // internen Katalog (music.cpp); die URL setzen wir, damit keine erfunden wird.
   if (musicReq) {
     JsonObject mt = req["tools"].add<JsonObject>();
@@ -97,7 +97,7 @@ static String askAnthropic(const String &sys, String *musicReq, bool *ok) {
     JsonObject props = sch["properties"].to<JsonObject>();
     JsonObject gp = props["genere"].to<JsonObject>();
     gp["type"] = "string";
-    gp["description"] = "das gewaehlte Genre oder die Stimmung aus der Liste";
+    gp["description"] = "das gewählte Genre oder die Stimmung aus der Liste";
     JsonArray rq = sch["required"].to<JsonArray>();
     rq.add("genere");
   }
@@ -135,7 +135,7 @@ static String askAnthropic(const String &sys, String *musicReq, bool *ok) {
     return "";
   }
 
-  // --- Auswertung mit FILTER: nur Textbloecke und stop_reason werden gelesen,
+  // --- Auswertung mit FILTER: nur Textblöcke und stop_reason werden gelesen,
   //     die umfangreichen Suchergebnisse nicht -> spart Speicher ---
   JsonDocument filter;
   filter["stop_reason"]          = true;
@@ -148,7 +148,7 @@ static String askAnthropic(const String &sys, String *musicReq, bool *ok) {
   DeserializationError e =
       deserializeJson(doc, resp, DeserializationOption::Filter(filter));
   if (e) {
-    Serial.printf("[llm] JSON ungueltig: %s\n", e.c_str());
+    Serial.printf("[llm] JSON ungültig: %s\n", e.c_str());
     return "";
   }
 
@@ -184,8 +184,8 @@ static String askLocal(const String &sys, String *musicReq, bool *ok) {
   req["max_tokens"]  = LLM_MAX_TOKENS;
   req["temperature"] = gSettings.localLlmTemp;   // im Panel einstellbar
   //  Fast alle Modelle zu Hause "denken" vor der Antwort, und dieses Denken kann
-  //  mehrere Sekunden Schweigen kosten. Fuer eine gesprochene Antwort bringt das
-  //  nichts und faellt schwer ins Gewicht. Server, die den Parameter nicht kennen,
+  //  mehrere Sekunden Schweigen kosten. Für eine gesprochene Antwort bringt das
+  //  nichts und fällt schwer ins Gewicht. Server, die den Parameter nicht kennen,
   //  ignorieren ihn, er kann also immer mitgeschickt werden.
   req["reasoning_effort"] = "none";
 
@@ -196,7 +196,7 @@ static String askLocal(const String &sys, String *musicReq, bool *ok) {
   JsonObject sm = msgs.add<JsonObject>();
   sm["role"]    = "system";
   sm["content"] = sys + "\n\nDu hast keinen Zugang zum Internet: wenn du etwas "
-                        "nicht weisst, sag es, statt es zu erfinden.";
+                        "nicht weißt, sag es, statt es zu erfinden.";
   for (int i = 0; i < histN; i++) {
     JsonObject m = msgs.add<JsonObject>();
     m["role"]    = histRole[i];
@@ -213,7 +213,7 @@ static String askLocal(const String &sys, String *musicReq, bool *ok) {
     sch["type"] = "object";
     JsonObject gp = sch["properties"]["genere"].to<JsonObject>();
     gp["type"] = "string";
-    gp["description"] = "das gewaehlte Genre oder die Stimmung aus der Liste";
+    gp["description"] = "das gewählte Genre oder die Stimmung aus der Liste";
     sch["required"].to<JsonArray>().add("genere");
   }
 
@@ -249,7 +249,7 @@ static String askLocal(const String &sys, String *musicReq, bool *ok) {
   DeserializationError e =
       deserializeJson(doc, resp, DeserializationOption::Filter(filter));
   if (e) {
-    Serial.printf("[llm] JSON von zu Hause ungueltig: %s\n", e.c_str());
+    Serial.printf("[llm] JSON von zu Hause ungültig: %s\n", e.c_str());
     return "";
   }
 
@@ -278,9 +278,9 @@ static String askLocal(const String &sys, String *musicReq, bool *ok) {
 // es bereits in tts.cpp entfernt, auf dem Bildschirm blieb es aber stehen, und
 // auf dem TFT wie im Panel sieht man jedes Sternchen. Entfernt wird es HIER, an
 // der Quelle, mit derselben Zeichenliste wie beim Sprechen: so stimmt das
-// Gelesene mit dem Gehoerten ueberein, und der Teleprompter, der mit der Stimme
-// mitlaeuft, zeigt nichts an, was nicht gesagt wird. Das Gedaechtnis des
-// Gespraechs speichert die gereinigte Fassung.
+// Gelesene mit dem Gehörten überein, und der Teleprompter, der mit der Stimme
+// mitläuft, zeigt nichts an, was nicht gesagt wird. Das Gedächtnis des
+// Gesprächs speichert die gereinigte Fassung.
 static String ripuliMarkdown(const String &in) {
   String out;
   out.reserve(in.length());
@@ -296,32 +296,32 @@ static String ripuliMarkdown(const String &in) {
 String llmAsk(const String &userText, String *musicReq) {
   if (userText.isEmpty()) return "";
 
-  // Der Weg dieser Runde wird BEVOR das Gedaechtnis angefasst wird entschieden.
-  // Hat er sich gegenueber der letzten Runde geaendert, wird das Gedaechtnis
-  // vollstaendig geleert: sonst naehme die erste Frage an die Cloud die zu Hause
-  // gefallenen Saetze mit (und umgekehrt). Es gibt nur ein Gedaechtnis, beim
-  // Wechsel muss es also zurueckgesetzt werden.
+  // Der Weg dieser Runde wird BEVOR das Gedächtnis angefasst wird entschieden.
+  // Hat er sich gegenüber der letzten Runde geändert, wird das Gedächtnis
+  // vollständig geleert: sonst nähme die erste Frage an die Cloud die zu Hause
+  // gefallenen Sätze mit (und umgekehrt). Es gibt nur ein Gedächtnis, beim
+  // Wechsel muss es also zurückgesetzt werden.
   static bool ultimaInCasa = false;
   const bool inCasa = localReachable(LOC_LLM);
   if (histN && inCasa != ultimaInCasa) {
-    Serial.println("[llm] Wegwechsel -> Gedaechtnis des Gespraechs zurueckgesetzt");
+    Serial.println("[llm] Wegwechsel -> Gedächtnis des Gesprächs zurückgesetzt");
     llmReset();
   }
   ultimaInCasa = inCasa;
 
   histPush("user", userText);
 
-  // System-Prompt samt aktuellem Datum und Uhrzeit (via NTP): ohne das weiss das
+  // System-Prompt samt aktuellem Datum und Uhrzeit (via NTP): ohne das weiß das
   // Modell nicht, "wann" gerade ist, und liegt bei Uhrzeit und Zeitzonen
   // systematisch daneben. Ist die Uhr noch nicht abgeglichen, liefert
-  // nowContextString() eine leere Zeichenkette und wir haengen nichts an.
+  // nowContextString() eine leere Zeichenkette und wir hängen nichts an.
   String sys = gSettings.systemPrompt;
   String nowStr = nowContextString();
   if (nowStr.length()) {
     sys += "\n\nAktuelles Datum und Uhrzeit: " + nowStr +
-           ". Nimm DIESE Angaben fuer Fragen nach der aktuellen Uhrzeit; fuer andere "
-           "Staedte rechne die Zeit aus der oben genannten UTC und deren Zeitzone aus. "
-           "Nutze fuer die Uhrzeit keine Websuche.";
+           ". Nimm DIESE Angaben für Fragen nach der aktuellen Uhrzeit; für andere "
+           "Städte rechne die Zeit aus der oben genannten UTC und deren Zeitzone aus. "
+           "Nutze für die Uhrzeit keine Websuche.";
   }
 
   bool ok = false;
@@ -332,13 +332,13 @@ String llmAsk(const String &userText, String *musicReq) {
   }
   if (!ok) {
     // "Nur zu Hause": es geht nichts hinaus. Lieber nicht antworten, als die
-    // Frage samt mitgefuehrtem Gespraechsteil ins Internet zu schicken.
+    // Frage samt mitgeführtem Gesprächsteil ins Internet zu schicken.
     if (gSettings.localOnly) {
       localSayBlocked(LOC_LLM);
-      if (histN > 0) histN--;              // Frage ohne Antwort: nicht ins Gedaechtnis
+      if (histN > 0) histN--;              // Frage ohne Antwort: nicht ins Gedächtnis
       return "";
     }
-    // Rueckfall auf die Cloud. Was ZU HAUSE gesagt wurde, darf mit diesem Aufruf
+    // Rückfall auf die Cloud. Was ZU HAUSE gesagt wurde, darf mit diesem Aufruf
     // nicht hinausgehen: es geht allein mit der jetzigen Frage weiter.
     if (inCasa) { llmReset(); histPush("user", userText); }
     localSayCloud(LOC_LLM);
@@ -348,9 +348,9 @@ String llmAsk(const String &userText, String *musicReq) {
 
   if (!ok) { if (histN > 0) histN--; return ""; }
 
-  // Es hat Musik gewaehlt: keine gesprochene Antwort, das Genre kommt ueber
-  // musicReq zurueck. Eine Assistenten-Runde wird trotzdem gespeichert, damit der
-  // Wechsel im Gedaechtnis erhalten bleibt.
+  // Es hat Musik gewählt: keine gesprochene Antwort, das Genre kommt über
+  // musicReq zurück. Eine Assistenten-Runde wird trotzdem gespeichert, damit der
+  // Wechsel im Gedächtnis erhalten bleibt.
   if (musicReq && musicReq->length()) {
     histPush("assistant", String("(Musik gestartet: ") + *musicReq + ")");
     return "";

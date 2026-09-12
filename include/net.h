@@ -16,7 +16,7 @@ bool wifiOk();
 // Uhrzeit trifft erst nach einigen Sekunden ein.
 void timeBegin();
 
-// Liefert Datum und Uhrzeit auf Deutsch samt Zeitzone und UTC, fertig fuer
+// Liefert Datum und Uhrzeit auf Deutsch samt Zeitzone und UTC, fertig für
 // Claude, etwa "Dienstag, 1. Juli 2026, 21:35 Uhr Ortszeit (Europe/Berlin)".
 // LEERE Zeichenkette, solange die Uhr nicht abgeglichen ist (NTP hat noch
 // nicht geantwortet).

@@ -97,9 +97,9 @@ void settingsBegin() {
   gSettings.musicStations    = prefs.getString("music",  gSettings.musicStations);
   gSettings.replyTrigger     = prefs.getString("rtrig",  gSettings.replyTrigger);
   gSettings.replyText        = prefs.getString("rtext",  gSettings.replyText);
-  //  NEUE Schluessel: beim ersten Start nach der Aktualisierung stehen sie noch
+  //  NEUE Schlüssel: beim ersten Start nach der Aktualisierung stehen sie noch
   //  nicht im NVS und bleiben auf der Werkseinstellung (leer = Dienst zu Hause
-  //  aus). Die weiter oben bereits gespeicherten Einstellungen bleiben unberuehrt.
+  //  aus). Die weiter oben bereits gespeicherten Einstellungen bleiben unberührt.
   gSettings.localLlmUrl      = prefs.getString("locLlmUrl", gSettings.localLlmUrl);
   gSettings.localLlmModel    = prefs.getString("locLlmMod", gSettings.localLlmModel);
   gSettings.localLlmTemp     = prefs.getFloat ("locLlmTmp", gSettings.localLlmTemp);

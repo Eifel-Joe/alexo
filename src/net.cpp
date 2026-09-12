@@ -37,7 +37,7 @@ static const char *MESI[]   = { "Januar", "Februar", "März", "April", "Mai",
 
 void timeBegin() {
   // TZ Europe/Berlin: MEZ (UTC+1), MESZ (UTC+2) mit automatischer Umstellung.
-  // Die Regel ist dieselbe wie fuer Europe/Rome, nur der Name aendert sich.
+  // Die Regel ist dieselbe wie für Europe/Rome, nur der Name ändert sich.
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3",
                "pool.ntp.org", "time.google.com", "time.cloudflare.com");
   Serial.println("[time] NTP-Abgleich gestartet (Zeitzone Europe/Berlin)");

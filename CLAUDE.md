@@ -121,14 +121,14 @@ maßgeblichen Stelle**.
 Firmware in **C++ mit PlatformIO** (Arduino). Die wichtigsten Befehle:
 
 ```bash
-# uebersetzen
+# übersetzen
 pio run -e esp32-s3-devkitc-1
-# Firmware aufspielen (das erste Mal ueber USB)
+# Firmware aufspielen (das erste Mal über USB)
 pio run -e esp32-s3-devkitc-1 -t upload
 # das DATEISYSTEM aufspielen (die Seite des Web-Panels data/index.html nach LittleFS)
-# nur noetig, wenn data/ geaendert wurde
+# nur nötig, wenn data/ geändert wurde
 pio run -e esp32-s3-devkitc-1 -t uploadfs
-# serieller Monitor (ueber USB)
+# serieller Monitor (über USB)
 pio run -e esp32-s3-devkitc-1 -t monitor
 ```
 
@@ -163,38 +163,38 @@ Woran man es merkt: seriell erscheinen nur wiederholte Meldungen aus dem ROM und
 
 ```
 include/
-  config.h           # alle Anschluesse und Hardware-Werte (samt WAKE_*, REC_*, MIC_DIAG, TFL_SELFTEST) und die Werkseinstellungen des Web-Panels
+  config.h           # alle Anschlüsse und Hardware-Werte (samt WAKE_*, REC_*, MIC_DIAG, TFL_SELFTEST) und die Werkseinstellungen des Web-Panels
   mic.h net.h stt.h llm.h tts.h ui.h sound.h netlog.h wakeword.h tfltest.h music.h
   encoder.h gobbo.h volume.h
   localai.h          # KI-Dienste zu Hause: Erreichbarkeit und Modellname (siehe unten)
   settings.h webui.h # das Einstellungs-Panel (Werte zur Laufzeit im NVS)
   secrets.example.h  # Vorlage -> nach secrets.h kopieren (von git ignoriert)
 src/
-  main.cpp           # der Ablauf (Loop auf Kern 1): zuhoeren, denken, sprechen. runConversation ist eine Frage oder mehrere hintereinander (fortlaufender Chat). Dazu matchAnyTerm fuer die zweite Stimme, customReplyMatch fuer die eigene Antwort, isAllucinazione gegen Geisterphrasen und das Ueberspringen, wenn micHeardVoice false meldet
-  mic.cpp            # Mikrofon ueber I2S: Aufnahme mit NACHGEFUEHRTEM Abbruch bei Stille (ueber RMS), Pegel fuer den Ring, micReadChunk und micFlush fuer das Weckwort, micGetLive und micHeardVoice
-  net.cpp            # WLAN-Verbindung (Zugangsdaten aus secrets.h), NTP-Uhr (timeBegin, Zeitzone Europe/Berlin) und nowContextString fuer Claude
+  main.cpp           # der Ablauf (Loop auf Kern 1): zuhören, denken, sprechen. runConversation ist eine Frage oder mehrere hintereinander (fortlaufender Chat). Dazu matchAnyTerm für die zweite Stimme, customReplyMatch für die eigene Antwort, isAllucinazione gegen Geisterphrasen und das Überspringen, wenn micHeardVoice false meldet
+  mic.cpp            # Mikrofon über I2S: Aufnahme mit NACHGEFÜHRTEM Abbruch bei Stille (über RMS), Pegel für den Ring, micReadChunk und micFlush für das Weckwort, micGetLive und micHeardVoice
+  net.cpp            # WLAN-Verbindung (Zugangsdaten aus secrets.h), NTP-Uhr (timeBegin, Zeitzone Europe/Berlin) und nowContextString für Claude
   stt.cpp            # schickt das WAV als multipart an Whisper (Groq oder den Server zu Hause) und liefert Text
-  llm.cpp            # zwei Wege: die Messages API von Anthropic samt Websuche oder ein OpenAI-kompatibler Server zu Hause. Modell und Prompt aus gSettings, dazu Datum und Uhrzeit aus dem NTP im System-Prompt. ripuliMarkdown raeumt die Antwort auf (die Modelle verwenden Markdown, auch wenn der Prompt es verbietet), damit auf dem Bildschirm und in der Stimme derselbe Text steht
-  localai.cpp        # KI-Dienste ZU HAUSE: antwortet der PC? welches Modell hat er geladen? (mit Zwischenspeicher und einem Kontrollgang fuer die Punkte auf dem Display)
+  llm.cpp            # zwei Wege: die Messages API von Anthropic samt Websuche oder ein OpenAI-kompatibler Server zu Hause. Modell und Prompt aus gSettings, dazu Datum und Uhrzeit aus dem NTP im System-Prompt. ripuliMarkdown räumt die Antwort auf (die Modelle verwenden Markdown, auch wenn der Prompt es verbietet), damit auf dem Bildschirm und in der Stimme derselbe Text steht
+  localai.cpp        # KI-Dienste ZU HAUSE: antwortet der PC? welches Modell hat er geladen? (mit Zwischenspeicher und einem Kontrollgang für die Punkte auf dem Display)
   ui.cpp             # Animationen des NeoPixel-Rings in einer eigenen Aufgabe (Kern 0)
-  sound.cpp          # Rueckmeldetoene (WAV, im Betrieb erzeugt und vom VS1053 abgespielt)
-  gobbo.cpp          # Chat und Teleprompter auf dem TFT (Aufgabe auf Kern 0, Bus HSPI, Zeichenflaeche mit 16 Bit), die gruene Anzeige waehrend der Aktualisierung (renderOtaScreen) und der UTF-8-Ringpuffer des Chats fuer das Web-Panel (gobboChatRev/Count/Item)
+  sound.cpp          # Rückmeldetöne (WAV, im Betrieb erzeugt und vom VS1053 abgespielt)
+  gobbo.cpp          # Chat und Teleprompter auf dem TFT (Aufgabe auf Kern 0, Bus HSPI, Zeichenfläche mit 16 Bit), die grüne Anzeige während der Aktualisierung (renderOtaScreen) und der UTF-8-Ringpuffer des Chats für das Web-Panel (gobboChatRev/Count/Item)
   encoder.cpp        # Drehgeber (Bibliothek Versatile_RotaryEncoder, Abfrage auf Kern 0)
-  volume.cpp         # Lautstaerke des VS1053 (gedrueckt und gedreht oder ueber das Panel), im NVS gespeichert
-  music.cpp          # MP3-Webradio zum VS1053 (http UND https ueber WiFiClientSecure). Die Sender lassen sich bearbeiten (gSettings.musicStations). Starten, Anhalten und Wechseln gehen auch ueber das Panel (musicRequestStart/Stop/Seek, gelesen im Loop von musicPlay oder in main). Der Ring reagiert auf den Lautsprecher. Nur MP3, kein AAC und kein HLS
-  netlog.cpp         # Protokoll ueber das Netz (Telnet, Port 23), um ohne USB-Kabel mitzulesen
+  volume.cpp         # Lautstärke des VS1053 (gedrückt und gedreht oder über das Panel), im NVS gespeichert
+  music.cpp          # MP3-Webradio zum VS1053 (http UND https über WiFiClientSecure). Die Sender lassen sich bearbeiten (gSettings.musicStations). Starten, Anhalten und Wechseln gehen auch über das Panel (musicRequestStart/Stop/Seek, gelesen im Loop von musicPlay oder in main). Der Ring reagiert auf den Lautsprecher. Nur MP3, kein AAC und kein HLS
+  netlog.cpp         # Protokoll über das Netz (Telnet, Port 23), um ohne USB-Kabel mitzulesen
   settings.cpp       # die Werte zur LAUFZEIT (gSettings), aus dem NVS geladen und dort gespeichert (Werkseinstellung aus config.h)
   webui.cpp          # Webserver (Port 80) und LittleFS: das Panel unter http://alexo.local/, die JSON-Schnittstelle und die laufenden Mikrofonwerte
-  wakeword.cpp       # das WECKWORT im Geraet (microWakeWord): Merkmalsberechnung, Modell, Erkennung (Verstaerkung, Schwelle und Fenster aus gSettings). Siehe WAKEWORD.md
+  wakeword.cpp       # das WECKWORT im Gerät (microWakeWord): Merkmalsberechnung, Modell, Erkennung (Verstärkung, Schwelle und Fenster aus gSettings). Siehe WAKEWORD.md
   wake_model.h       # das INT8-Modell (g_wake_model): "hey_jarvis". Unmittelbar austauschbar
-  tfltest.cpp        # Selbsttest fuer TFLite Micro (Schalter TFL_SELFTEST), diente dazu, die Laufzeitumgebung zu pruefen
+  tfltest.cpp        # Selbsttest für TFLite Micro (Schalter TFL_SELFTEST), diente dazu, die Laufzeitumgebung zu prüfen
 data/
   index.html         # die Seite des Einstellungs-Panels (aus LittleFS ausgeliefert; mit -t uploadfs aufspielen)
-lib/microfrontend/   # die Merkmalsberechnung von TFLM (40 Mel-Merkmale) und kissfft v130, mitgeliefert fuer das Weckwort
-partitions_custom.csv  # die Partitionstabelle fuer 16 MB mit zwei Anwendungsbereichen (in Benutzung)
+lib/microfrontend/   # die Merkmalsberechnung von TFLM (40 Mel-Merkmale) und kissfft v130, mitgeliefert für das Weckwort
+partitions_custom.csv  # die Partitionstabelle für 16 MB mit zwei Anwendungsbereichen (in Benutzung)
 tools/
-  pruefe_sprache.py  # sucht italienische Reste in den uebersetzten Dateien
-  test_cp437.py      # prueft die Zeichentabelle des Displays gegen den cp437-Codec von Python
+  pruefe_sprache.py  # sucht italienische Reste in den übersetzten Dateien
+  test_cp437.py      # prüft die Zeichentabelle des Displays gegen den cp437-Codec von Python
 ```
 
 > **Das Einstellungs-Panel** (`http://alexo.local/`): die abstimmbaren Werte

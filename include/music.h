@@ -44,7 +44,7 @@ int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*se
 // Zahl der gültigen Sender in gSettings.musicStations.
 int  musicStationCount();
 // Füllt url und nome mit dem Sender an der Stelle idx (ab 0). false, wenn die
-// Stelle ausserhalb der Liste liegt.
+// Stelle außerhalb der Liste liegt.
 bool musicStationGet(int idx, String &url, String &nome);
 // Stelle des Senders mit dieser URL in der Liste, oder -1, wenn er fehlt.
 int  musicStationIndexOf(const char *url);

@@ -4,7 +4,7 @@
 
 Spezifikation: `docs/specs/2026-09-12-uebersetzung-deutsch.md`
 Plan: `docs/plans/2026-09-12-uebersetzung-deutsch.md`
-Branch: `feat/uebersetzung-deutsch`, 21 Commits, noch nicht gepusht.
+Branch: `deutsch`, 21 Commits, noch nicht gepusht.
 
 ### Stand
 
