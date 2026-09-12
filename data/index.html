@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ALEXO · Impostazioni</title>
+<title>ALEXO · Einstellungen</title>
 <style>
   :root{
     --bg:#0a0e12; --panel:#111820; --panel2:#0e141b; --line:#1d2a35;
@@ -51,14 +51,14 @@
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0e141b;border:1px solid var(--cy-d);
     color:var(--cy);padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .25s;pointer-events:none}
   #toast.show{opacity:1}
-  /* chat (stessa dello schermo, aggiornata a ogni nuovo messaggio) */
+  /* Chat: derselbe wie auf dem Display, bei jeder neuen Nachricht aufgefrischt */
   #chatBox{max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;
     background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
   .msg{max-width:85%;padding:7px 11px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;font-size:14px}
   .msg.u{align-self:flex-end;background:#0c2b33;border:1px solid var(--cy-d)}
   .msg.a{align-self:flex-start;background:#141c24;border:1px solid var(--line)}
   .msg.s{align-self:center;background:transparent;color:var(--mut);font-style:italic;font-size:12.5px;padding:2px 8px}
-  /* avviso: e' uscito qualcosa su internet. Rosso, al centro, impossibile da non vedere */
+  /* Hinweis: es ist etwas ins Internet gegangen. Rot und mittig, nicht zu übersehen */
   .msg.w{align-self:center;background:#2a0d0d;border:1px solid #ff4d4d;color:#ff6b6b;
     font-size:12.5px;font-weight:700;padding:4px 10px}
   .msg .who{display:block;font-size:11px;color:var(--mut);margin-bottom:2px;letter-spacing:.5px}
@@ -66,423 +66,456 @@
 </head>
 <body>
 <header>
-  <h1>ALEXO</h1><span class="sub">pannello impostazioni</span>
+  <h1>ALEXO</h1><span class="sub">Einstellungen</span>
 </header>
 <main>
 
-  <!-- LETTURA LIVE -->
+  <!-- LAUFENDE WERTE -->
   <div class="card" id="live">
-    <h2>Microfono in tempo reale</h2>
+    <h2>Mikrofon in Echtzeit</h2>
     <div class="body">
-      <div class="marks"><span class="mark" id="mThresh" title="soglia"></span></div>
+      <div class="marks"><span class="mark" id="mThresh" title="Schwelle"></span></div>
       <div class="bar"><i id="barLevel"></i></div>
       <div class="stat">
-        <span>livello: <b id="vLevel">–</b>/255</span>
-        <span>fondo: <b id="vFloor">–</b></span>
-        <span>soglia LED: <b id="vThresh">–</b></span>
+        <span>Pegel: <b id="vLevel">–</b>/255</span>
+        <span>Grundpegel: <b id="vFloor">–</b></span>
+        <span>LED-Schwelle: <b id="vThresh">–</b></span>
       </div>
       <div style="height:8px"></div>
       <div class="bar"><i id="barWake" style="background:linear-gradient(90deg,#0a99aa,#00e5ff)"></i></div>
       <div class="stat">
-        <span>wake prob: <b id="vWake">–</b>/255</span>
-        <span>WiFi: <b id="vRssi">–</b> dBm</span>
+        <span>Weckwort: <b id="vWake">–</b>/255</span>
+        <span>WLAN: <b id="vRssi">–</b> dBm</span>
         <span>RAM: <b id="vHeap">–</b> KB</span>
       </div>
       <div class="desc" style="margin-top:8px">
-        Il <b>livello</b> è quanto suono sente il mic adesso; il <b>fondo</b> è il rumore
-        di base stimato da solo; la <b>soglia</b> (tacca cyan) è il punto oltre cui i LED
-        si accendono. Con un rumore di fondo guarda dove sta il livello e regola sotto.
+        Der <b>Pegel</b> ist, wie viel das Mikrofon gerade hört; der <b>Grundpegel</b>
+        ist das selbst geschätzte Grundrauschen; die <b>Schwelle</b> (die cyanfarbene
+        Marke) ist der Punkt, ab dem die LED angehen. Bei störendem Rauschen schaue,
+        wo der Pegel liegt, und stelle es unten nach.
       </div>
     </div>
   </div>
 
-  <!-- CHAT (la stessa che scorre sul display TFT) -->
+  <!-- CHAT (derselbe, der über das TFT-Display läuft) -->
   <div class="card" id="chatCard">
     <h2>Chat</h2>
     <div class="body">
       <div id="chatBox"></div>
-      <div class="desc" style="margin-top:8px">La stessa conversazione che scorre sul display,
-        ultimi 40 messaggi. Si aggiorna da sola a ogni nuovo messaggio.</div>
+      <div class="desc" style="margin-top:8px">Dasselbe Gespräch, das über das Display
+        läuft, die letzten 40 Nachrichten. Es frischt sich bei jeder neuen Nachricht
+        selbst auf.</div>
     </div>
   </div>
 
-  <!-- MUSICA -->
+  <!-- MUSIK -->
   <div class="card">
-    <h2>Musica</h2>
+    <h2>Musik</h2>
     <div class="body">
       <div class="row">
-        <label>Stazioni (una per riga)</label>
-        <div class="desc">Formato <code>chiave | nome | url</code>. La <b>chiave</b> è la
-          parola cercata nella frase (es. "metti <b>rock</b>"), il <b>nome</b> compare sul
-          display, l'<b>url</b> è lo stream <b>MP3</b> (il VS1053 non legge l'AAC). Metti le
-          chiavi più <b>specifiche prima</b> (es. "alternativ" prima di "rock"); righe doppie
-          = sinonimi per la stessa radio.</div>
+        <label>Sender (einer je Zeile)</label>
+        <div class="desc">Format <code>Schlüssel | Name | URL</code>. Der
+          <b>Schlüssel</b> ist das Wort, nach dem im Satz gesucht wird (etwa "spiel
+          <b>Rock</b>"), der <b>Name</b> erscheint auf dem Display, die <b>URL</b> ist der
+          <b>MP3</b>-Strom (der VS1053 kann kein AAC). Die <b>genaueren Schlüssel zuerst</b>
+          (etwa "alternativ" vor "rock"); mehrere Zeilen mit derselben Adresse sind
+          gleichbedeutende Schlüssel für denselben Sender.</div>
         <textarea id="musicStations" spellcheck="false" style="min-height:150px"></textarea>
       </div>
       <div class="row" style="border-bottom:0">
-        <label>Radio in riproduzione</label>
-        <div class="desc">Di' ad Alexo <code>metti musica rock</code> (oppure pop, country,
-          anni 80, anni 90), oppure premi <b>Accendi radio</b>: parte la <b>prima</b> stazione
-          della lista qui sopra. Per fermarla: <b>Ferma musica</b> <b>oppure</b> un click
-          sull'encoder. I due pulsanti <b>◀ ▶</b> passano alla stazione precedente o
-          successiva della lista (in tondo), come il click sull'encoder mentre suona:
-          servono solo a cambiare stazione, a radio ferma non fanno partire niente.
-          Stato: <b id="musicState">–</b>.</div>
+        <label>Laufendes Radio</label>
+        <div class="desc">Sag zu Alexo <code>spiel Musik rock</code> (oder pop, country,
+          anni 80, anni 90), oder drücke <b>Radio einschalten</b>: dann startet der
+          <b>erste</b> Sender der Liste oben. Zum Anhalten <b>Musik anhalten</b> oder ein
+          Klick auf den Drehgeber. Die beiden Schaltflächen <b>◀ ▶</b> wechseln im Kreis
+          zum vorherigen oder nächsten Sender der Liste, genau wie der Klick auf den
+          Drehgeber während der Wiedergabe. Sie wechseln nur den Sender und starten bei
+          stummem Radio nichts. Die Schlüsselwörter der Liste sind noch italienisch.
+          Zustand: <b id="musicState">–</b>.</div>
         <div class="desc" id="musicNow" style="color:var(--cy);font-weight:600;min-height:18px"></div>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="btnMusicStart" class="ghost">▶ Accendi radio</button>
-          <button id="btnMusicStop" class="ghost" disabled>⏹ Ferma musica</button>
+          <button id="btnMusicStart" class="ghost">▶ Radio einschalten</button>
+          <button id="btnMusicStop" class="ghost" disabled>⏹ Musik anhalten</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="btnMusicPrev" class="ghost" disabled>◀ Precedente</button>
-          <button id="btnMusicNext" class="ghost" disabled>Successiva ▶</button>
+          <button id="btnMusicPrev" class="ghost" disabled>◀ Vorheriger</button>
+          <button id="btnMusicNext" class="ghost" disabled>Nächster ▶</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- MIC / SILENZIO / LED -->
+  <!-- MIKROFON / STILLE / LED -->
   <div class="card">
-    <h2>Microfono · stop-al-silenzio · LED</h2>
+    <h2>Mikrofon · Abbruch bei Stille · LED</h2>
     <div class="body">
       <div class="row">
-        <label>Stop dopo silenzio (ms)</label>
-        <div class="desc">Quanti millisecondi di silenzio continuo, dopo che hai parlato,
-          prima che la registrazione si chiuda da sola e parta la domanda. Più basso = più
-          reattivo ma rischia di tagliarti; più alto = aspetta di più. Tipico 1500.</div>
+        <label>Abbruch nach Stille (ms)</label>
+        <div class="desc">Wie viele Millisekunden ununterbrochene Stille nach dem
+          Sprechen vergehen, bevor die Aufnahme von allein endet und die Frage losgeht.
+          Niedriger reagiert schneller, schneidet dich aber eher ab; höher wartet länger.
+          Üblich sind 1500.</div>
         <input type="number" id="recSilenceMs" min="300" max="10000" step="100">
       </div>
       <div class="row">
-        <label>Margine soglia voce (×)</label>
-        <div class="desc">La soglia per capire "sto parlando" è calcolata sopra il rumore di
-          fondo: soglia = fondo × <b>questo</b> + margine minimo. Alza se il rumore di fondo (es.
-          ventilatore) viene scambiato per voce (non si ferma mai); abbassa se ti taglia. Tipico 1.6.</div>
+        <label>Faktor für die Sprachschwelle (×)</label>
+        <div class="desc">Die Schwelle, ab der etwas als Sprache gilt, misst sich am
+          Grundrauschen: Schwelle = Grundpegel × <b>dieser Wert</b> + kleinster Abstand.
+          Erhöhe ihn, wenn Rauschen, etwa ein Lüfter, für Sprache gehalten wird und die
+          Aufnahme nie endet; senke ihn, wenn du abgeschnitten wirst. Üblich ist 1,6.</div>
         <input type="number" id="recSilenceMargin" min="1" max="6" step="0.1">
       </div>
       <div class="row">
-        <label>Margine minimo assoluto (RMS)</label>
-        <div class="desc">Il "gradino" minimo sopra il fondo, in unità di energia. Aiuta quando
-          il fondo è quasi zero. Alza se in silenzio non si ferma; abbassa se non sente la voce
-          piano. Tipico 150.</div>
+        <label>Kleinster absoluter Abstand (RMS)</label>
+        <div class="desc">Der kleinste Abstand über dem Grundpegel, in Energieeinheiten.
+          Er hilft, wenn der Grundpegel fast null ist. Erhöhe ihn, wenn die Aufnahme bei
+          Stille nicht endet; senke ihn, wenn leise Sprache nicht ankommt. Üblich sind
+          150.</div>
         <input type="number" id="recSilenceFloor" min="0" max="4000" step="10">
       </div>
       <div class="row">
-        <label>LED · margine accensione (×)</label>
-        <div class="desc">Quanto sopra il rumore di fondo deve stare il suono perché i LED
-          reattivi si accendano. Alza se i LED lampeggiano con rumore di fondo; abbassa se
-          reagiscono poco. Tipico 3.0.</div>
+        <label>LED · Einschaltfaktor (×)</label>
+        <div class="desc">Wie weit ein Geräusch über dem Grundrauschen liegen muss,
+          damit die LED angehen. Erhöhe den Wert, wenn die LED beim Grundrauschen
+          flackern; senke ihn, wenn sie kaum reagieren. Üblich ist 3,0.</div>
         <input type="number" id="micLvlMargin" min="1" max="8" step="0.1">
       </div>
       <div class="row">
-        <label>LED · soglia minima</label>
-        <div class="desc">Soglia minima assoluta di accensione dei LED. Alza per renderli meno
-          sensibili a rumori deboli. Tipico 40.</div>
+        <label>LED · kleinste Schwelle</label>
+        <div class="desc">Die kleinste absolute Einschaltschwelle der LED. Erhöhe sie,
+          damit schwache Geräusche sie nicht mehr auslösen. Üblich sind 40.</div>
         <input type="number" id="micLvlFloor" min="0" max="500" step="5">
       </div>
       <div class="row">
-        <label>LED · permanenza (discesa)</label>
-        <div class="desc">Quanto in fretta i LED si <b>spengono</b> dopo un suono. Valore
-          <b>basso</b> = luce che "trascina", sfuma lentamente (più permanenza); valore <b>alto</b>
-          = si spengono di scatto. Tipico 0.25 (0.02–1).</div>
+        <label>LED · Abklingen</label>
+        <div class="desc">Wie schnell die LED nach einem Geräusch <b>ausgehen</b>. Ein
+          <b>niedriger</b> Wert lässt das Licht nachziehen und langsam ausblenden, ein
+          <b>hoher</b> schaltet es abrupt aus. Üblich ist 0,25 (0,02 bis 1).</div>
         <input type="number" id="micLvlRelease" min="0.02" max="1" step="0.01">
       </div>
       <div class="row">
-        <label>LED · reattività (salita)</label>
-        <div class="desc">Quanto in fretta i LED si <b>accendono</b> quando arriva un suono. Basso
-          = salita lenta (ignora gli impulsi isolati, niente flash); alto = accensione immediata.
-          Tipico 0.12 (0.02–1).</div>
+        <label>LED · Anstieg</label>
+        <div class="desc">Wie schnell die LED <b>angehen</b>, wenn ein Geräusch kommt. Ein
+          niedriger Wert steigt langsam und übergeht einzelne Impulse, es blitzt also
+          nichts; ein hoher schaltet sofort ein. Üblich ist 0,12 (0,02 bis 1).</div>
         <input type="number" id="micLvlAttack" min="0.02" max="1" step="0.01">
       </div>
       <div class="row">
-        <label>LED reattivi al suono a riposo</label>
-        <div class="desc">Se acceso, a riposo l'anello "balla" col suono; se spento, resta buio
-          finché Alexo non lavora. (Equivale al doppio-click sull'encoder.)</div>
-        <div class="sw"><input type="checkbox" id="idleReactive"><span>abilita effetto reattivo</span></div>
+        <label>LED reagieren bei Ruhe auf Geräusche</label>
+        <div class="desc">Eingeschaltet "tanzt" der Ring bei Ruhe zum Ton; ausgeschaltet
+          bleibt er dunkel, bis Alexo arbeitet. Das entspricht dem Doppelklick auf den
+          Drehgeber.</div>
+        <div class="sw"><input type="checkbox" id="idleReactive"><span>auf Geräusche reagieren</span></div>
       </div>
       <div class="row">
-        <label>Chat continua</label>
-        <div class="desc">Se acceso, finita una risposta Alexo riapre il microfono da solo:
-          la domanda dopo non vuole di nuovo "Hey Mycroft". Mentre aspetta, l'anello fa un
-          respiro <b>ambra</b> e sul display c'è scritto "a te". Si chiude stando zitti
-          3 secondi, oppure subito con un click dell'encoder.</div>
-        <div class="sw"><input type="checkbox" id="chatContinua"><span>continua a chiacchierare senza wake word</span></div>
+        <label>Fortlaufender Chat</label>
+        <div class="desc">Eingeschaltet öffnet Alexo nach einer Antwort das Mikrofon von
+          allein: die nächste Frage braucht nicht erneut "Hey Jarvis". Während er wartet,
+          atmet der Ring <b>bernsteinfarben</b>, und auf dem Display steht "du dran".
+          Beendet wird es durch drei Sekunden Schweigen oder sofort durch einen Klick auf
+          den Drehgeber.</div>
+        <div class="sw"><input type="checkbox" id="chatContinua"><span>weiterreden ohne Weckwort</span></div>
       </div>
     </div>
   </div>
 
-  <!-- WAKE WORD -->
+  <!-- WECKWORT -->
   <div class="card">
-    <h2>Wake word · "Hey Mycroft"</h2>
+    <h2>Weckwort · "Hey Jarvis"</h2>
     <div class="body">
       <div class="row">
-        <label>Guadagno wake (×)</label>
-        <div class="desc">Amplifica l'audio prima del riconoscitore. Alza se devi gridare
-          per svegliarlo; abbassa se si attiva da solo (falsi positivi, es. col ventilatore).
-          Troppo alto satura e peggiora. Tipico 3.</div>
+        <label>Verstärkung für das Weckwort (×)</label>
+        <div class="desc">Verstärkt den Ton vor der Erkennung. Erhöhe den Wert, wenn du
+          schreien musst, um Alexo zu wecken; senke ihn, wenn er von allein anspringt, etwa
+          durch einen Lüfter. Zu hoch übersteuert und macht es schlechter. Üblich ist 3.</div>
         <input type="number" id="wakeGain" min="1" max="12" step="1">
       </div>
       <div class="row">
-        <label>Soglia di attivazione (0–255)</label>
-        <div class="desc">Quanto dev'essere "sicuro" il riconoscitore per attivarsi. Più alto =
-          meno falsi positivi ma serve pronunciare bene; più basso = più sensibile. Tipico 242
-          (~0.95) per "Hey Mycroft" — era 246 quando la parola era "Okay Nabu": la soglia
-          giusta è scritta nel modello, non è una preferenza. Guarda "wake prob" qui sopra
-          mentre dici la parola.</div>
+        <label>Auslöseschwelle (0–255)</label>
+        <div class="desc">Wie "sicher" sich die Erkennung sein muss, um auszulösen. Höher
+          bedeutet weniger Fehlauslösungen, verlangt aber deutliche Aussprache; niedriger
+          ist empfindlicher. Üblich sind 247 (das entspricht 0,97) für "Hey Jarvis". Für
+          "Hey Mycroft" waren es 242 und für "Okay Nabu" 246: die richtige Schwelle steht
+          im Modell, sie ist keine Geschmacksfrage. Beobachte oben den Wert für das
+          Weckwort, während du es sagst.</div>
         <input type="number" id="wakeProbCutoff" min="100" max="255" step="1">
       </div>
       <div class="row">
-        <label>Finestra media (1–16)</label>
-        <div class="desc">Su quante misure consecutive fa la media prima di decidere. Più alto =
-          più stabile ma un filo più lento; più basso = più scattante ma più falsi. Tipico 5.</div>
+        <label>Mittelungsfenster (1–16)</label>
+        <div class="desc">Über wie viele aufeinanderfolgende Messungen gemittelt wird,
+          bevor entschieden wird. Höher ist stabiler, aber eine Spur langsamer; niedriger
+          spricht schneller an und löst öfter fälschlich aus. Üblich ist 5.</div>
         <input type="number" id="wakeWindow" min="1" max="16" step="1">
       </div>
     </div>
   </div>
 
-  <!-- AUDIO -->
+  <!-- TON -->
   <div class="card">
-    <h2>Audio</h2>
+    <h2>Ton</h2>
     <div class="body">
       <div class="row">
-        <label>Volume</label>
-        <div class="desc">Volume dell'altoparlante: <b>0 = muto</b>, 100 = massimo. Tutta la
-          corsa è utile (rimappata sulla zona udibile del VS1053). Si regola anche premendo e
-          girando l'encoder.</div>
+        <label>Lautstärke</label>
+        <div class="desc">Lautstärke des Lautsprechers: <b>0 ist stumm</b>, 100 ist die
+          höchste. Der ganze Weg des Reglers bewirkt etwas, er ist auf den hörbaren Bereich
+          des VS1053 umgerechnet. Einstellen lässt sie sich auch, indem man den Drehgeber
+          drückt und dreht.</div>
         <div class="inline"><input type="range" id="volume" min="0" max="100" step="1">
           <span class="val" id="volumeV">–</span></div>
       </div>
       <div class="row">
-        <label>Voce di default (ElevenLabs Voice ID)</label>
-        <div class="desc">L'identificativo della voce di default presa da elevenlabs.io. Cambialo
-          per usare un'altra voce.</div>
+        <label>Voreingestellte Stimme (ElevenLabs Voice ID)</label>
+        <div class="desc">Die Kennung der voreingestellten Stimme von elevenlabs.io.
+          Ändere sie, um eine andere Stimme zu verwenden. Ab Werk steht hier noch die
+          Stimme aus dem Originalprojekt.</div>
         <input type="text" id="voiceId" spellcheck="false" autocapitalize="off">
       </div>
       <div class="row">
-        <label>Voce alternativa (Voice ID)</label>
-        <div class="desc">Una seconda voce, usata quando la tua frase inizia con la parola-trigger
-          qui sotto. Utile per far "cambiare voce" ad Alexo con un comando.</div>
+        <label>Zweite Stimme (Voice ID)</label>
+        <div class="desc">Eine zweite Stimme, die spricht, wenn dein Satz mit dem
+          Auslösewort unten beginnt. Damit lässt sich Alexos Stimme auf Zuruf
+          wechseln.</div>
         <input type="text" id="voiceIdAlt" spellcheck="false" autocapitalize="off">
       </div>
       <div class="row">
-        <label>Parole-trigger voce alternativa</label>
-        <div class="desc">Se la tua frase INIZIA con una di queste parole, Alexo risponde con la
-          voce alternativa invece della default. Puoi metterne <b>più d'una separandole con la
-          virgola</b> (es. <code>bene, ok, ehi</code>). Confronto in minuscolo. <b>Lascia vuoto</b>
-          per disattivare la voce alternativa.</div>
+        <label>Auslösewörter für die zweite Stimme</label>
+        <div class="desc">BEGINNT dein Satz mit einem dieser Wörter, antwortet Alexo mit
+          der zweiten statt der voreingestellten Stimme. Es dürfen <b>mehrere sein, durch
+          Komma getrennt</b> (etwa <code>gut, ok, hey</code>). Verglichen wird klein
+          geschrieben. <b>Leer lassen</b> schaltet die zweite Stimme ab.</div>
         <input type="text" id="voiceTrigger" spellcheck="false" autocapitalize="off">
       </div>
     </div>
   </div>
 
-  <!-- CERVELLO -->
+  <!-- GEHIRN -->
   <div class="card">
-    <h2>Cervello (Claude)</h2>
+    <h2>Gehirn (Claude)</h2>
     <div class="body">
       <div class="row">
-        <label>Modello</label>
-        <div class="desc"><b>claude-haiku-4-5</b>: il più veloce ed economico (default, ideale per
-          una risposta vocale rapida). <b>claude-sonnet-5</b>: molto capace e comunque svelto, il
-          miglior compromesso se Haiku sbaglia troppo. <b>claude-opus-5</b>: il più intelligente,
-          ma più lento e costoso (circa 5 volte Sonnet). Per un assistente vocale la
-          <b>velocità conta</b>: Haiku o Sonnet sono di solito la scelta migliore.</div>
+        <label>Modell</label>
+        <div class="desc"><b>claude-haiku-4-5</b>: das schnellste und günstigste, ab Werk
+          eingestellt und ideal für eine rasche gesprochene Antwort. <b>claude-sonnet-5</b>:
+          sehr leistungsfähig und trotzdem flott, der beste Mittelweg, wenn Haiku zu oft
+          danebenliegt. <b>claude-opus-5</b>: das klügste, dafür langsamer und teurer, etwa
+          das Fünffache von Sonnet. Bei einem Sprachassistenten <b>zählt die
+          Geschwindigkeit</b>: Haiku oder Sonnet sind meist die bessere Wahl.</div>
         <select id="llmModel">
-          <option value="claude-haiku-4-5">claude-haiku-4-5 (veloce/economico)</option>
-          <option value="claude-sonnet-5">claude-sonnet-5 (equilibrato)</option>
-          <option value="claude-opus-5">claude-opus-5 (massima intelligenza)</option>
+          <option value="claude-haiku-4-5">claude-haiku-4-5 (schnell und günstig)</option>
+          <option value="claude-sonnet-5">claude-sonnet-5 (ausgewogen)</option>
+          <option value="claude-opus-5">claude-opus-5 (am klügsten)</option>
         </select>
       </div>
       <div class="row">
-        <label>Personalità (system prompt)</label>
-        <div class="desc">Le istruzioni permanenti che descrivono chi è Alexo e come deve
-          rispondere. Tienilo breve e chiaro: qui decidi tono, lingua e stile. Ricordati che le
-          risposte vengono lette ad alta voce (meglio frasi corte, niente elenchi/emoji).</div>
+        <label>Persönlichkeit (System-Prompt)</label>
+        <div class="desc">Die dauerhaften Anweisungen, die beschreiben, wer Alexo ist und
+          wie er antworten soll. Halte sie kurz und klar: hier entscheidest du über Ton,
+          Sprache und Stil. Denk daran, dass die Antworten vorgelesen werden, kurze Sätze
+          sind also besser, und Aufzählungen und Emojis stören.</div>
         <textarea id="systemPrompt" spellcheck="false"></textarea>
       </div>
     </div>
   </div>
 
-  <!-- SERVIZI AI IN CASA -->
-  <!-- NOTA per chi legge il sorgente: le descrizioni qui sotto citano una
-       installazione REALE e funzionante (porte 8002/8003, numeri dei lanciatori,
-       nomi delle voci, cartella dei campioni). Sono esempi concreti, non requisiti:
-       il firmware non conosce nessuno di quei nomi e non va a cercare quei percorsi.
-       Vale solo la regola generale - un server che parla il formato OpenAI a
-       <indirizzo>/v1 - quindi al loro posto vanno i tuoi indirizzi e i tuoi nomi. -->
+  <!-- KI-DIENSTE ZU HAUSE -->
+  <!-- Hinweis für alle, die den Quelltext lesen: die Beschreibungen unten nennen
+       eine ECHTE, laufende Installation (Ports 8002 und 8003, Nummern der
+       Starter, Namen der Stimmen, Ordner der Klangbeispiele). Das sind konkrete
+       Beispiele und keine Voraussetzungen: die Firmware kennt keinen dieser Namen
+       und sucht keinen dieser Pfade. Es gilt allein die allgemeine Regel, dass ein
+       Server das OpenAI-Format unter <Adresse>/v1 sprechen muss. An ihre Stelle
+       gehören also deine Adressen und deine Namen. -->
   <div class="card">
-    <h2>AI in casa (al posto del cloud)</h2>
+    <h2>KI zu Hause statt in der Cloud</h2>
     <div class="body">
       <div class="row">
-        <div class="desc" style="margin:0">Alexo può usare l'AI che gira sul <b>tuo PC</b>
-          invece dei servizi online. La regola è sempre la stessa: <b>indirizzo vuoto</b> =
-          spento, si usa il cloud come sempre; <b>indirizzo scritto</b> = se il PC risponde
-          si usa quello, se è spento o occupato si torna al cloud da solo, senza che tu
-          debba fare niente.<br><br>
-          Metti l'<b>indirizzo numerico</b> del PC (es. <code>http://192.168.1.50:1234/v1</code>),
-          non il nome: è più veloce e non dipende dalla risoluzione dei nomi. Il server dev'essere
-          in ascolto <b>su tutta la rete locale</b>, non solo su <code>localhost</code>, altrimenti
-          Alexo non lo vede. Il <b>nome del modello lasciato vuoto</b> significa "usa quello che il
-          server ha caricato adesso": così cambi modello dal PC e qui non tocchi niente.</div>
+        <div class="desc" style="margin:0">Alexo kann die KI nutzen, die auf <b>deinem
+          PC</b> läuft, statt der Dienste im Internet. Die Regel ist immer dieselbe: eine
+          <b>leere Adresse</b> bedeutet aus, es geht wie immer in die Cloud; steht eine
+          <b>Adresse</b> da und antwortet der PC, wird er benutzt, und ist er aus oder
+          beschäftigt, geht es von allein zurück in die Cloud, ohne dass du etwas tun
+          musst.<br><br>
+          Trage die <b>Zahlenadresse</b> des PC ein (etwa
+          <code>http://192.168.1.50:1234/v1</code>), nicht den Namen: das ist schneller und
+          hängt nicht von der Namensauflösung ab. Der Server muss <b>im ganzen Heimnetz</b>
+          erreichbar sein und nicht nur auf <code>localhost</code>, sonst sieht Alexo ihn
+          nicht. Ein <b>leer gelassener Modellname</b> bedeutet "nimm das, was der Server
+          gerade geladen hat": so wechselst du das Modell am PC, ohne hier etwas
+          anzufassen.</div>
       </div>
       <div class="row">
-        <label>Cervello · indirizzo (LM Studio)</label>
-        <div class="desc">Il server che risponde alle domande. Attenzione: in casa <b>non c'è
-          la ricerca web</b>, quindi su meteo, notizie e prezzi il locale non può aiutarti (per
-          quelli conviene restare sul cloud). Se il modello "ragiona" prima di rispondere, Alexo
-          gli chiede di non farlo: il pensiero costa secondi di silenzio.</div>
+        <label>Gehirn · Adresse (LM Studio)</label>
+        <div class="desc">Der Server, der die Fragen beantwortet. Achtung: zu Hause gibt
+          es <b>keine Websuche</b>, bei Wetter, Nachrichten und Preisen hilft der Server also
+          nicht, dafür bleibt man besser in der Cloud. "Denkt" das Modell vor der Antwort,
+          bittet Alexo es, das zu lassen: das Nachdenken kostet Sekunden Schweigen.</div>
         <input type="text" id="localLlmUrl" spellcheck="false" autocapitalize="off"
                placeholder="http://192.168.1.50:1234/v1">
       </div>
       <div class="row">
-        <label>Cervello · modello</label>
-        <div class="desc">Vuoto = quello caricato adesso su LM Studio. Scrivilo solo se sul
-          server ne tieni più d'uno e vuoi imporre quale.</div>
+        <label>Gehirn · Modell</label>
+        <div class="desc">Leer bedeutet das Modell, das gerade in LM Studio geladen ist.
+          Trage nur dann eines ein, wenn auf dem Server mehrere liegen und du bestimmen
+          willst, welches.</div>
         <input type="text" id="localLlmModel" spellcheck="false" autocapitalize="off"
-               placeholder="(vuoto = quello caricato)">
+               placeholder="(leer = das geladene)">
       </div>
       <div class="row">
-        <label>Cervello · temperatura</label>
-        <div class="desc">Quanto il modello <b>osa</b> nella scelta delle parole. <b>Bassa</b>
-          (0.2–0.4): prende quasi sempre la parola più probabile, risposte aderenti e
-          ripetibili. <b>Media</b> (0.7–0.8): è il valore di partenza della maggior parte dei
-          server, più varietà ma ogni tanto divaga. <b>Alta</b> (oltre 1): per inventare storie.
-          L'effetto si <b>accumula</b>: una parola insolita all'inizio si trascina dietro tutta
-          la frase. Non c'entra con quanto il modello <i>sa</i>, solo con quanto rischia.
-          Vale solo per il modello in casa (il cloud usa il suo).</div>
+        <label>Gehirn · Temperatur</label>
+        <div class="desc">Wie viel das Modell bei der Wortwahl <b>wagt</b>. <b>Niedrig</b>
+          (0,2 bis 0,4): es nimmt fast immer das wahrscheinlichste Wort, die Antworten
+          bleiben nah am Thema und wiederholbar. <b>Mittel</b> (0,7 bis 0,8): der Startwert
+          der meisten Server, mehr Abwechslung, dafür schweift es hin und wieder ab.
+          <b>Hoch</b> (über 1): zum Erfinden von Geschichten. Die Wirkung <b>summiert
+          sich</b>: ein ungewöhnliches Wort am Anfang zieht den ganzen Satz hinter sich her.
+          Mit dem, was das Modell <i>weiss</i>, hat das nichts zu tun, nur damit, wie viel es
+          riskiert. Gilt allein für das Modell zu Hause, die Cloud nutzt ihre eigene.</div>
         <input type="number" id="localLlmTemp" min="0" max="2" step="0.05">
       </div>
       <div class="row">
-        <label>Trascrizione · indirizzo</label>
-        <div class="desc">Il server che trasforma la tua voce in testo (Whisper in casa). Stesso
-          formato del servizio online, quindi cambia solo l'indirizzo.</div>
+        <label>Spracherkennung · Adresse</label>
+        <div class="desc">Der Server, der deine Stimme in Text verwandelt, also Whisper zu
+          Hause. Dasselbe Format wie beim Dienst im Internet, es ändert sich nur die
+          Adresse.</div>
         <input type="text" id="localSttUrl" spellcheck="false" autocapitalize="off"
                placeholder="http://192.168.1.50:8001/v1">
       </div>
       <div class="row">
-        <label>Trascrizione · modello</label>
-        <div class="desc">Vuoto = quello caricato sul server. Molti server Whisper ignorano
-          comunque questo campo.</div>
+        <label>Spracherkennung · Modell</label>
+        <div class="desc">Leer bedeutet das auf dem Server geladene Modell. Viele
+          Whisper-Server übergehen dieses Feld ohnehin.</div>
         <input type="text" id="localSttModel" spellcheck="false" autocapitalize="off"
-               placeholder="(vuoto = quello caricato)">
+               placeholder="(leer = das geladene)">
       </div>
       <div class="row">
-        <label>Voce · indirizzo</label>
-        <div class="desc">Il server che legge le risposte ad alta voce. Deve parlare la
-          grammatica di OpenAI: qui va l'indirizzo <b>fino a /v1</b>, il resto
-          (<code>/audio/speech</code>) lo aggiunge Alexo. Va bene sia MP3 sia <b>WAV</b>,
-          che il VS1053 decodifica nativamente ed è quello che mandano i due server di casa.
-          <br><b>La porta si può omettere</b>: scrivendo solo
-          <code>http://&lt;ip-del-PC&gt;</code> Alexo prova la <b>8002</b> e poi la
-          <b>8003</b> e usa quella che risponde — così si passa da un server all'altro
-          accendendo l'uno o l'altro sul PC, senza tornare qui. Se invece la porta la
-          scrivi, si usa quella e basta (nessuna prova, nessuna attesa in più).
-          <br><b>I due server del PC di casa:</b>
-          <br><code>http://&lt;ip-del-PC&gt;:8002/v1</code> — <b>Kokoro</b> (lanciatore 15).
-          Sulla CPU, risponde in mezzo secondo e non toglie niente a nessuno: è la voce di
-          tutti i giorni.
-          <br><code>http://&lt;ip-del-PC&gt;:8003/v1</code> — <b>Chatterbox</b> (lanciatore 16).
-          Clona la voce di ElevenLabs e le somiglia davvero, ma vuole la scheda video
-          (3,6 GB di VRAM) e ci mette ~3,5 secondi. Avviato con <code>--cpu</code> diventa
-          ~19 secondi, e non ci si conversa.
-          <br>Vuoto = si usa sempre ElevenLabs.</div>
+        <label>Stimme · Adresse</label>
+        <div class="desc">Der Server, der die Antworten vorliest. Er muss das Format von
+          OpenAI sprechen: hier gehört die Adresse <b>bis /v1</b> hinein, den Rest
+          (<code>/audio/speech</code>) hängt Alexo an. Es geht sowohl MP3 als auch <b>WAV</b>,
+          das der VS1053 unmittelbar decodiert und das die beiden Server zu Hause schicken.
+          <br><b>Der Port darf fehlen</b>: schreibst du nur
+          <code>http://&lt;IP-des-PC&gt;</code>, probiert Alexo erst <b>8002</b> und dann
+          <b>8003</b> und nimmt den, der antwortet. So wechselst du zwischen den Servern,
+          indem du am PC den einen oder anderen startest, ohne hierher zurückzukehren.
+          Steht der Port dagegen da, wird genau der benutzt, ohne Probieren und ohne
+          zusätzliche Wartezeit.
+          <br><b>Die beiden Server auf dem PC zu Hause:</b>
+          <br><code>http://&lt;IP-des-PC&gt;:8002/v1</code> — <b>Kokoro</b> (Starter 15).
+          Läuft auf dem Hauptprozessor, antwortet in einer halben Sekunde und nimmt
+          niemandem etwas weg: die Stimme für jeden Tag.
+          <br><code>http://&lt;IP-des-PC&gt;:8003/v1</code> — <b>Chatterbox</b> (Starter 16).
+          Bildet die Stimme von ElevenLabs nach und kommt ihr wirklich nahe, braucht dafür
+          aber die Grafikkarte (3,6 GB Grafikspeicher) und etwa 3,5 Sekunden. Mit
+          <code>--cpu</code> gestartet werden daraus etwa 19 Sekunden, damit lässt sich
+          nicht reden.
+          <br>Leer bedeutet, dass immer ElevenLabs spricht.</div>
         <input type="text" id="localTtsUrl" spellcheck="false" autocapitalize="off"
-               placeholder="http://192.168.1.50 (senza porta = 8002 o 8003)">
+               placeholder="http://192.168.1.50 (ohne Port = 8002 oder 8003)">
       </div>
       <div class="row">
-        <label>Voce · modello</label>
-        <div class="desc">Vuoto = quello caricato sul server.</div>
+        <label>Stimme · Modell</label>
+        <div class="desc">Leer bedeutet das auf dem Server geladene Modell.</div>
         <input type="text" id="localTtsModel" spellcheck="false" autocapitalize="off"
-               placeholder="(vuoto = quello caricato)">
+               placeholder="(leer = das geladene)">
       </div>
       <div class="row">
-        <label>Voce · nome della voce</label>
-        <div class="desc">Quale voce far parlare sul server locale (non è il Voice ID di
-          ElevenLabs: è il nome che usa il tuo motore). <b>Nel dubbio lascialo VUOTO</b>:
-          ogni server parte già con la voce scelta a orecchio, e un nome sbagliato qui
-          vince su quella.
-          <br><b>Vuole due cose diverse a seconda della porta:</b>
-          <br>Su <b>Kokoro</b> (8002) è il nome di una voce: <code>alexo_calda</code>
-          (quella su misura, ed è la predefinita), <code>if_sara</code>,
-          <code>im_nicola</code>.
-          <br>Su <b>Chatterbox</b> (8003) è il <b>nome del file</b> del campione da clonare,
-          estensione compresa: <code>campione_corto20.wav</code> (predefinito, 20 secondi:
-          all'ascolto ha battuto sia quello da 10 sia quello da 48).
-          I file stanno in <code>AI_locale\voce_alexo\NonToccare\campioni\</code>.
-          <br>L'elenco di quelle disponibili lo dice il server stesso, aprendo
-          <code>&lt;indirizzo&gt;/audio/voices</code> nel browser.</div>
+        <label>Stimme · Name der Stimme</label>
+        <div class="desc">Welche Stimme der Server zu Hause sprechen lässt. Das ist nicht
+          die Kennung von ElevenLabs, sondern der Name, den dein Programm verwendet.
+          <b>Im Zweifel LEER lassen</b>: jeder Server startet ohnehin mit einer nach Gehör
+          gewählten Stimme, und ein falscher Name hier überstimmt sie.
+          <br><b>Je nach Port ist etwas anderes gemeint:</b>
+          <br>Bei <b>Kokoro</b> (8002) ist es der Name einer Stimme:
+          <code>alexo_calda</code> (die eigens angelegte und voreingestellte),
+          <code>if_sara</code>, <code>im_nicola</code>.
+          <br>Bei <b>Chatterbox</b> (8003) ist es der <b>Dateiname</b> des Klangbeispiels,
+          das nachgebildet werden soll, mitsamt Endung:
+          <code>campione_corto20.wav</code> (voreingestellt, 20 Sekunden; im Hörvergleich
+          war es besser als das mit 10 und das mit 48 Sekunden).
+          Die Dateien liegen in <code>AI_locale\voce_alexo\NonToccare\campioni\</code>.
+          <br>Welche verfügbar sind, sagt der Server selbst, wenn man
+          <code>&lt;Adresse&gt;/audio/voices</code> im Browser öffnet.</div>
         <input type="text" id="localTtsVoice" spellcheck="false" autocapitalize="off"
-               placeholder="(vuoto = voce predefinita)">
+               placeholder="(leer = voreingestellte Stimme)">
       </div>
       <div class="row">
-        <label>Voce sempre in casa (mai ElevenLabs)</label>
-        <div class="desc">Riguarda <b>solo la voce</b>: acceso, la risposta la sintetizza
-          sempre il server di casa, <b>senza controllarlo prima</b> (una attesa in meno) e
-          <b>senza ripiegare su ElevenLabs</b> se non ce la fa — così i crediti gratuiti
-          restano per quando servono davvero. Se il server di casa è spento, Alexo lo scrive
-          e non parla. Trascrizione e cervello non cambiano. Se è acceso <b>Solo casa</b>
-          qui sotto, questo non serve: vale già quello.</div>
-        <div class="sw"><input type="checkbox" id="ttsLocalOnly"><span>voce solo dal server di casa</span></div>
+        <label>Stimme immer zu Hause (nie ElevenLabs)</label>
+        <div class="desc">Betrifft <b>nur die Stimme</b>: eingeschaltet spricht immer der
+          Server zu Hause, <b>ohne vorherige Prüfung</b> (das spart Wartezeit) und <b>ohne
+          Ausweichen auf ElevenLabs</b>, wenn er es nicht schafft. So bleiben die
+          Freikontingente für die Fälle, in denen man sie wirklich braucht. Ist der Server
+          zu Hause aus, schreibt Alexo es hin und spricht nicht. Spracherkennung und Gehirn
+          bleiben unberührt. Ist unten <b>Nur zu Hause</b> eingeschaltet, braucht es diesen
+          Schalter nicht, dort gilt es bereits.</div>
+        <div class="sw"><input type="checkbox" id="ttsLocalOnly"><span>Stimme nur vom Server zu Hause</span></div>
       </div>
       <div class="row">
-        <label>Solo casa (non uscire su internet)</label>
-        <div class="desc">Di serie, se un servizio di casa non risponde o sbaglia, Alexo
-          <b>ripiega sul cloud da solo e in silenzio</b>: comodo, ma vuol dire che la tua voce,
-          la domanda o la risposta escono senza che tu te ne accorga — e le tre spie verdi non
-          te lo dicono, perché guardano l'ultimo controllo, non la frase appena detta.<br><br>
-          Con questo acceso il ripiego <b>non avviene</b>: se casa non c'è, Alexo lo scrive in
-          <b>rosso</b> nella chat e si ferma. Riguarda solo trascrizione, cervello e voce:
-          la <b>radio</b> (la chiedi tu) e l'<b>orologio</b> continuano ad andare su internet.
-          Attenzione: senza indirizzi di casa validi, così Alexo non risponde più.</div>
-        <div class="sw"><input type="checkbox" id="localOnly"><span>non uscire mai su internet</span></div>
+        <label>Nur zu Hause (nichts geht ins Internet)</label>
+        <div class="desc">Ab Werk weicht Alexo <b>von allein und stillschweigend in die
+          Cloud aus</b>, wenn ein Dienst zu Hause nicht antwortet oder einen Fehler macht.
+          Das ist bequem, bedeutet aber, dass deine Stimme, die Frage oder die Antwort
+          hinausgehen, ohne dass du es merkst. Die drei grünen Punkte sagen es dir nicht,
+          denn sie zeigen die letzte Prüfung und nicht den eben gesprochenen Satz.<br><br>
+          Ist dieser Schalter an, <b>findet das Ausweichen nicht statt</b>: fehlt der Dienst
+          zu Hause, schreibt Alexo es <b>rot</b> in den Chat und hört auf. Betroffen sind nur
+          Spracherkennung, Gehirn und Stimme; das <b>Radio</b>, das du selbst anforderst, und
+          die <b>Uhr</b> gehen weiterhin ins Internet. Achtung: ohne gültige Adressen zu
+          Hause antwortet Alexo damit gar nicht mehr.</div>
+        <div class="sw"><input type="checkbox" id="localOnly"><span>nie ins Internet gehen</span></div>
       </div>
       <div class="row" style="border-bottom:0">
-        <label>Prova i collegamenti</label>
-        <div class="desc">Chiede ai tre servizi se rispondono e con quale modello. <b>Salva
-          prima</b>: la prova usa gli indirizzi già salvati sul dispositivo.</div>
-        <button id="btnLocalTest" class="ghost" style="margin-top:4px;width:100%">Prova ora</button>
+        <label>Verbindungen prüfen</label>
+        <div class="desc">Fragt die drei Dienste, ob sie antworten und mit welchem Modell.
+          <b>Vorher speichern</b>: geprüft werden die Adressen, die bereits auf dem Gerät
+          gespeichert sind.</div>
+        <button id="btnLocalTest" class="ghost" style="margin-top:4px;width:100%">Jetzt prüfen</button>
         <div class="desc" id="localTestOut" style="margin-top:8px;white-space:pre-line"></div>
       </div>
     </div>
   </div>
 
-  <!-- RISPOSTA PERSONALIZZATA -->
+  <!-- EIGENE ANTWORT -->
   <div class="card">
-    <h2>Risposta personalizzata</h2>
+    <h2>Eigene Antwort</h2>
     <div class="body">
       <div class="row">
-        <label>Trigger</label>
-        <div class="desc">La parola o frase da cercare nella domanda. Se la domanda la
-          <b>contiene</b> (confronto in minuscolo), Alexo dice la risposta fissa qui sotto e
-          <b>salta l'AI</b>. <b>Lascia vuoto</b> per disattivare (risponde normalmente l'AI).</div>
+        <label>Auslöser</label>
+        <div class="desc">Das Wort oder der Satzteil, nach dem in der Frage gesucht wird.
+          <b>Enthält</b> die Frage ihn (klein geschrieben verglichen), sagt Alexo den festen
+          Text unten und <b>überspringt die KI</b>. <b>Leer lassen</b> schaltet es ab, dann
+          antwortet wie gewohnt die KI.</div>
         <input type="text" id="replyTrigger" spellcheck="false" autocapitalize="off">
       </div>
       <div class="row">
-        <label>Risposta fissa</label>
-        <div class="desc">Il testo esatto che Alexo dice quando trova il trigger. Utile per
-          scherzi, battute fisse o riprese video ripetibili.</div>
+        <label>Fester Text</label>
+        <div class="desc">Genau der Text, den Alexo sagt, wenn er den Auslöser findet.
+          Nützlich für Scherze, feste Sprüche oder wiederholbare Videoaufnahmen.</div>
         <textarea id="replyText" spellcheck="false"></textarea>
       </div>
     </div>
   </div>
 
-  <!-- ANTI-FANTASMA (WHISPER) -->
+  <!-- GEISTERPHRASEN (WHISPER) -->
   <div class="card">
-    <h2>Filtro anti-fantasma (Whisper)</h2>
+    <h2>Filter gegen Geisterphrasen (Whisper)</h2>
     <div class="body">
       <div class="row">
-        <label>Frasi da scartare</label>
-        <div class="desc">Quando la registrazione è solo silenzio/rumore, il riconoscitore vocale
-          a volte "inventa" frasi (tipico: <b>Grazie</b>, <b>Grazie a tutti</b>, sottotitoli…).
-          Se la trascrizione è <b>esattamente</b> una di queste, Alexo la scarta senza rispondere.
-          Una per riga o separate da <b>virgola</b>. Confronto in minuscolo, senza punteggiatura ai
-          bordi (quindi "Grazie." e "grazie" sono uguali). <b>Vuoto</b> = filtro disattivato.</div>
+        <label>Zu verwerfende Phrasen</label>
+        <div class="desc">Enthält die Aufnahme nur Stille oder Rauschen, "erfindet" die
+          Spracherkennung mitunter Sätze; typisch sind <b>Vielen Dank</b>, <b>Untertitel der
+          Amara.org-Community</b> und ähnliche Abspänne. Ist die Transkription <b>genau</b>
+          einer davon, verwirft Alexo sie, ohne zu antworten. Eine je Zeile oder durch
+          <b>Komma</b> getrennt. Verglichen wird klein geschrieben und ohne Satzzeichen an den
+          Rändern, "Danke." und "danke" sind also dasselbe. Umlaute bitte klein schreiben, der
+          Vergleich setzt nur ASCII-Buchstaben um. <b>Leer</b> schaltet den Filter ab.</div>
         <textarea id="hallucTerms" spellcheck="false"></textarea>
       </div>
     </div>
   </div>
 
   <div class="actions">
-    <button class="ghost" id="btnReset">Ripristina default</button>
-    <button id="btnSave">Salva</button>
+    <button class="ghost" id="btnReset">Werkseinstellung</button>
+    <button id="btnSave">Speichern</button>
   </div>
 </main>
 
@@ -490,7 +523,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-// campi semplici: id -> tipo
+// einfache Felder: id -> Typ
 const FIELDS = {
   recSilenceMs:'int', recSilenceMargin:'float', recSilenceFloor:'int',
   micLvlMargin:'float', micLvlFloor:'float', micLvlAttack:'float', micLvlRelease:'float', idleReactive:'bool',
@@ -517,12 +550,13 @@ function apply(s){
     const el=$(k); if(!el) continue;
     if(FIELDS[k]==='bool') el.checked = !!s[k];
     else {
-      // Su un <select> un valore senza opzione corrispondente lascia il menu VUOTO
-      // (e al Salva cambierebbe il modello senza che tu l'abbia chiesto): se in NVS
-      // c'e' un modello non piu' in elenco lo aggiungo come opzione.
+      // In einem <select> lässt ein Wert ohne passenden Eintrag das Menü LEER, und
+      // beim Speichern würde sich das Modell ändern, ohne dass jemand darum gebeten
+      // hat. Steht im NVS ein Modell, das nicht mehr in der Liste ist, wird es
+      // deshalb als Eintrag ergänzt.
       if(el.tagName==='SELECT' && s[k] && !el.querySelector(`option[value="${s[k]}"]`)){
         const o=document.createElement('option');
-        o.value=s[k]; o.textContent=s[k]+' (salvato)';
+        o.value=s[k]; o.textContent=s[k]+' (gespeichert)';
         el.appendChild(o);
       }
       el.value = s[k];
@@ -544,118 +578,126 @@ function collect(){
 }
 
 async function load(){
-  // Il web server e' SINCRONO (1 richiesta alla volta): se la GET si accavalla
-  // con /api/live o /api/chat puo' cadere e lasciare il form vuoto. Ritenta un
-  // po' di volte cosi' non serve ricaricare la pagina a mano.
+  // Der Webserver arbeitet SYNCHRON und bedient eine Anfrage nach der anderen.
+  // Überschneidet sich diese Abfrage mit /api/live oder /api/chat, kann sie
+  // scheitern und das Formular leer lassen. Deshalb wird einige Male erneut
+  // versucht, damit niemand die Seite von Hand neu laden muss.
   for(let i=0;i<5;i++){
     try{ const r=await fetch('/api/settings'); apply(await r.json()); return; }
     catch(e){ await new Promise(res=>setTimeout(res,400)); }
   }
-  toast('Errore nel caricare', false);
+  toast('Laden fehlgeschlagen', false);
 }
 
 async function save(){
   try{
     const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(collect())});
-    apply(await r.json()); toast('Salvato ✓');
-    // refresh della pagina: rilegge dal device i valori effettivi (clampati) e
-    // riallinea i campi, cosi' non si rischia di rimodificare valori gia' salvati.
+    apply(await r.json()); toast('Gespeichert ✓');
+    // Die Seite wird neu geladen: so kommen die tatsächlich gespeicherten und
+    // begrenzten Werte vom Gerät zurück in die Felder, und niemand ändert
+    // versehentlich etwas, das bereits gespeichert ist.
     setTimeout(()=>location.reload(), 700);
-  }catch(e){ toast('Errore nel salvare', false); }
+  }catch(e){ toast('Speichern fehlgeschlagen', false); }
 }
 
 async function reset(){
-  if(!confirm('Ripristinare i valori di fabbrica?')) return;
-  try{ const r=await fetch('/api/reset',{method:'POST'}); apply(await r.json()); toast('Ripristinato'); }
-  catch(e){ toast('Errore', false); }
+  if(!confirm('Werkseinstellung wiederherstellen?')) return;
+  try{ const r=await fetch('/api/reset',{method:'POST'}); apply(await r.json()); toast('Wiederhergestellt'); }
+  catch(e){ toast('Fehler', false); }
 }
 
 async function musicSeek(d){
   try{
     const r=await fetch('/api/music/seek',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({d})});
-    toast(r.ok ? (d>0?'Stazione successiva':'Stazione precedente') : 'La radio è ferma', r.ok);
-  }catch(e){ toast('Non sono riuscito a cambiare stazione', false); }
+    toast(r.ok ? (d>0?'Nächster Sender':'Vorheriger Sender') : 'Das Radio läuft nicht', r.ok);
+  }catch(e){ toast('Senderwechsel fehlgeschlagen', false); }
 }
 async function musicStart(){
   try{
     const r=await fetch('/api/music/start',{method:'POST'});
-    toast(r.ok ? 'Radio accesa' : 'Radio già accesa o lista vuota', r.ok);
-  }catch(e){ toast('Non sono riuscito ad accendere la radio', false); }
+    toast(r.ok ? 'Radio eingeschaltet' : 'Radio läuft bereits oder die Liste ist leer', r.ok);
+  }catch(e){ toast('Radio liess sich nicht einschalten', false); }
 }
 async function musicStop(){
-  try{ await fetch('/api/music/stop',{method:'POST'}); toast('Musica fermata'); }
-  catch(e){ toast('Errore', false); }
+  try{ await fetch('/api/music/stop',{method:'POST'}); toast('Musik angehalten'); }
+  catch(e){ toast('Fehler', false); }
 }
 
 $('volume').addEventListener('input', e=> $('volumeV').textContent = e.target.value);
-// Volume: auto-salva al RILASCIO dello slider (change), senza toccare il resto
-// ne' ricaricare la pagina. POST del solo campo volume.
+// Lautstärke: wird beim LOSLASSEN des Reglers von selbst gespeichert, ohne den
+// Rest anzufassen und ohne die Seite neu zu laden. Gesendet wird allein dieses
+// Feld.
 $('volume').addEventListener('change', async e=>{
   const v = parseInt(e.target.value,10);
   try{
     await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({volume:v})});
-    toast('Volume '+v+' ✓');
-  }catch(err){ toast('Errore volume', false); }
+    toast('Lautstärke '+v+' ✓');
+  }catch(err){ toast('Fehler bei der Lautstärke', false); }
 });
-// "Abilita effetto reattivo": auto-salva al click (come il volume), senza premere
-// Salva ne' ricaricare la pagina. POST del solo campo -> effetto immediato (idle E musica).
+// "Auf Geräusche reagieren": speichert sich beim Klick von selbst, wie die
+// Lautstärke, ohne Speichern zu drücken und ohne die Seite neu zu laden. Gesendet
+// wird allein dieses Feld, die Wirkung tritt sofort ein, bei Ruhe wie bei Musik.
 $('idleReactive').addEventListener('change', async e=>{
   const on = e.target.checked;
   try{
     await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({idleReactive:on})});
-    toast('Effetto reattivo '+(on?'ON':'OFF')+' ✓');
-  }catch(err){ toast('Errore', false); }
+    toast('Reagieren '+(on?'AN':'AUS')+' ✓');
+  }catch(err){ toast('Fehler', false); }
 });
-// "Chat continua": auto-salva al click come gli altri interruttori di comportamento.
-// Vale dalla conversazione successiva (quella in corso finisce come e' iniziata).
+// "Fortlaufender Chat": speichert sich beim Klick von selbst, wie die anderen
+// Schalter, die das Verhalten ändern. Es gilt ab dem nächsten Gespräch, das
+// laufende endet so, wie es begonnen hat.
 $('chatContinua').addEventListener('change', async e=>{
   const on = e.target.checked;
   try{
     await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({chatContinua:on})});
-    toast('Chat continua '+(on?'ON':'OFF')+' ✓');
-  }catch(err){ toast('Errore', false); }
+    toast('Fortlaufender Chat '+(on?'AN':'AUS')+' ✓');
+  }catch(err){ toast('Fehler', false); }
 });
-// "Solo casa": auto-salva al click, come il volume. NON deve dipendere dal pulsante
-// Salva: e' un interruttore di sicurezza, e uno che sembra armato senza esserlo e'
-// peggio che non averlo (la spunta c'e', ma la domanda dopo esce lo stesso).
+// "Nur zu Hause": speichert sich beim Klick von selbst, wie die Lautstärke. Es
+// darf NICHT von der Schaltfläche Speichern abhängen: das ist ein Schalter für die
+// Sicherheit, und einer, der scharf aussieht, ohne es zu sein, ist schlimmer als
+// gar keiner. Das Häkchen wäre gesetzt, und die nächste Frage ginge trotzdem
+// hinaus.
 $('localOnly').addEventListener('change', async e=>{
   const on = e.target.checked;
   try{
     await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({localOnly:on})});
-    toast(on?'Solo casa ON ✓':'Solo casa OFF ✓');
-  }catch(err){ toast('Errore', false); }
+    toast(on?'Nur zu Hause AN ✓':'Nur zu Hause AUS ✓');
+  }catch(err){ toast('Fehler', false); }
 });
-// "Voce sempre in casa": stesso trattamento, si applica al click.
+// "Stimme immer zu Hause": genauso behandelt, gilt ab dem Klick.
 $('ttsLocalOnly').addEventListener('change', async e=>{
   const on = e.target.checked;
   try{
     await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ttsLocalOnly:on})});
-    toast(on?'Voce sempre in casa ON ✓':'Voce sempre in casa OFF ✓');
-  }catch(err){ toast('Errore', false); }
+    toast(on?'Stimme immer zu Hause AN ✓':'Stimme immer zu Hause AUS ✓');
+  }catch(err){ toast('Fehler', false); }
 });
-// Prova dei servizi in casa. Puo' metterci qualche secondo (tre attese + la
-// domanda "che modello hai caricato"), quindi il pulsante si disabilita.
+// Prüfung der Dienste zu Hause. Das kann einige Sekunden dauern, drei Wartezeiten
+// und dazu die Frage nach dem geladenen Modell, deshalb wird die Schaltfläche
+// so lange gesperrt.
 async function localTest(){
   const btn=$('btnLocalTest'), out=$('localTestOut');
-  btn.disabled=true; out.textContent='Sto provando…';
-  const nomi={llm:'Cervello', stt:'Trascrizione', tts:'Voce'};
+  btn.disabled=true; out.textContent='Wird geprüft…';
+  const nomi={llm:'Gehirn', stt:'Spracherkennung', tts:'Stimme'};
   try{
     const d=await (await fetch('/api/local/test',{method:'POST'})).json();
     out.textContent=Object.keys(nomi).map(k=>{
       const s=d[k]||{};
-      const segno = s.stato==='in casa' ? '✓' : s.stato==='spento' ? '–' : '✗';
-      // l'indirizzo conta per la VOCE: dice se ha risposto la 8002 o la 8003
-      const dove = (s.indirizzo && s.stato!=='spento') ? '  '+s.indirizzo : '';
+      const segno = s.stato==='zu Hause' ? '✓' : s.stato==='aus' ? '–' : '✗';
+      // Die Adresse zählt bei der STIMME: sie sagt, ob 8002 oder 8003 geantwortet hat
+      const dove = (s.indirizzo && s.stato!=='aus') ? '  '+s.indirizzo : '';
       return segno+' '+nomi[k]+': '+(s.stato||'?')+(s.modello?'  ('+s.modello+')':'')+dove;
     }).join('\n');
-  }catch(e){ out.textContent='Non sono riuscito a fare la prova (dispositivo occupato?)'; }
+  }catch(e){ out.textContent='Die Prüfung ist fehlgeschlagen (Gerät beschäftigt?)'; }
   btn.disabled=false;
 }
 
@@ -667,57 +709,58 @@ $('btnMusicStop').addEventListener('click', musicStop);
 $('btnMusicPrev').addEventListener('click', ()=>musicSeek(-1));
 $('btnMusicNext').addEventListener('click', ()=>musicSeek(1));
 
-// Lettura live ogni secondo
+// Die laufenden Werte werden jede Sekunde geholt
 let lastChatRev=-1;
 async function loadChat(){
   try{
     const arr=await (await fetch('/api/chat')).json();
     const box=$('chatBox'); box.innerHTML='';
-    const names=['Alexo','Tu','sistema','avviso'];
+    const names=['Alexo','Du','System','Hinweis'];
     for(const m of arr){
       const el=document.createElement('div');
-      // ruolo 3 = avviso rosso (qualcosa e' uscito su internet), senza intestazione
+      // Rolle 3 ist der rote Hinweis, dass etwas ins Internet ging, ohne Überschrift
       el.className='msg '+(m.r===1?'u':m.r===2?'s':m.r===3?'w':'a');
       if(m.r<2){const w=document.createElement('span');w.className='who';w.textContent=names[m.r]||'';el.appendChild(w);}
       el.appendChild(document.createTextNode(m.t));
       box.appendChild(el);
     }
-    box.scrollTop=box.scrollHeight;   // sempre sull'ultimo
-  }catch(e){/* server occupato: riprova al prossimo giro */}
+    box.scrollTop=box.scrollHeight;   // immer am neuesten Eintrag
+  }catch(e){/* Server beschäftigt: beim nächsten Durchgang erneut */}
 }
 
 async function live(){
   try{
     const r=await fetch('/api/live'); const d=await r.json();
-    // refresh chat SOLO quando arriva un nuovo messaggio (chatRev cambia)
+    // Der Chat wird NUR bei einer neuen Nachricht neu geladen (chatRev ändert sich)
     if(d.chatRev!==lastChatRev){ lastChatRev=d.chatRev; loadChat(); }
     $('vLevel').textContent=d.level; $('vFloor').textContent=Math.round(d.floor);
     $('vThresh').textContent=Math.round(d.thresh); $('vWake').textContent=d.wakeProb;
     $('vRssi').textContent=d.rssi; $('vHeap').textContent=Math.round(d.heap/1024);
     const playing = !!d.music;
-    $('musicState').textContent = playing ? 'in riproduzione' : 'ferma';
-    $('btnMusicStart').disabled = playing;    // accende solo a radio ferma
+    $('musicState').textContent = playing ? 'läuft' : 'angehalten';
+    $('btnMusicStart').disabled = playing;    // einschalten nur bei stummem Radio
     $('btnMusicStop').disabled = !playing;
-    $('btnMusicPrev').disabled = !playing;   // solo cambio stazione: a radio ferma niente
+    $('btnMusicPrev').disabled = !playing;   // nur Senderwechsel: bei stummem Radio nichts
     $('btnMusicNext').disabled = !playing;
-    // "In onda": emittente + brano (metadata ICY)
+    // Was läuft: Sender und Titel aus den ICY-Metadaten
     $('musicNow').textContent = playing
       ? ('♪ ' + (d.station ? d.station + ' — ' : '') + (d.nowPlaying || '…'))
       : '';
     $('barLevel').style.width=(d.level*100/255)+'%';
     $('barWake').style.width=(d.wakeProb*100/255)+'%';
-    // tacca soglia sulla stessa scala 0..255 del livello
+    // Die Marke der Schwelle auf derselben Skala 0..255 wie der Pegel
     const t=Math.max(0,Math.min(255,d.thresh));
     $('mThresh').style.left=(t*100/255)+'%';
-  }catch(e){/* durante un'interazione il server e' occupato: ignora */}
+  }catch(e){/* während eines Wortwechsels ist der Server beschäftigt: übergehen */}
 }
 
-// Avvio SERIALIZZATO: il web server e' sincrono, quindi prima carichiamo il
-// form (critico), poi la chat, e solo alla fine avviamo il polling live. Cosi'
-// le fetch non si accavallano all'apertura e i campi si popolano sempre.
+// Der Start läuft NACHEINANDER ab: der Webserver ist synchron, deshalb wird
+// zuerst das Formular geladen, was am wichtigsten ist, dann der Chat, und erst
+// zuletzt beginnt das Abfragen der laufenden Werte. So überschneiden sich die
+// Anfragen beim Öffnen nicht und die Felder füllen sich immer.
 (async function boot(){
   await load();
-  await loadChat();    // popola la chat al caricamento
+  await loadChat();    // füllt den Chat beim Laden
   setInterval(live, 1000);
 })();
 </script>
