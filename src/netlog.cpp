@@ -1,7 +1,8 @@
 // ============================================================================
-//  ALEXO - Log via rete (Telnet). Vedi netlog.h.
-//  Un solo client alla volta: se ne arriva un altro, sostituisce il precedente.
-//  Tutte le operazioni sono non bloccanti per non disturbare il loop OTA.
+//  ALEXO - Protokoll über das Netz (Telnet). Siehe netlog.h.
+//  Immer nur ein Client: kommt ein weiterer, löst er den bisherigen ab.
+//  Alle Vorgänge blockieren nicht, damit der Loop für die Aktualisierung über
+//  Funk ungestört bleibt.
 // ============================================================================
 #include "netlog.h"
 #include <WiFi.h>
@@ -10,7 +11,7 @@ static WiFiServer *s_server = nullptr;
 static WiFiClient  s_client;
 
 void netlogBegin(uint16_t port) {
-  if (s_server) return;                 // gia' avviato
+  if (s_server) return;                 // läuft bereits
   s_server = new WiFiServer(port);
   s_server->begin();
   s_server->setNoDelay(true);
@@ -18,15 +19,16 @@ void netlogBegin(uint16_t port) {
 
 void netlogHandle() {
   if (!s_server) return;
-  // Nuovo client in attesa? Accettalo (sostituendo l'eventuale precedente).
+  // Wartet ein neuer Client? Annehmen und den bisherigen ablösen.
   if (s_server->hasClient()) {
     WiFiClient nc = s_server->available();
     if (s_client && s_client.connected()) s_client.stop();
     s_client = nc;
     s_client.setNoDelay(true);
-    s_client.println("[netlog] connesso ad Alexo");
+    s_client.println("[netlog] mit Alexo verbunden");
   }
-  // Scarta l'eventuale input del client (non lo usiamo, ma va svuotato).
+  // Eingaben des Clients verwerfen: wir brauchen sie nicht, aber der Puffer
+  // muss geleert werden.
   if (s_client && s_client.connected()) {
     while (s_client.available()) s_client.read();
   }

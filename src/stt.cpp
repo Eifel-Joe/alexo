@@ -1,13 +1,17 @@
 // ============================================================================
-//  ALEXO - Speech-to-Text
-//  Costruisce un body multipart/form-data (in PSRAM) con il WAV e lo invia a un
-//  endpoint in formato OpenAI /audio/transcriptions, poi estrae il campo "text".
-//  Due strade, stesso identico formato:
-//    CLOUD  Groq Whisper (gratis)
-//    CASA   server Whisper sulla LAN (vedi localai.h), senza chiave
-//  Si va in casa solo se il pannello ha un indirizzo E il PC risponde; se il
-//  server locale sbaglia si ritenta in cloud, dicendolo in rosso nella chat.
-//  Col "solo casa" acceso il ritentativo non c'e': il WAV della voce non esce.
+//  ALEXO - Spracherkennung
+//  Baut im PSRAM einen Rumpf im Format multipart/form-data mit der WAV-Datei,
+//  schickt ihn an einen Endpunkt im OpenAI-Format /audio/transcriptions und
+//  liest daraus das Feld "text".
+//  Zwei Wege, genau dasselbe Format:
+//    CLOUD  Groq Whisper (kostenlos)
+//    ZU HAUSE  ein Whisper-Server im eigenen Netz (siehe localai.h), ohne
+//           Schlüssel
+//  Zu Hause wird nur erkannt, wenn im Panel eine Adresse steht UND der PC
+//  antwortet; macht der lokale Server einen Fehler, geht es mit einem Hinweis in
+//  Rot im Chat noch einmal in die Cloud. Bei eingeschaltetem "nur zu Hause"
+//  entfällt dieser zweite Versuch: die aufgenommene Stimme verlässt das Netz
+//  nicht.
 // ============================================================================
 #include "stt.h"
 #include "secrets.h"
@@ -17,24 +21,25 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-// --- Provider STT cloud (Groq, gratis, API compatibile OpenAI) --------------
-// Per passare a OpenAI: URL "https://api.openai.com/v1/audio/transcriptions",
+// --- Anbieter für die Erkennung in der Cloud (Groq, kostenlos, Schnittstelle
+// im OpenAI-Format) ----------------------------------------------------------
+// Um auf OpenAI zu wechseln: URL "https://api.openai.com/v1/audio/transcriptions",
 // MODEL "whisper-1", KEY OPENAI_API_KEY.
 #define STT_URL     "https://api.groq.com/openai/v1/audio/transcriptions"
 #define STT_MODEL   "whisper-large-v3-turbo"
 #define STT_API_KEY GROQ_API_KEY
-//  Nome modello di ripiego per il server in casa, quando il pannello non lo
-//  specifica e il server non sa dire cosa ha caricato: la gran parte dei server
-//  Whisper locali ignora comunque questo campo.
+//  Ersatzname für das Modell des Servers zu Hause, wenn das Panel keinen nennt
+//  und der Server nicht sagen kann, was er geladen hat. Die meisten
+//  Whisper-Server zu Hause übergehen dieses Feld ohnehin.
 #define STT_LOCAL_FALLBACK "whisper-1"
 
-// Un tentativo di trascrizione. apiKey vuota = nessun header di autenticazione
-// (server in casa). Torna il testo, oppure "" se il tentativo e' fallito.
+// Ein Erkennungsversuch. Leerer apiKey = keine Kopfzeile zur Anmeldung (Server
+// zu Hause). Liefert den Text oder "", wenn der Versuch scheiterte.
 static String sttPost(const String &url, const String &model, const String &apiKey,
                       bool tls, const uint8_t *wav, size_t wavLen, const char *lang) {
   const String boundary = "----alexoBoundary7MA4YWxkTrZu0gW";
 
-  // Parti del corpo multipart prima e dopo i byte del file
+  // Die Teile des Rumpfes vor und nach den Bytes der Datei
   String pre;
   pre  = "--" + boundary + "\r\n";
   pre += "Content-Disposition: form-data; name=\"model\"\r\n\r\n" + model + "\r\n";
@@ -48,7 +53,7 @@ static String sttPost(const String &url, const String &model, const String &apiK
   const size_t bodyLen = pre.length() + wavLen + post.length();
   uint8_t *body = (uint8_t *)ps_malloc(bodyLen);
   if (!body) {
-    Serial.println("[stt] allocazione PSRAM del body fallita");
+    Serial.println("[stt] Reservieren des Rumpfes im PSRAM fehlgeschlagen");
     return "";
   }
   size_t o = 0;
@@ -56,10 +61,11 @@ static String sttPost(const String &url, const String &model, const String &apiK
   memcpy(body + o, wav, wavLen);                o += wavLen;
   memcpy(body + o, post.c_str(), post.length());
 
-  // Il client cambia con la strada: TLS verso il cloud, in chiaro verso casa.
+  // Der Client richtet sich nach dem Weg: TLS in die Cloud, unverschlüsselt
+  // nach Hause.
   WiFiClientSecure secure;
   WiFiClient       plain;
-  secure.setInsecure();              // niente verifica certificato (ok per hobby)
+  secure.setInsecure();              // keine Zertifikatsprüfung (für ein Hobbyprojekt vertretbar)
   secure.setTimeout(20000);
   plain.setTimeout(20000);
 
@@ -70,24 +76,24 @@ static String sttPost(const String &url, const String &model, const String &apiK
   if (apiKey.length()) http.addHeader("Authorization", String("Bearer ") + apiKey);
   http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
 
-  Serial.printf("[stt] invio %u byte a %s (%s)...\n", (unsigned)bodyLen,
-                tls ? "Whisper cloud" : "Whisper in casa", model.c_str());
+  Serial.printf("[stt] sende %u Byte an %s (%s)...\n", (unsigned)bodyLen,
+                tls ? "Whisper in der Cloud" : "Whisper zu Hause", model.c_str());
   uint32_t t0 = millis();
   int code = http.POST(body, bodyLen);
   String resp = http.getString();
   http.end();
   free(body);
-  Serial.printf("[stt] risposta HTTP %d in %lu ms\n", code, (unsigned long)(millis() - t0));
+  Serial.printf("[stt] Antwort HTTP %d nach %lu ms\n", code, (unsigned long)(millis() - t0));
 
   if (code != 200) {
-    Serial.printf("[stt] errore: %s\n", resp.c_str());
+    Serial.printf("[stt] Fehler: %s\n", resp.c_str());
     return "";
   }
 
   JsonDocument doc;
   DeserializationError e = deserializeJson(doc, resp);
   if (e) {
-    Serial.printf("[stt] JSON non valido: %s\n", e.c_str());
+    Serial.printf("[stt] JSON ungueltig: %s\n", e.c_str());
     return "";
   }
   String text = doc["text"] | "";
@@ -106,11 +112,12 @@ String sttTranscribe(const uint8_t *wav, size_t wavLen, const char *lang) {
     String text = sttPost(localBaseUrl(LOC_STT) + "/audio/transcriptions",
                           model, "", false, wav, wavLen, lang);
     if (text.length()) return text;
-    Serial.println("[stt] trascrizione in casa non riuscita");
+    Serial.println("[stt] Erkennung zu Hause fehlgeschlagen");
   }
 
-  // "Solo casa": la voce registrata non esce, punto. Tornando vuoto chi chiama
-  // dira' "Non ho capito" - meglio di un WAV spedito a Groq senza avvisare.
+  // "Nur zu Hause": die aufgenommene Stimme geht nicht hinaus, Ende. Da hier
+  // nichts zurückkommt, sagt der Aufrufer "Das habe ich nicht verstanden", was
+  // besser ist, als eine WAV-Datei unangekündigt an Groq zu schicken.
   if (gSettings.localOnly) {
     if (!provataInCasa) localSayBlocked(LOC_STT);
     return "";

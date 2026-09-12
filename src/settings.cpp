@@ -1,8 +1,9 @@
 // ============================================================================
-//  ALEXO - Impostazioni runtime (vedi settings.h). Backend: Preferences (NVS),
-//  namespace "cfg" (separato da "alexo" del volume). Ogni parametro ha una
-//  chiave breve (<=15 char, limite NVS). Se una chiave non esiste ancora, si usa
-//  il default di config.h -> il primo avvio parte coi valori di fabbrica.
+//  ALEXO - Einstellungen zur Laufzeit (siehe settings.h). Darunter liegt
+//  Preferences (NVS) im Namensraum "cfg", getrennt von "alexo" für die
+//  Lautstärke. Jeder Wert hat einen kurzen Schlüssel (höchstens 15 Zeichen, so
+//  will es das NVS). Fehlt ein Schlüssel noch, gilt die Werkseinstellung aus
+//  config.h, der erste Start läuft also mit den Werten ab Werk.
 // ============================================================================
 #include "settings.h"
 #include "config.h"
@@ -12,7 +13,7 @@ AlexoSettings gSettings;
 
 static Preferences prefs;
 
-// Applica i valori di FABBRICA (macro di config.h) alla struct in RAM.
+// Schreibt die WERKSEINSTELLUNGEN (die Makros aus config.h) in die Struktur im RAM.
 static void loadDefaults() {
   gSettings.recSilenceMs     = REC_SILENCE_MS;
   gSettings.recSilenceMargin = REC_SILENCE_MARGIN;
@@ -96,9 +97,9 @@ void settingsBegin() {
   gSettings.musicStations    = prefs.getString("music",  gSettings.musicStations);
   gSettings.replyTrigger     = prefs.getString("rtrig",  gSettings.replyTrigger);
   gSettings.replyText        = prefs.getString("rtext",  gSettings.replyText);
-  //  Chiavi NUOVE: al primo avvio dopo l'aggiornamento non esistono ancora in
-  //  NVS e restano al default (vuoto = locale spento). Le impostazioni gia'
-  //  salvate qui sopra non vengono toccate.
+  //  NEUE Schluessel: beim ersten Start nach der Aktualisierung stehen sie noch
+  //  nicht im NVS und bleiben auf der Werkseinstellung (leer = Dienst zu Hause
+  //  aus). Die weiter oben bereits gespeicherten Einstellungen bleiben unberuehrt.
   gSettings.localLlmUrl      = prefs.getString("locLlmUrl", gSettings.localLlmUrl);
   gSettings.localLlmModel    = prefs.getString("locLlmMod", gSettings.localLlmModel);
   gSettings.localLlmTemp     = prefs.getFloat ("locLlmTmp", gSettings.localLlmTemp);
@@ -111,7 +112,7 @@ void settingsBegin() {
   gSettings.ttsLocalOnly     = prefs.getBool  ("locTtsOnly",gSettings.ttsLocalOnly);
   prefs.end();
   clamp();
-  Serial.println("[set] impostazioni caricate da NVS (default se assenti)");
+  Serial.println("[set] Einstellungen aus dem NVS geladen (Werkswerte, wo nichts steht)");
 }
 
 void settingsSave() {
@@ -149,7 +150,7 @@ void settingsSave() {
   prefs.putBool  ("locOnly",   gSettings.localOnly);
   prefs.putBool  ("locTtsOnly",gSettings.ttsLocalOnly);
   prefs.end();
-  Serial.println("[set] impostazioni salvate in NVS");
+  Serial.println("[set] Einstellungen im NVS gespeichert");
 }
 
 void settingsResetDefaults() {

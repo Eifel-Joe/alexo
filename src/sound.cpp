@@ -1,7 +1,8 @@
 // ============================================================================
-//  ALEXO - Suoni di feedback
-//  Genera un breve tono (PCM sinusoidale a 16kHz, con fade per evitare click),
-//  lo impacchetta in WAV e lo da' al VS1053. Niente file esterni.
+//  ALEXO - Rückmeldetöne
+//  Erzeugt einen kurzen Ton (Sinus als PCM mit 16 kHz, mit Ein- und Ausblenden
+//  gegen Knacken), packt ihn als WAV und gibt ihn an den VS1053. Ohne
+//  Tondateien.
 // ============================================================================
 #include "sound.h"
 #include <Arduino.h>
@@ -12,14 +13,14 @@ static void wr16(uint8_t *p, uint16_t v) { p[0]=v; p[1]=v>>8; }
 
 static void playTone(VS1053 &player, uint16_t freq, uint16_t ms, uint8_t vol) {
   const uint32_t sr = 16000;
-  const size_t   tone    = (size_t)sr * ms / 1000;   // campioni del tono
-  const size_t   silence = sr * 70 / 1000;           // ~70ms di coda di silenzio
+  const size_t   tone    = (size_t)sr * ms / 1000;   // Abtastwerte des Tons
+  const size_t   silence = sr * 70 / 1000;           // etwa 70 ms Stille als Ausklang
   const size_t   n       = tone + silence;
   const size_t   dataLen = n * 2;
-  uint8_t *wav = (uint8_t *)ps_malloc(44 + dataLen);   // PSRAM: niente frammentazione
+  uint8_t *wav = (uint8_t *)ps_malloc(44 + dataLen);   // PSRAM: keine Zersplitterung
   if (!wav) return;
 
-  // header WAV (mono 16-bit 16kHz)
+  // WAV-Kopf (Mono, 16 Bit, 16 kHz)
   memcpy(wav + 0, "RIFF", 4);  wr32(wav + 4, 36 + dataLen);
   memcpy(wav + 8, "WAVE", 4);  memcpy(wav + 12, "fmt ", 4);
   wr32(wav + 16, 16); wr16(wav + 20, 1); wr16(wav + 22, 1);
@@ -27,9 +28,9 @@ static void playTone(VS1053 &player, uint16_t freq, uint16_t ms, uint8_t vol) {
   memcpy(wav + 36, "data", 4); wr32(wav + 40, dataLen);
 
   int16_t *pcm = (int16_t *)(wav + 44);
-  const size_t fade = sr / 200;   // ~5ms di fade in/out (anti-click)
+  const size_t fade = sr / 200;   // etwa 5 ms Ein- und Ausblenden (gegen Knacken)
   for (size_t i = 0; i < n; i++) {
-    if (i >= tone) { pcm[i] = 0; continue; }          // coda di silenzio
+    if (i >= tone) { pcm[i] = 0; continue; }          // Ausklang in Stille
     float amp = 9000.0f;
     if (i < fade)            amp *= (float)i / fade;
     else if (i > tone - fade) amp *= (float)(tone - i) / fade;
@@ -37,8 +38,9 @@ static void playTone(VS1053 &player, uint16_t freq, uint16_t ms, uint8_t vol) {
   }
 
   player.setVolume(vol);
-  // Riproduzione come la TTS: feed dati + coda di silenzio, SENZA stopSong()
-  // (lo stopSong manda un "cancel" che sui toni brevi incanta il VS1053).
+  // Wiedergabe wie bei der Sprachausgabe: Daten zuführen und mit Stille
+  // ausklingen, OHNE stopSong(). Dieser Aufruf schickt ein "cancel", an dem sich
+  // der VS1053 bei kurzen Tönen verschluckt.
   size_t off = 0, tot = 44 + dataLen;
   while (off < tot) {
     size_t c = min((size_t)512, tot - off);
@@ -47,7 +49,7 @@ static void playTone(VS1053 &player, uint16_t freq, uint16_t ms, uint8_t vol) {
   }
   uint8_t z[32];
   memset(z, 0, sizeof(z));
-  for (int i = 0; i < 64; i++) player.playChunk(z, sizeof(z));  // ~2KB endFillByte
+  for (int i = 0; i < 64; i++) player.playChunk(z, sizeof(z));  // etwa 2 KB endFillByte
   free(wav);
 }
 
