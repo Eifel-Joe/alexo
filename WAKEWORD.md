@@ -1,203 +1,226 @@
-# ALEXO — La wake word locale (microWakeWord)
+# ALEXO — Das Weckwort im Gerät (microWakeWord)
 
-La parola di attivazione **"Hey Mycroft"** è riconosciuta **dentro l'ESP32-S3**, offline:
-nessun audio esce di casa per il solo fatto di stare in ascolto. È l'unica intelligenza
-artificiale che gira sul microcontrollore; tutto il resto della catena vocale è altrove
-(cloud o server di casa).
+Das Weckwort **"Hey Jarvis"** wird **im ESP32-S3 selbst** erkannt, ohne Internet: allein
+vom Zuhören verlässt kein Ton das Haus. Es ist die einzige künstliche Intelligenz, die
+auf dem Mikrocontroller rechnet; der Rest der Sprachkette läuft anderswo, in der Cloud
+oder auf einem Server zu Hause.
 
-Il wake **sostituisce solo l'avvio**: da lì in poi la pipeline è identica a quella del
-click sull'encoder, che resta disponibile in parallelo come avvio manuale e come stop.
+Das Weckwort **ersetzt nur den Start**: von da an ist der Ablauf derselbe wie beim Klick
+auf den Drehgeber, der daneben weiter zur Verfügung steht, zum Starten von Hand und zum
+Anhalten.
 
-- Implementazione: [`src/wakeword.cpp`](src/wakeword.cpp), modello in
-  [`src/wake_model.h`](src/wake_model.h), microfrontend in [`lib/microfrontend/`](lib/microfrontend/).
-- Si accende con `WAKE_ENABLE 1` in [`include/config.h`](include/config.h) (default).
+- Umsetzung: [`src/wakeword.cpp`](src/wakeword.cpp), das Modell in
+  [`src/wake_model.h`](src/wake_model.h), die Merkmalsberechnung in
+  [`lib/microfrontend/`](lib/microfrontend/).
+- Eingeschaltet wird es mit `WAKE_ENABLE 1` in
+  [`include/config.h`](include/config.h), so steht es ab Werk.
 
-## Come funziona la catena
+## Wie die Kette arbeitet
 
 ```
-🎤 I2S 16 kHz (flusso continuo)
-   → microfrontend: 40 feature mel ogni 10 ms
-   → modello microWakeWord INT8 (streaming, mantiene uno stato interno)
-   → probabilità 0–255
-   → media mobile su WAKE_WINDOW step > WAKE_PROB_CUTOFF
-   → TRIGGER: stesso ingresso del click encoder → parte la conversazione
+🎤 I2S mit 16 kHz (durchgehender Strom)
+   → Merkmalsberechnung: 40 Mel-Merkmale alle 10 ms
+   → Modell microWakeWord INT8 (im Strombetrieb, mit innerem Zustand)
+   → Wahrscheinlichkeit 0–255
+   → gleitender Mittelwert über WAKE_WINDOW Schritte größer als WAKE_PROB_CUTOFF
+   → AUSLÖSUNG: derselbe Eingang wie der Klick auf den Drehgeber → das Gespräch beginnt
 ```
 
-Il modello è **streaming**: non guarda uno spezzone di audio alla volta, ma un flusso
-continuo di cui conserva memoria fra un'inferenza e l'altra. Da qui la regola più
-importante di tutte: **il flusso non va interrotto**. Ogni pausa nella lettura del
-microfono gli fa perdere il filo e la parola non viene più riconosciuta.
+Das Modell arbeitet **im Strombetrieb**: es betrachtet nicht einen Tonausschnitt nach
+dem anderen, sondern einen durchgehenden Fluss, von dem es sich zwischen zwei
+Auswertungen etwas merkt. Daraus folgt die wichtigste Regel überhaupt: **der Fluss darf
+nicht abreißen**. Jede Pause beim Lesen des Mikrofons lässt es den Faden verlieren, und
+das Wort wird nicht mehr erkannt.
 
-### I numeri in uso
+### Die Zahlen im Einsatz
 
-| | Valore | Dove |
+| | Wert | Wo |
 | --- | --- | --- |
-| Modello | microWakeWord **v2 "hey_mycroft"**, INT8, **57248 byte** | `src/wake_model.h` (`g_wake_model`) |
-| Tensor arena | **23628 byte** richiesti, **40 KB allocati in PSRAM** | `WAKE_ARENA_BYTES` in `wakeword.cpp` |
-| Soglia probabilità | **242** su 255 (manifest: 0.95) | `WAKE_PROB_CUTOFF` |
-| Finestra media mobile | **5** step | `WAKE_WINDOW` |
-| Guadagno digitale | **3** | `WAKE_GAIN` |
+| Modell | microWakeWord **v2 "hey_jarvis"**, INT8, **52272 Byte** | `src/wake_model.h` (`g_wake_model`) |
+| Arbeitsspeicher | **22860 Byte** angefordert, **40 KB im PSRAM reserviert** | `WAKE_ARENA_BYTES` in `wakeword.cpp` |
+| Schwelle | **247** von 255 (das Manifest nennt 0,97) | `WAKE_PROB_CUTOFF` |
+| Gleitendes Fenster | **5** Schritte | `WAKE_WINDOW` |
+| Digitale Verstärkung | **3** | `WAKE_GAIN` |
 
-> Le tre `WAKE_*` sono **regolabili dal pannello web** senza ricompilare: in `config.h`
-> ci sono solo i valori di fabbrica.
+> Die drei `WAKE_*` lassen sich **im Web-Panel ändern**, ohne neu zu übersetzen; in
+> `config.h` stehen nur die Werkseinstellungen.
 
-### Il frontend: la specifica deve combaciare col training
+### Die Merkmalsberechnung muss zum Training passen
 
-Le 40 feature vanno calcolate **esattamente** come quando il modello è stato addestrato,
-altrimenti il modello riceve numeri che non riconosce. Configurazione (da
-`preprocessor_settings.h` di ESPHome, preprocessore micro_speech / TFLM microfrontend):
+Die 40 Merkmale müssen **genau so** berechnet werden wie beim Training des Modells,
+sonst bekommt es Zahlen, die es nicht wiedererkennt. Die Einstellungen stammen aus
+`preprocessor_settings.h` von ESPHome (dem Vorverarbeiter micro_speech beziehungsweise
+der Merkmalsberechnung von TFLM):
 
-- sample rate **16000**, finestra **30 ms** (480 campioni), passo **10 ms** (160 campioni)
-- **40** canali mel, banda **125–7500 Hz**
-- noise reduction: `smoothing_bits=10`, `even=0.025`, `odd=0.06`, `min_signal_remaining=0.05`
-- PCAN (controllo automatico del guadagno): `enable=true`, `strength=0.95`, `offset=80.0`, `gain_bits=21`
-- log scale: `enable=true`, `scale_shift=6`
-- uscita: 40 feature per slice, una ogni step da 10 ms
+- Abtastrate **16000**, Fenster **30 ms** (480 Abtastwerte), Schritt **10 ms** (160 Abtastwerte)
+- **40** Mel-Kanäle, Band **125 bis 7500 Hz**
+- Rauschunterdrückung: `smoothing_bits=10`, `even=0.025`, `odd=0.06`, `min_signal_remaining=0.05`
+- PCAN (die selbsttätige Verstärkungsregelung): `enable=true`, `strength=0.95`, `offset=80.0`, `gain_bits=21`
+- logarithmische Skala: `enable=true`, `scale_shift=6`
+- Ausgabe: 40 Merkmale je Scheibe, eine in jedem Schritt von 10 ms
 
-Il modello accumula `stride` slice (letto a runtime da `input->dims[1]`) prima di ogni
-`Invoke()`.
+Das Modell sammelt `stride` Scheiben (zur Laufzeit aus `input->dims[1]` gelesen), bevor
+es `Invoke()` aufruft.
 
-## L'ordine in cui è stato costruito
+## In welcher Reihenfolge es entstand
 
-Ogni passo era verificabile da solo, prima di passare al successivo: se la catena
-smette di funzionare, è l'ordine in cui conviene ricontrollarla.
+Jeder Schritt ließ sich für sich prüfen, bevor der nächste kam. Hört die Kette auf zu
+arbeiten, ist das die Reihenfolge, in der man sie am besten wieder durchgeht.
 
-**1 · Microfono pulito.** Passa-alto (~120 Hz) e shift 15 sul PCM, più la diagnostica
-`MIC_DIAG` per misurare il rumore di fondo. *Verifica:* i livelli stampati distinguono
-silenzio e voce. Senza questo, tutto il resto lavora su audio sporco.
+**1 · Ein sauberes Mikrofon.** Hochpass bei etwa 120 Hz und Verschiebung 15 auf dem PCM,
+dazu der Messbetrieb `MIC_DIAG`, um das Grundrauschen zu messen. *Prüfung:* die
+ausgegebenen Pegel unterscheiden Stille von Sprache. Ohne das arbeitet alles Weitere auf
+schmutzigem Ton.
 
-**2 · TFLite Micro compila e gira.** Prima di scrivere una riga di wake word bisogna
-sapere che il runtime esiste e non va in crash sulla board: un `Invoke()` banale su un
-modellino di prova (`TFL_SELFTEST` + [`src/tfltest.cpp`](src/tfltest.cpp)). *Verifica:*
-nessun crash, tempi di inferenza (38–132 µs) stampati sul log via rete. Questo passo
-serve a **togliere di mezzo il rischio più grosso per primo**, quello della toolchain.
+**2 · TFLite Micro übersetzt und läuft.** Bevor eine Zeile für das Weckwort entsteht,
+muss feststehen, dass die Laufzeitumgebung vorhanden ist und auf der Platine nicht
+abstürzt: ein schlichtes `Invoke()` auf einem Testmodell (`TFL_SELFTEST` und
+[`src/tfltest.cpp`](src/tfltest.cpp)). *Prüfung:* kein Absturz, und die Rechenzeiten
+(38 bis 132 µs) erscheinen im Protokoll über das Netz. Dieser Schritt **räumt das größte
+Risiko zuerst aus dem Weg**, nämlich das der Werkzeugkette.
 
-**3 · Microfrontend.** Generare le 40 feature ogni 10 ms dallo stream I2S. *Verifica:*
-i valori stampati cambiano in modo evidente fra voce e silenzio.
+**3 · Die Merkmalsberechnung.** Alle 10 ms die 40 Merkmale aus dem I2S-Strom erzeugen.
+*Prüfung:* die ausgegebenen Werte ändern sich deutlich zwischen Sprache und Stille.
 
-**4 · Modello pre-addestrato.** Incorporare un modello pronto da
-`esphome/micro-wake-word-models` come array `const`, collegare frontend → modello e
-stampare la probabilità. *Verifica:* pronunciando la parola la probabilità sale. È
-questo il passo che dimostra che la catena intera funziona.
+**4 · Ein fertig trainiertes Modell.** Ein Modell aus
+`esphome/micro-wake-word-models` als konstantes Feld einbetten, Merkmalsberechnung und
+Modell verbinden und die Wahrscheinlichkeit ausgeben. *Prüfung:* beim Aussprechen des
+Wortes steigt die Wahrscheinlichkeit. Dieser Schritt zeigt, dass die ganze Kette
+arbeitet.
 
-**5 · Soglia, media mobile e trigger.** Sopra soglia per N step consecutivi → si avvia la
-conversazione, dallo stesso punto del click encoder. Più il periodo **refrattario**: dopo
-uno scatto la finestra si svuota, o la stessa parola ne farebbe partire tre.
+**5 · Schwelle, gleitender Mittelwert und Auslösung.** Liegt der Wert über N Schritte in
+Folge über der Schwelle, beginnt das Gespräch, an derselben Stelle wie beim Klick auf
+den Drehgeber. Dazu die **Sperrzeit**: nach einer Auslösung wird das Fenster geleert,
+sonst startete dasselbe Wort gleich drei Gespräche.
 
-**6 · Rifinitura.** Sordità durante la conversazione, rientro in ascolto pulito,
-integrazione con l'audio a riposo (sotto).
+**6 · Feinarbeit.** Taubheit während des Gesprächs, sauberer Wiedereinstieg ins Zuhören
+und das Zusammenspiel mit dem Ton bei Ruhe (siehe unten).
 
-**Passo che resta aperto:** una parola **tutta propria** al posto di un modello
-pre-addestrato (in fondo a questa pagina).
+**Offen geblieben ist:** ein **eigenes** Weckwort anstelle eines fertig trainierten
+Modells (am Ende dieser Seite).
 
-## Le due decisioni tecniche che hanno pesato
+## Die zwei technischen Entscheidungen, die zählten
 
-### Quale runtime TFLite Micro (risolta: libreria Arduino)
+### Welche Laufzeitumgebung für TFLite Micro (entschieden: die Arduino-Bibliothek)
 
-Il progetto è Arduino/PlatformIO, mentre TFLite Micro nasce per ESP-IDF. Due strade:
+Das Projekt arbeitet mit Arduino und PlatformIO, während TFLite Micro für ESP-IDF
+gedacht ist. Zwei Wege:
 
-1. **`esp-tflite-micro`** (Espressif): la più veloce, ha i kernel ottimizzati `esp-nn`
-   sulle istruzioni vettoriali dell'S3. Ma è un componente ESP-IDF, e in
-   PlatformIO-Arduino va innestato a mano: integrazione delicata.
-2. **Una libreria Arduino che impacchetta TFLM**: si mette in `lib_deps` e funziona,
-   al prezzo di rinunciare all'accelerazione `esp-nn`.
+1. **`esp-tflite-micro`** von Espressif: der schnellste Weg, mit den auf `esp-nn`
+   optimierten Rechenkernen für die Vektorbefehle des S3. Es ist allerdings eine
+   ESP-IDF-Komponente und muss unter PlatformIO mit Arduino von Hand eingefügt werden,
+   was heikel ist.
+2. **Eine Arduino-Bibliothek, die TFLM mitbringt**: sie kommt in `lib_deps` und
+   funktioniert, allerdings ohne die Beschleunigung durch `esp-nn`.
 
-**Ha vinto la (2)**: `esp-tflite-micro` in PlatformIO-Arduino si comporta male, quindi si
-usa **Chirale_TensorFlowLite** (in `platformio.ini`). La performance non è il collo di
-bottiglia — l'inferenza è microsecondi contro i 10 ms di ogni step.
+**Gewonnen hat der zweite Weg**: `esp-tflite-micro` verhält sich unter PlatformIO mit
+Arduino schlecht, deshalb kommt **Chirale_TensorFlowLite** zum Einsatz (siehe
+`platformio.ini`). Die Geschwindigkeit ist nicht der Engpass, die Auswertung dauert
+Mikrosekunden gegenüber den 10 ms jedes Schrittes.
 
-### Il microfrontend va vendorizzato
+### Die Merkmalsberechnung musste mitgeliefert werden
 
-Chirale **non** include il microfrontend, che però è obbligatorio (senza, il modello non
-ha input). Sta quindi in [`lib/microfrontend/`](lib/microfrontend/), copiato dai sorgenti
-TFLM. Cosa contiene, per chi dovesse rifarlo:
+Chirale enthält die Merkmalsberechnung **nicht**, sie ist aber zwingend, denn ohne sie
+bekommt das Modell keine Eingabe. Sie liegt deshalb in
+[`lib/microfrontend/`](lib/microfrontend/), kopiert aus den Quellen von TFLM. Was darin
+steckt, für alle, die es nachbauen müssen:
 
-- Da `tensorflow/lite/experimental/microfrontend/lib/` (escludendo `_io`/`_test`/`_main`/
-  `memmap`/`BUILD`): `frontend`, `frontend_util`, `filterbank`(+`util`),
-  `noise_reduction`(+`util`), `pcan_gain_control`(+`util`), `log_scale`(+`util`),
-  `log_lut`, `window`(+`util`), `fft`, `fft_util`, `kiss_fft_int16`,
-  `kiss_fft_common.h`, `bits.h`.
-- **Dipendenza kissfft**: `kiss_fft_int16` include, dentro il namespace
-  `kissfft_fixed16` con `FIXED_POINT=16`, i sorgenti `kiss_fft.h/.c` e
-  `tools/kiss_fftr.h/.c` (+ `_kiss_fft_guts.h`) dal repo `mborgerding/kissfft`, alla
-  versione indicata da `tensorflow/lite/micro/tools/make/kissfft_download.sh`
-  (+ la patch `third_party/kissfft/kissfft.patch`).
-- **Struttura della cartella**: `lib/microfrontend/src/tensorflow/...`, perché TFLM usa
-  include assoluti; i sorgenti kissfft devono essere raggiungibili come `kiss_fft.h` e
-  `tools/kiss_fftr.h` dall'include path.
+- Aus `tensorflow/lite/experimental/microfrontend/lib/` (ohne `_io`, `_test`, `_main`,
+  `memmap` und `BUILD`): `frontend`, `frontend_util`, `filterbank` samt `util`,
+  `noise_reduction` samt `util`, `pcan_gain_control` samt `util`, `log_scale` samt
+  `util`, `log_lut`, `window` samt `util`, `fft`, `fft_util`, `kiss_fft_int16`,
+  `kiss_fft_common.h` und `bits.h`.
+- **Die Abhängigkeit kissfft**: `kiss_fft_int16` bindet innerhalb des Namensraums
+  `kissfft_fixed16` mit `FIXED_POINT=16` die Quellen `kiss_fft.h` und `.c` sowie
+  `tools/kiss_fftr.h` und `.c` (dazu `_kiss_fft_guts.h`) aus dem Repository
+  `mborgerding/kissfft` ein, in der Fassung, die
+  `tensorflow/lite/micro/tools/make/kissfft_download.sh` nennt, samt der Korrektur
+  `third_party/kissfft/kissfft.patch`.
+- **Der Aufbau des Ordners**: `lib/microfrontend/src/tensorflow/...`, denn TFLM benutzt
+  absolute Einbindungen; die Quellen von kissfft müssen über den Suchpfad als
+  `kiss_fft.h` und `tools/kiss_fftr.h` erreichbar sein.
 
-## Integrazione con l'audio a riposo
+## Zusammenspiel mit dem Ton bei Ruhe
 
-Il wake ha bisogno di **tutto** lo stream, in continuo. Perciò la lettura I2S a riposo è
-**unificata**: nel `loop()` un solo `micReadChunk()` produce il chunk che alimenta sia
-`wakeFeed()` sia il livello dell'anello LED (`micLevelFromChunk`). Due `i2s_read`
-separati si ruberebbero i campioni a vicenda e il modello perderebbe metà audio. Con
-`WAKE_ENABLE 0` resta la vecchia strada, `micPeekLevel()` per il solo anello reattivo.
+Das Weckwort braucht **den gesamten** Strom, ohne Unterbrechung. Deshalb ist das Lesen
+des I2S-Busses bei Ruhe **zusammengelegt**: im `loop()` erzeugt ein einziger Aufruf von
+`micReadChunk()` den Block, der sowohl `wakeFeed()` als auch den Pegel des LED-Rings
+(`micLevelFromChunk`) versorgt. Zwei getrennte `i2s_read` würden einander die
+Abtastwerte wegnehmen, und dem Modell fehlte die Hälfte des Tons. Mit `WAKE_ENABLE 0`
+bleibt der alte Weg, `micPeekLevel()` allein für den Ring.
 
-**A fine conversazione** servono `micFlush()` + `wakeReset()`: nel buffer c'è ancora
-l'audio di pochi secondi prima (inclusa la voce di Alexo dall'altoparlante) e senza
-svuotarlo il wake **riparte da solo** su audio stantio.
+**Am Ende eines Gesprächs** braucht es `micFlush()` und `wakeReset()`: im Puffer steht
+noch der Ton der letzten Sekunden, die Stimme von Alexo aus dem Lautsprecher
+eingeschlossen, und ohne ihn zu verwerfen **löst das Weckwort von allein aus**, auf
+altem Ton.
 
-## Come si sceglie la parola
+## Wie man das Wort auswählt
 
-Il catalogo dei modelli **già pronti** ne contiene quattro in tutto (`alexa`,
-`hey_jarvis`, `hey_mycroft`, `okay_nabu`), e vanno usati finché bastano: sono precisi
-e non costano tempo.
+Der Katalog der **fertig trainierten** Modelle enthält insgesamt vier (`alexa`,
+`hey_jarvis`, `hey_mycroft`, `okay_nabu`). Man sollte sie nutzen, solange sie reichen,
+denn sie sind genau und kosten keine Zeit.
 
-**Perché "Hey Mycroft" e non più "Okay Nabu" (2 settembre 2026).** Peppe ha messo la
-stessa wake word anche sul Balancing Robot, e in una casa sola una parola non può
-accendere due apparecchi. "Okay Nabu" è rimasta al robot perché è l'unica **provata**
-con la sua voce (probabilità 254 su una soglia di 246) e perché il robot deve
-rispondere mentre cammina per le stanze; Alexo sta fermo su un mobile, quindi la
-parola non ancora provata tocca a lui.
+**Warum "Hey Jarvis" (12. September 2026).** Beim Umstellen dieses Forks auf Deutsch
+wurde das Weckwort auf Wunsch des Betreibers gewechselt. Der ursprüngliche Autor hatte
+"hey jarvis" getestet und verworfen, weil es ein auf Englisch trainiertes Modell ist und
+bei italienischer Aussprache selten ansprach. Bei deutscher Aussprache liegt der Klang
+deutlich näher am Englischen, der Grund für die Verwerfung entfällt damit weitgehend.
+Bestätigen kann das nur der Test am Gerät, der noch aussteht.
 
-Provate e scartate prima, per ragioni istruttive:
+Die Geschichte davor, weil sie lehrreich ist:
 
-- **"hey jarvis"** — modello inglese: con la pronuncia italiana veniva colto raramente.
-- **"alexa"** — scelto per assonanza con "Alexo", ma scattava su **qualsiasi** parola
-  contenente "-xa". Una wake word troppo corta e troppo comune fa più danni che comodità.
+- **"Okay Nabu"** war das erste Weckwort. Es blieb beim Balancing Robot des Autors, denn
+  in einem Haus kann ein Wort nicht zwei Geräte wecken, und dort war es das einzige
+  **erprobte** (Wahrscheinlichkeit 254 bei einer Schwelle von 246).
+- **"Hey Mycroft"** kam danach und war bis zu dieser Übersetzung im Einsatz.
+- **"alexa"** wurde wegen des Gleichklangs mit "Alexo" versucht, löste aber bei
+  **jedem** Wort mit "-xa" darin aus. Ein zu kurzes und zu häufiges Weckwort schadet
+  mehr, als es nützt.
 
-> ⚠️ **Il catalogo pronto è finito.** Delle quattro parole, una è del robot e due sono
-> state scartate: "Hey Mycroft" è l'ultima rimasta. Se anche questa non venisse colta
-> con la pronuncia italiana, l'unica strada resta addestrarne una su misura — e il
-> progetto ufficiale avverte che «allenare un modello che funzioni bene è ancora molto
-> difficile».
+> ⚠️ **Der fertige Katalog ist begrenzt.** Wenn "Hey Jarvis" auf Deutsch nicht
+> zuverlässig erkannt wird, bleibt allein der Weg, ein eigenes Modell zu trainieren —
+> und das offizielle Projekt warnt, dass es noch immer sehr schwierig sei, ein Modell zu
+> trainieren, das gut funktioniert.
 
-### Se vuoi una parola tutta tua
+### Wenn du ein eigenes Wort willst
 
-È il passo rimasto aperto. Si allena un modello proprio con il notebook Colab di
-**microWakeWord**: non servono registrazioni, i campioni vocali sono sintetici (TTS), e
-l'operazione dura orientativamente mezz'ora-un'ora. Poi:
+Das ist der offen gebliebene Schritt. Ein eigenes Modell trainiert man mit dem
+Colab-Notizbuch von **microWakeWord**: Aufnahmen sind nicht nötig, die Sprachbeispiele
+werden künstlich erzeugt, und der Vorgang dauert grob eine halbe bis eine Stunde. Danach:
 
-1. Esporta il `.tflite` INT8 e prendi nota dei parametri del **manifest**.
-2. Converti in array C con `xxd -i`, mantenendo il simbolo `g_wake_model`.
-3. Sostituisci `src/wake_model.h` (è un rimpiazzo diretto, niente altro da toccare).
-4. Aggiorna `WAKE_PROB_CUTOFF` e `WAKE_WINDOW` in `config.h` coi valori del manifest
-   (`probability_cutoff` × 255 e `sliding_window_size`).
+1. Exportiere die INT8-Datei `.tflite` und notiere die Werte aus dem **Manifest**.
+2. Wandle sie mit `xxd -i` in ein C-Feld um und behalte den Namen `g_wake_model` bei.
+3. Ersetze `src/wake_model.h` (ein unmittelbarer Austausch, sonst ist nichts
+   anzufassen).
+4. Ziehe `WAKE_PROB_CUTOFF` und `WAKE_WINDOW` in `config.h` mit den Werten aus dem
+   Manifest nach (`probability_cutoff` mal 255 und `sliding_window_size`).
 
-## Taratura e strumenti di diagnosi
+## Abstimmen und Werkzeuge zur Fehlersuche
 
-Tre flag in `config.h`, ognuno lascia l'aggiornamento OTA attivo:
+Drei Schalter in `config.h`, und jeder lässt die Aktualisierung über Funk offen:
 
-| Flag | A cosa serve |
+| Schalter | Wozu er dient |
 | --- | --- |
-| `MIC_DIAG` | livelli di rumore del microfono: per scegliere il guadagno |
-| `TFL_SELFTEST` | il runtime TFLite Micro funziona? (modellino `hello_world`) |
-| `WAKE_TEST` | gira la catena su audio sintetico, **senza microfono**: valida frontend e modello e mostra i falsi positivi prima della prova dal vivo |
+| `MIC_DIAG` | die Rauschpegel des Mikrofons, um die Verstärkung zu wählen |
+| `TFL_SELFTEST` | arbeitet die Laufzeitumgebung von TFLite Micro? (Testmodell `hello_world`) |
+| `WAKE_TEST` | lässt die Kette auf künstlichem Ton laufen, **ohne Mikrofon**: prüft Merkmalsberechnung und Modell und zeigt Fehlauslösungen vor dem Test am lebenden Gerät |
 
-Tre lezioni pagate durante la taratura:
+Drei Lehren, die das Abstimmen gekostet hat:
 
-- **Il flusso dev'essere continuo.** Il modello è streaming: una pausa fra le letture e
-  non rileva più niente. Non inserire attese nel percorso del wake.
-- **Troppo guadagno peggiora.** Alzare `WAKE_GAIN` sembra la cura ovvia quando "non
-  sente", ma oltre un certo punto il segnale **satura** e il riconoscimento cala.
-- **L'audio stantio fa ripartire il wake da solo.** Vedi `micFlush()`/`wakeReset()` sopra.
+- **Der Fluss muss durchgehend sein.** Das Modell arbeitet im Strombetrieb: eine Pause
+  zwischen zwei Lesevorgängen, und es erkennt nichts mehr. Also keine Wartezeiten in den
+  Weg des Weckworts einbauen.
+- **Zu viel Verstärkung macht es schlechter.** `WAKE_GAIN` zu erhöhen wirkt wie das
+  offensichtliche Mittel, wenn er "nicht hört", aber ab einem gewissen Punkt
+  **übersteuert** das Signal und die Erkennung wird schlechter.
+- **Alter Ton löst das Weckwort von allein aus.** Siehe `micFlush()` und `wakeReset()`
+  weiter oben.
 
-## Fonti
+## Quellen
 
-- microWakeWord: <https://microwakeword.com/> (training: <https://microwakeword.com/train>)
-- Repo di training: <https://github.com/OHF-Voice/micro-wake-word>
-- Modelli pronti: <https://github.com/esphome/micro-wake-word-models>
+- microWakeWord: <https://microwakeword.com/> (Training: <https://microwakeword.com/train>)
+- Repository für das Training: <https://github.com/OHF-Voice/micro-wake-word>
+- Fertige Modelle: <https://github.com/esphome/micro-wake-word-models>
 - `esp-tflite-micro`: <https://github.com/espressif/esp-tflite-micro>
 - ESPHome `micro_wake_word`: <https://esphome.io/components/micro_wake_word/>
-- Guida pratica ESP32-S3 + TFLM: <https://dev.to/zediot/esp32-s3-tensorflow-lite-micro-a-practical-guide-to-local-wake-word-edge-ai-inference-5540>
+- Praxisanleitung ESP32-S3 mit TFLM: <https://dev.to/zediot/esp32-s3-tensorflow-lite-micro-a-practical-guide-to-local-wake-word-edge-ai-inference-5540>

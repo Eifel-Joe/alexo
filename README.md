@@ -1,46 +1,52 @@
-# Alexo — assistente vocale fai-da-te su ESP32-S3
+# Alexo — Sprachassistent zum Selberbauen auf dem ESP32-S3
 
-Alexo è un assistente vocale "tipo Alexa/Google Home" **costruito da zero** su un
-microcontrollore **ESP32-S3**: ascolta una domanda a voce e risponde a voce, con tanto
-di chat sul display e animazioni luminose. Tutto il progetto (codice, commenti,
-interfaccia) è in **italiano**.
+Alexo ist ein Sprachassistent nach Art von Alexa oder Google Home, **von Grund auf
+gebaut** auf einem **ESP32-S3**: er hört eine gesprochene Frage und antwortet
+gesprochen, samt Chat auf dem Display und Lichtanimationen.
+
+> 🇩🇪 **Deutsche Fassung.** Dieses Repository ist ein Fork von
+> [PeppeMinniti/alexo](https://github.com/PeppeMinniti/alexo). Dokumentation,
+> Kommentare, Oberfläche und das Verhalten des Geräts sind ins Deutsche übersetzt;
+> der Assistent hört und antwortet auf Deutsch. Bezeichner im Code, Dateinamen und
+> Ordnernamen sind absichtlich italienisch geblieben, damit ein Abgleich mit dem
+> Originalprojekt möglich bleibt.
 
 <p align="center">
-  <img src="IMMAGINI/alexo.png" alt="Alexo — case stampato, splash di avvio, schermata OTA, chat sul display e schermata radio 'In onda'" width="820">
+  <img src="IMMAGINI/alexo.png" alt="Alexo — gedrucktes Gehäuse, Startbild, Anzeige der Aktualisierung, Chat auf dem Display und Radioanzeige" width="820">
 </p>
 
-> ⚠️ **Progetto hobbistico/educativo.** Per funzionare servono **3 API key tue**
-> (vedi sotto). Nessuna garanzia: usalo a tuo rischio.
+> ⚠️ **Hobby- und Lernprojekt.** Zum Betrieb braucht es **drei eigene Schlüssel für
+> die Dienste** (siehe unten). Ohne Gewähr, die Nutzung geschieht auf eigenes Risiko.
 
-> 🖨️ **Il case è stampabile in 3D** — file `.3mf`/STL su
+> 🖨️ **Das Gehäuse lässt sich in 3D drucken** — die Dateien (`.3mf` und STL) liegen auf
 > **[MakerWorld](https://makerworld.com/it/models/3040023-alexo-ai-voice-assistant-case-esp32-s3)**
-> (licenza CC BY 4.0).
+> (Lizenz CC BY 4.0).
 
 ---
 
-## Come funziona
+## Wie es arbeitet
 
-Alexo da solo è troppo piccolo per "ragionare": fa il **fattorino** tra alcuni servizi
-cloud. L'unica intelligenza che gira **dentro** l'ESP32 è il riconoscimento della parola
-di attivazione.
+Alexo allein ist zu klein zum Denken: er ist der **Bote** zwischen einigen Diensten im
+Internet. Das Einzige, was **im** ESP32 selbst rechnet, ist die Erkennung des
+Weckworts.
 
-> 🏠 Il cloud però non è obbligatorio: ognuno dei tre servizi può essere sostituito da un
-> **server sulla tua rete locale** (LM Studio, Whisper, un TTS) — vedi il
-> [capitolo 16 del manuale](MANUALE.md#16-lai-in-casa-far-girare-tutto-sul-tuo-pc).
+> 🏠 Die Cloud ist allerdings nicht zwingend: jeder der drei Dienste lässt sich durch
+> einen **Server im eigenen Netz** ersetzen (LM Studio, Whisper, eine Sprachausgabe) —
+> siehe [Kapitel 16 des Handbuchs](MANUALE.md#16-die-ki-zu-hause-alles-auf-dem-eigenen-pc).
 
 ```mermaid
 flowchart TD
-    START(["🗣️ Wake word 'Hey Mycroft' (locale, offline)<br/>oppure click sull'encoder"])
-    MIC["🎤 Microfono I2S<br/>registra la voce · stop automatico al silenzio"]
-    STT["📤 Groq · Whisper<br/>voce → testo (STT, gratis)"]
-    LLM["🧠 Claude · Anthropic<br/>il cervello · ricerca web"]
-    TTS["🔊 ElevenLabs<br/>testo → voce (TTS, MP3)"]
-    OUT["🔈 VS1053 → amplificatore → altoparlante"]
-    UI["📺 Display TFT (chat) &nbsp;·&nbsp; 💍 Ring LED (stato)"]
+    START(["🗣️ Weckwort 'Hey Jarvis' (im Gerät, ohne Internet)<br/>oder ein Klick auf den Drehgeber"])
+    MIC["🎤 I2S-Mikrofon<br/>nimmt auf · bricht bei Stille von allein ab"]
+    STT["📤 Groq · Whisper<br/>Stimme → Text (Spracherkennung, kostenlos)"]
+    LLM["🧠 Claude · Anthropic<br/>das Gehirn · Websuche"]
+    TTS["🔊 ElevenLabs<br/>Text → Stimme (Sprachausgabe, MP3)"]
+    OUT["🔈 VS1053 → Verstärker → Lautsprecher"]
+    UI["📺 TFT-Display (Chat) &nbsp;·&nbsp; 💍 LED-Ring (Zustand)"]
 
-    START --> MIC --> STT -->|testo| LLM -->|risposta| TTS --> OUT
-    MIC -. aggiorna .-> UI
-    LLM -. aggiorna .-> UI
+    START --> MIC --> STT -->|Text| LLM -->|Antwort| TTS --> OUT
+    MIC -. frischt auf .-> UI
+    LLM -. frischt auf .-> UI
 
     classDef cloud fill:#0e2a33,stroke:#00e5ff,color:#dfeef2;
     classDef ui fill:#1a1030,stroke:#ff2ea6,color:#dfeef2;
@@ -48,113 +54,122 @@ flowchart TD
     class UI ui;
 ```
 
-Sul display TFT scorre la conversazione come un teleprompter; l'anello di LED cambia
-animazione in base allo stato (ascolto / pensa / parla).
+Auf dem TFT-Display läuft das Gespräch wie auf einem Teleprompter durch; der LED-Ring
+wechselt die Animation je nach Zustand (zuhören, denken, sprechen).
 
-## Funzionalità
+## Was es kann
 
-- 🗣️ **Wake word locale** "Hey Mycroft" (microWakeWord / TensorFlow Lite Micro, offline)
-- 🎛️ **Encoder** come comando unico (click per parlare, giro per scorrere/volume)
-- 🧠 **Memoria della conversazione** + **ricerca web** (via Claude)
-- 💬 **Chat continua** (opzionale): finita la risposta il microfono si riapre da solo,
-  la domanda dopo non richiede di ridire la wake word
-- 🏠 **AI "in casa"** (opzionale): trascrizione, cervello e voce possono girare su un
-  **PC della tua rete** invece che nel cloud, con un interruttore "non uscire mai su
-  internet"
-- ⏱️ **Stop automatico al silenzio** adattivo al rumore di fondo
-- 📻 **Web-radio** MP3 ("metti radio…", cambio stazione dall'encoder)
-- 🌐 **Pannello web** (`http://alexo.local/`): taratura parametri, volume, voci,
-  personalità di Claude, e **chat in tempo reale** — senza ricompilare
-- 🕒 **Ora reale** via NTP passata al cervello
-- ⬆️ **Aggiornamento OTA** (via WiFi) oltre che via USB
+- 🗣️ **Weckwort im Gerät** "Hey Jarvis" (microWakeWord / TensorFlow Lite Micro, ohne Internet)
+- 🎛️ **Drehgeber** als einzige Bedienung (Klick zum Sprechen, Drehen zum Blättern und für die Lautstärke)
+- 🧠 **Gedächtnis für das Gespräch** und **Websuche** über Claude
+- 💬 **Fortlaufender Chat** (abschaltbar): nach der Antwort öffnet das Mikrofon von
+  allein, die nächste Frage braucht das Weckwort nicht erneut
+- 🏠 **KI zu Hause** (abschaltbar): Spracherkennung, Gehirn und Stimme können auf einem
+  **PC im eigenen Netz** laufen statt in der Cloud, mit einem Schalter "nie ins
+  Internet gehen"
+- ⏱️ **Abbruch bei Stille**, der sich dem Grundrauschen anpasst
+- 📻 **Webradio** über MP3 (Sender per Sprache, Wechsel über den Drehgeber)
+- 🌐 **Web-Panel** (`http://alexo.local/`): Parameter abstimmen, Lautstärke, Stimmen,
+  Persönlichkeit von Claude und der **Chat in Echtzeit** — ohne neu zu übersetzen
+- 🕒 **Echte Uhrzeit** über NTP, die das Gehirn mitbekommt
+- ⬆️ **Aktualisierung über Funk** zusätzlich zum Weg über USB
 
 ## Hardware
 
-| Componente    | Modello                                      | Ruolo                        |
-| ------------- | -------------------------------------------- | ---------------------------- |
-| MCU           | ESP32-S3 **N16R8** (16 MB flash, 8 MB PSRAM) | il "computer"                |
-| Microfono     | **ICS-43434** (I2S)                          | l'orecchio                   |
-| Decoder audio | **VS1053 / VS1003** (SPI)                    | riproduce MP3 (voce e radio) |
-| Amplificatore | **PAM8302A**                                 | pilota l'altoparlante        |
-| Display       | **ST7735** TFT 1.8" a colori                 | chat / teleprompter          |
-| Anello LED    | **WS2812** 12 LED (NeoPixel)                 | animazioni di stato          |
-| Comando       | Encoder rotativo **KY-040**                  | click / giro                 |
+| Bauteil        | Modell                                        | Aufgabe                          |
+| -------------- | --------------------------------------------- | -------------------------------- |
+| Mikrocontroller | ESP32-S3 **N16R8** (16 MB Flash, 8 MB PSRAM) | der "Rechner"                    |
+| Mikrofon       | **ICS-43434** (I2S)                           | das Ohr                          |
+| Tondecoder     | **VS1053 / VS1003** (SPI)                     | spielt MP3 ab (Stimme und Radio) |
+| Verstärker     | **PAM8302A**                                  | treibt den Lautsprecher          |
+| Display        | **ST7735** TFT 1,8 Zoll in Farbe              | Chat und Teleprompter            |
+| LED-Ring       | **WS2812** mit 12 LED (NeoPixel)              | Animationen für den Zustand      |
+| Bedienung      | Drehgeber **KY-040**                          | Klick und Drehen                 |
 
-Schema dei collegamenti pin-per-pin e note di montaggio nel
-[**MANUALE.md**](MANUALE.md) e in [CABLAGGIO_HW.md](CABLAGGIO_HW.md).
+Der Anschlussplan Anschluss für Anschluss und die Hinweise zum Aufbau stehen im
+[**MANUALE.md**](MANUALE.md) und in [CABLAGGIO_HW.md](CABLAGGIO_HW.md).
 
 ## Software
 
-Firmware in **C++ / PlatformIO** (Arduino), modulare: `mic`, `net`, `stt`, `llm`, `tts`,
-`music`, `ui` (LED), `gobbo` (display), `encoder`, `volume`, `sound`, `wakeword`,
-`localai` (i servizi AI in casa), `settings` + `webui` (pannello web). La pipeline pesante gira su un core, le animazioni
-sull'altro, così restano fluide anche mentre Alexo "pensa".
+Die Firmware ist in **C++ mit PlatformIO** (Arduino) geschrieben und in Module geteilt:
+`mic`, `net`, `stt`, `llm`, `tts`, `music`, `ui` (LED), `gobbo` (Display), `encoder`,
+`volume`, `sound`, `wakeword`, `localai` (die KI-Dienste zu Hause), `settings` und
+`webui` (das Panel). Die rechenintensive Kette läuft auf einem Kern, die Animationen
+auf dem anderen, damit sie flüssig bleiben, auch während Alexo denkt.
 
-## Come si costruisce (in breve)
+## Wie man es baut (in Kürze)
 
-1. **Clona** il repo e aprilo con [PlatformIO](https://platformio.org/) (in VS Code).
-2. **Crea le tue chiavi API** (necessarie):
-   - **Groq** (Whisper STT) — gratis su console.groq.com
+1. **Klone** das Repository und öffne es mit [PlatformIO](https://platformio.org/) in
+   VS Code.
+2. **Lege deine Schlüssel an** (sie werden gebraucht):
+   - **Groq** (Whisper, Spracherkennung) — kostenlos auf console.groq.com
    - **Anthropic** (Claude) — console.anthropic.com
-   - **ElevenLabs** (voce TTS) — elevenlabs.io
-3. **Configura i segreti**: copia `include/secrets.example.h` in `include/secrets.h` e
-   inserisci WiFi + le 3 chiavi. (`secrets.h` è ignorato da git: non finirà nel repo.)
-4. **Compila e carica** (primo flash via USB): in fondo a `platformio.ini` le righe
-   attive sono quelle dell'**OTA** — per il caricamento via cavo scambiale con le due
-   righe `upload_port = COMx` / `upload_protocol = esptool` (vedi i commenti nel file).
-   
+   - **ElevenLabs** (Stimme) — elevenlabs.io
+3. **Trage die Geheimnisse ein**: kopiere `include/secrets.example.h` nach
+   `include/secrets.h` und setze WLAN und die drei Schlüssel ein. (`secrets.h` wird von
+   git ignoriert und landet nicht im Repository.)
+4. **Übersetzen und aufspielen** (das erste Mal über USB): am Ende von
+   `platformio.ini` sind die Zeilen für die **Aktualisierung über Funk** aktiv. Für den
+   Weg über das Kabel tausche sie gegen die beiden Zeilen `upload_port = COMx` und
+   `upload_protocol = esptool` (siehe die Kommentare in der Datei).
+
    ```
    pio run -e esp32-s3-devkitc-1 -t upload
    ```
-   
-   Serve caricare **una volta** anche la pagina del pannello web (cartella `data/`) nel
-   filesystem dell'ESP — da ripetere solo se in futuro modifichi quella pagina:
-     
+
+   **Einmal** muss auch die Seite des Web-Panels (der Ordner `data/`) ins Dateisystem
+   des ESP. Das ist nur zu wiederholen, wenn du diese Seite später änderst:
+
    ```
    pio run -e esp32-s3-devkitc-1 -t uploadfs
    ```
- 
-5. Tutti i **pin e i parametri** stanno in [`include/config.h`](include/config.h) —
-   unica fonte di verità.
 
-La guida completa e spiegata passo-passo (con il *perché* di ogni scelta) è nel
-[**MANUALE.md**](MANUALE.md). Dettagli sulla wake word in [WAKEWORD.md](WAKEWORD.md).
+5. Alle **Anschlüsse und Parameter** stehen in [`include/config.h`](include/config.h),
+   der einzigen maßgeblichen Stelle.
 
-## Documentazione
+Die vollständige Anleitung Schritt für Schritt, mit dem *Warum* hinter jeder
+Entscheidung, steht im [**MANUALE.md**](MANUALE.md). Einzelheiten zum Weckwort in
+[WAKEWORD.md](WAKEWORD.md).
 
-- 📖 [MANUALE.md](MANUALE.md) — guida completa (hardware + software, spiegata semplice)
-- 🔌 [CABLAGGIO_HW.md](CABLAGGIO_HW.md) — collegamenti pin-per-pin
-- 🧩 [WAKEWORD.md](WAKEWORD.md) — la wake word locale nel dettaglio
-- 🖨️ [Case 3D su MakerWorld](https://makerworld.com/it/models/3040023-alexo-ai-voice-assistant-case-esp32-s3) — file stampabili (`.3mf`/STL), licenza CC BY 4.0
+## Dokumentation
+
+- 📖 [MANUALE.md](MANUALE.md) — die vollständige Anleitung (Hardware und Software, einfach erklärt)
+- 🔌 [CABLAGGIO_HW.md](CABLAGGIO_HW.md) — die Anschlüsse im Einzelnen
+- 🧩 [WAKEWORD.md](WAKEWORD.md) — das Weckwort im Gerät im Detail
+- 🖨️ [Gehäuse auf MakerWorld](https://makerworld.com/it/models/3040023-alexo-ai-voice-assistant-case-esp32-s3) — druckbare Dateien (`.3mf` und STL), Lizenz CC BY 4.0
 
 ---
 
-## 👤 Autore
+## 👤 Autor
 
-**Peppe Minniti** — *Automation Engineer* dal profilo atipico: nessun titolo in
-ingegneria, tanta pratica. Costruisco sistemi che integrano hardware, software e
-meccanica. Alexo è uno dei miei progetti. Il mio motto: **"Soluzioni che funzionano".**
+**Peppe Minniti** — *Automation Engineer* mit einem ungewöhnlichen Werdegang: kein
+Ingenieurtitel, dafür viel Praxis. Er baut Systeme, die Hardware, Software und Mechanik
+verbinden. Alexo ist eines seiner Projekte. Sein Motto: **"Lösungen, die
+funktionieren".**
 
-### 🆘 Sei bloccato su un tuo ESP32?
+### 🆘 Steckst du bei deinem eigenen ESP32 fest?
 
-**Lo risolviamo insieme, in diretta.** Diagnosi gratuita, poi sessione 1:1 in
-condivisione schermo. → **[Vai a ESP32 SOS ›](https://www.peppeminniti.it/assistenza_esp32/)**
+**Wir lösen es gemeinsam, in Echtzeit.** Kostenlose Erstdiagnose, danach eine Sitzung zu
+zweit mit geteiltem Bildschirm. → **[Zu ESP32 SOS ›](https://www.peppeminniti.it/assistenza_esp32/)**
 
-<sub>Oppure impara a costruirli tu: [corso completo "Dall'idea al sistema con ESP32"](https://www.peppeminniti.it/) · [Portfolio](https://www.peppeminniti.it/portfolio/) · [GitHub](https://github.com/PeppeMinniti) · [LinkedIn](https://www.linkedin.com/in/giuseppe-minniti-m2m-fablab)</sub>
+<sub>Oder lerne, sie selbst zu bauen: [der vollständige Kurs "Dall'idea al sistema con ESP32"](https://www.peppeminniti.it/) · [Portfolio](https://www.peppeminniti.it/portfolio/) · [GitHub](https://github.com/PeppeMinniti) · [LinkedIn](https://www.linkedin.com/in/giuseppe-minniti-m2m-fablab)</sub>
 
-## Licenza
+## Lizenz
 
-Rilasciato sotto licenza **MIT** — vedi [LICENSE](LICENSE). Puoi usarlo, modificarlo e
-ridistribuirlo liberamente, mantenendo la nota di copyright.
+Veröffentlicht unter der **MIT**-Lizenz — siehe [LICENSE](LICENSE). Du darfst sie
+benutzen, ändern und weitergeben, solange der Urhebervermerk erhalten bleibt.
 
-## Ringraziamenti
+## Dank
 
-Ideazione, progettazione, scelte tecniche, prove sul campo e cura del risultato finale
-sono di **Giuseppe Minniti**. Parte dello sviluppo è stata portata avanti in
-collaborazione con un assistente AI (Claude, di Anthropic), usato come compagno di
-lavoro: per confrontare idee, scrivere e commentare codice, rifinire la documentazione.
+Idee, Entwurf, technische Entscheidungen, Erprobung und die Sorgfalt am Ergebnis stammen
+von **Giuseppe Minniti**. Ein Teil der Entwicklung entstand zusammen mit einem
+KI-Assistenten (Claude von Anthropic), der als Arbeitspartner diente: um Ideen
+abzuwägen, Code zu schreiben und zu kommentieren und die Dokumentation auszuarbeiten.
 
-Mi piace pensarla come una collaborazione in cui si cresce a vicenda: l'AI non
-sostituisce il lavoro e le decisioni umane, le affianca e le accelera. La direzione, il
-senso critico e la responsabilità delle scelte restano di chi progetta — e proprio da
-questo dialogo nasce l'occasione di imparare, per entrambe le parti.
+Er versteht das als Zusammenarbeit, bei der beide Seiten wachsen: die KI ersetzt weder
+die Arbeit noch die Entscheidungen von Menschen, sie begleitet und beschleunigt sie. Die
+Richtung, das kritische Urteil und die Verantwortung für die Entscheidungen bleiben bei
+dem, der entwirft — und gerade aus diesem Austausch entsteht die Gelegenheit, dazu zu
+lernen, für beide Seiten.
+
+Die deutsche Fassung dieses Forks entstand ebenfalls mit Claude.

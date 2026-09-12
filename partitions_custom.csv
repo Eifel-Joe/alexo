@@ -5,9 +5,9 @@ app0,       app,  ota_0,    0x10000,   0x400000,
 app1,       app,  ota_1,    0x410000,  0x400000,
 spiffs,     data, spiffs,   0x810000,  0x700000,
 coredump,   data, coredump, 0xF80000,  0x20000,
-# NVS, -, Non,-volatile, storage, (20 KB)
-# Da,ti, O,T,A, (8 KB)
-# Prima, partizione, OTA, per, l'applicazione, (4 MB)
-# Seconda, partizione, OTA, per, l'applicazione, (4 MB)
-# Partizione, per, il, file, system SPIFFS, (7 MB)
-# Partizione, per, il, core, dump, (128 KB)
+# NVS - nichtfluechtiger Speicher (20 KB)
+# Daten fuer die Aktualisierung ueber Funk (8 KB)
+# erste Partition fuer die Anwendung (4 MB)
+# zweite Partition fuer die Anwendung (4 MB)
+# Partition fuer das Dateisystem SPIFFS (7 MB)
+# Partition fuer den Speicherauszug bei Abstuerzen (128 KB)

@@ -1,5 +1,6 @@
 # --- PlatformIO / build ---
 .pio
+__pycache__/
 
 # --- VS Code ---
 .vscode/.browse.c_cpp.db*
