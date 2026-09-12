@@ -1,66 +1,69 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Impostazioni RUNTIME modificabili dal pannello web (webui.cpp).
-//  I parametri che prima erano #define fissi (config.h / dentro i .cpp) ora
-//  vivono in questa struct, caricata dall'NVS all'avvio (default = config.h) e
-//  salvata quando l'utente li cambia dal pannello. Cosi' si tarano senza
-//  ricompilare. Il volume resta gestito da volume.cpp (gia' in NVS).
+//  ALEXO - Einstellungen, die zur LAUFZEIT über das Web-Panel änderbar sind
+//  (webui.cpp).
+//  Die Parameter, die früher feste #define waren (in config.h oder in den
+//  .cpp-Dateien), leben nun in dieser Struktur. Sie wird beim Start aus dem NVS
+//  geladen (Werkseinstellung = config.h) und gespeichert, sobald der Nutzer sie
+//  im Panel ändert. So lässt sich alles abstimmen, ohne neu zu übersetzen. Die
+//  Lautstärke verwaltet weiterhin volume.cpp (ebenfalls im NVS).
 // ============================================================================
 #include <Arduino.h>
 
 struct AlexoSettings {
-  // --- Mic / stop-al-silenzio / LED ---
-  uint32_t recSilenceMs;      // silenzio continuo prima dello stop registrazione
-  float    recSilenceMargin;  // soglia voce = noiseFloor * margin + floor
-  int      recSilenceFloor;   // margine minimo assoluto (RMS)
-  float    micLvlMargin;      // LED reattivi: quanto sopra il fondo per accendere
-  float    micLvlFloor;       // LED reattivi: margine minimo assoluto
-  float    micLvlAttack;      // LED reattivi: velocita' di salita (reattivita') 0..1
-  float    micLvlRelease;     // LED reattivi: velocita' di discesa (permanenza) 0..1
-  bool     idleReactive;      // LED "ballano" col suono a riposo (on/off)
-  bool     chatContinua;      // dopo una risposta riapre il mic (niente wake word ogni volta)
+  // --- Mikrofon, Abbruch bei Stille, LED ---
+  uint32_t recSilenceMs;      // ununterbrochene Stille vor dem Abbruch der Aufnahme
+  float    recSilenceMargin;  // Sprachschwelle = Grundpegel * margin + floor
+  int      recSilenceFloor;   // kleinster absoluter Abstand (RMS)
+  float    micLvlMargin;      // reagierende LED: wie weit über dem Grundpegel zum Einschalten
+  float    micLvlFloor;       // reagierende LED: kleinster absoluter Abstand
+  float    micLvlAttack;      // reagierende LED: Anstiegsgeschwindigkeit 0..1
+  float    micLvlRelease;     // reagierende LED: Abklinggeschwindigkeit 0..1
+  bool     idleReactive;      // LED "tanzen" bei Ruhe zum Ton (ein/aus)
+  bool     chatContinua;      // nach einer Antwort öffnet das Mikrofon erneut (kein Weckwort jedes Mal)
 
-  // --- Wake word "Hey Mycroft" ---
-  int      wakeGain;          // guadagno digitale del percorso wake
-  int      wakeProbCutoff;    // soglia probabilita' 0..255
-  int      wakeWindow;        // ampiezza finestra mobile (1..16)
+  // --- Weckwort "Hey Jarvis" ---
+  int      wakeGain;          // digitale Verstärkung des Weckwort-Wegs
+  int      wakeProbCutoff;    // Wahrscheinlichkeitsschwelle 0..255
+  int      wakeWindow;        // Breite des gleitenden Fensters (1..16)
 
-  // --- Audio ---
-  String   voiceId;           // Voice ID ElevenLabs di default
-  String   voiceIdAlt;        // Voice ID alternativo (usato col trigger)
-  String   voiceTrigger;      // parola iniziale che attiva la voce alternativa (vuoto = off)
+  // --- Ton ---
+  String   voiceId;           // voreingestellte ElevenLabs-Stimme
+  String   voiceIdAlt;        // zweite Stimme (mit dem Auslösewort)
+  String   voiceTrigger;      // Anfangswort, das die zweite Stimme aktiviert (leer = aus)
 
-  // --- Cervello (Claude) ---
-  String   llmModel;          // es. claude-haiku-4-5 / claude-sonnet-5 / claude-opus-5
-  String   systemPrompt;      // "personalita'" di Alexo
+  // --- Gehirn (Claude) ---
+  String   llmModel;          // etwa claude-haiku-4-5 / claude-sonnet-5 / claude-opus-5
+  String   systemPrompt;      // die "Persönlichkeit" von Alexo
 
-  // --- Filtro anti-allucinazione Whisper ---
-  String   hallucTerms;       // frasi-fantasma da scartare, separate da virgola (vuoto = off)
+  // --- Filter gegen Halluzinationen von Whisper ---
+  String   hallucTerms;       // Geisterphrasen zum Verwerfen, durch Komma getrennt (leer = aus)
 
-  // --- Musica (web-radio) ---
-  String   musicStations;     // stazioni, una per riga "chiave | nome | url"
+  // --- Musik (Webradio) ---
+  String   musicStations;     // Sender, einer je Zeile: "Schlüssel | Name | URL"
 
-  // --- Servizi AI IN CASA (LM Studio & co., vedi localai.h) ---
-  //  Indirizzo VUOTO = servizio locale spento -> si va in cloud come sempre.
-  //  Nome modello VUOTO = usa quello caricato adesso sul server (glielo chiede).
-  String   localLlmUrl;       // cervello, es. http://192.168.1.50:1234/v1
+  // --- Dienste ZU HAUSE (LM Studio und ähnliche, siehe localai.h) ---
+  //  LEERE Adresse = Dienst zu Hause aus -> es geht wie immer in die Cloud.
+  //  LEERER Modellname = das gerade auf dem Server geladene Modell wird benutzt
+  //  (es wird dort erfragt).
+  String   localLlmUrl;       // Gehirn, etwa http://192.168.1.50:1234/v1
   String   localLlmModel;
-  float    localLlmTemp;      // quanto il modello locale "osa" nella scelta delle parole
-  String   localSttUrl;       // trascrizione, es. http://192.168.1.50:8001/v1
+  float    localLlmTemp;      // wie viel das Modell zu Hause bei der Wortwahl "wagt"
+  String   localSttUrl;       // Spracherkennung, etwa http://192.168.1.50:8001/v1
   String   localSttModel;
-  String   localTtsUrl;       // voce, es. http://192.168.1.50:8880/v1
+  String   localTtsUrl;       // Stimme, etwa http://192.168.1.50:8880/v1
   String   localTtsModel;
-  String   localTtsVoice;     // nome voce del server locale (non il Voice ID ElevenLabs)
-  bool     localOnly;         // true = mai in cloud per stt/llm/tts: se casa non c'e', tace
-  bool     ttsLocalOnly;      // true = voce SEMPRE in casa (niente ElevenLabs), solo il tts
+  String   localTtsVoice;     // Stimmenname des Servers zu Hause (nicht die ElevenLabs-Kennung)
+  bool     localOnly;         // true = nie in die Cloud für Erkennung/Gehirn/Stimme: fehlt der Dienst zu Hause, bleibt es still
+  bool     ttsLocalOnly;      // true = Stimme IMMER zu Hause (kein ElevenLabs), betrifft nur die Sprachausgabe
 
-  // --- Risposta personalizzata (trigger + testo) ---
-  String   replyTrigger;      // parola/frase nella domanda (vuoto = off -> risponde l'AI)
-  String   replyText;         // testo fisso che Alexo dice quando il trigger e' presente
+  // --- Eigene Antwort (Auslöser und Text) ---
+  String   replyTrigger;      // Wort oder Satzteil in der Frage (leer = aus -> es antwortet die KI)
+  String   replyText;         // fester Text, den Alexo sagt, wenn der Auslöser vorkommt
 };
 
 extern AlexoSettings gSettings;
 
-void settingsBegin();          // carica da NVS (o default di config.h)
-void settingsSave();           // scrive TUTTO in NVS (permanente)
-void settingsResetDefaults();  // riporta ai default di fabbrica (config.h) e salva
+void settingsBegin();          // lädt aus dem NVS (oder die Werte aus config.h)
+void settingsSave();           // schreibt ALLES ins NVS (dauerhaft)
+void settingsResetDefaults();  // stellt die Werkseinstellung wieder her (config.h) und speichert

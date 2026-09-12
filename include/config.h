@@ -96,25 +96,29 @@
 //  l'OTA RESTA ATTIVO: per uscire rimetti 0 e riflasha via OTA. Default 0.
 #define MIC_DIAG         0
 
-// --- Wake word locale "Hey Mycroft" (microWakeWord, vedi WAKEWORD.md) -------
-//  1 = wake word attiva (avvio chat con "Hey Mycroft" IN PARALLELO al click
-//  encoder); 0 = avvio SOLO col click. Vedi WAKEWORD.md.
-//  ⚠️ NON e' piu' "Okay Nabu" dal 2026-09-02: quella parola ora accende il
-//  Balancing Robot, e nella stessa casa non possono averla tutti e due.
+// --- Weckwort "Hey Jarvis", erkannt im Geraet selbst (microWakeWord) --------
+//  Siehe WAKEWORD.md.
+//  1 = Weckwort aktiv (der Chat startet mit "Hey Jarvis" GENAUSO wie mit einem
+//  Klick auf den Drehgeber); 0 = Start NUR per Klick.
+//  GEAENDERT am 2026-09-12: vorher "Hey Mycroft", davor "Okay Nabu". "Okay
+//  Nabu" gehoert dem Balancing Robot, zwei Geraete im selben Haus koennen
+//  dieselbe Parole nicht teilen.
 #define WAKE_ENABLE      1
-//  Parametri detection (dal manifest v2 "hey_mycroft"): cutoff probabilita'
-//  0..255 (0.95*255=242) e dimensione della finestra mobile su cui si fa la
-//  media. Entrambi regolabili a caldo dal pannello web: qui c'e' solo il default.
-//  ⚠️ 242 e NON 246: il manifest di "hey_mycroft" dichiara 0.95, quello di
-//  "okay_nabu" dichiarava 0.97. Sono due modelli diversi e la soglia e' una
-//  proprieta' del modello, non una preferenza: lasciandoci il 246 di prima si
-//  chiederebbe a Mycroft piu' sicurezza di quanta ne sia stata tarata, e la
-//  parola verrebbe colta di rado. Vedi src/wake_model.h.
-#define WAKE_PROB_CUTOFF 242
+//  Erkennungsparameter (aus dem Manifest v2 "hey_jarvis"): Schwelle der
+//  Wahrscheinlichkeit 0..255 und Breite des gleitenden Fensters, ueber das
+//  gemittelt wird. Beides laesst sich im Web-Panel im Betrieb aendern, hier
+//  steht nur die Werkseinstellung.
+//  ACHTUNG: 247 und NICHT 242. Die Schwelle ist eine Eigenschaft des Modells,
+//  keine Geschmacksfrage: das Manifest von "hey_jarvis" nennt 0.97 (0.97*255),
+//  das von "hey_mycroft" nannte 0.95. Bliebe hier die 242 stehen, verlangte man
+//  von Jarvis weniger Sicherheit als abgestimmt wurde, und es gaebe mehr
+//  Fehlausloesungen. Siehe src/wake_model.h.
+#define WAKE_PROB_CUTOFF 247
 #define WAKE_WINDOW      5
-//  Guadagno digitale del solo percorso wake (il PCM a shift 15 e' troppo basso:
-//  serviva gridare). Moltiplica i campioni prima del frontend, con clamp. Alza
-//  se devi ancora alzare la voce, abbassa se compaiono falsi positivi.
+//  Digitale Verstaerkung allein des Weckwort-Wegs (das PCM mit Verschiebung 15
+//  ist zu leise, man muesste schreien). Multipliziert die Abtastwerte vor der
+//  Merkmalsberechnung, mit Begrenzung. Hoeher, wenn man immer noch lauter
+//  sprechen muss; niedriger, wenn es faelschlich ausloest.
 #define WAKE_GAIN        3
 
 // --- Registrazione voce (dopo l'attivazione: wake word o click) -------------
@@ -208,6 +212,9 @@
 #define MIC_LVL_ATTACK_DEF  0.12f  // reattivita' (salita): quanto in fretta si accendono
 #define MIC_LVL_RELEASE_DEF 0.25f  // permanenza (discesa): quanto in fretta si spengono
 //  Standardstimme bei ElevenLabs (Voice ID).
+//  Dies ist noch die Stimme aus dem Originalprojekt. Fuer den Jarvis-Klang
+//  eine eigene Stimme im ElevenLabs-Konto waehlen und ihre Kennung im
+//  Web-Panel eintragen; das Modell eleven_flash_v2_5 ist mehrsprachig.
 #define ELEVEN_VOICE_DEF    "fTHp5NEBwS4InadKS0Ci"
 //  ZWEITE Stimme samt Auslösewort: beginnt der Satz mit VOICE_TRIGGER_DEF,
 //  antwortet Alexo mit ELEVEN_VOICE_ALT_DEF. Leeres Auslösewort schaltet die
@@ -234,13 +241,15 @@
 //  claude-opus-5 = klüger, dafür langsamer und teurer.
 #define LLM_MODEL_DEF       "claude-haiku-4-5"
 #define SYSTEM_PROMPT_DEF \
-    "Du bist Alexo, ein Sprachassistent für zu Hause und antwortest auf Deutsch. " \
-    "Antworte kurz, natürlich und umgangssprachlich, so wie man laut spricht. " \
-    "Höchstens 2 bis 3 Sätze. Keine Aufzählungen, kein Markdown, keine Emojis. " \
+    "Du bist Jarvis, ein Sprachassistent für zu Hause und antwortest auf Deutsch. " \
+    "Du sprichst förmlich, knapp und mit ruhiger Höflichkeit, gelegentlich mit " \
+    "trockenem Humor. Du redest den Nutzer mit Sir an, aber sparsam, nicht in " \
+    "jedem Satz. Antworte in höchstens 2 bis 3 Sätzen, so wie man laut spricht. " \
+    "Keine Aufzählungen, kein Markdown, keine Emojis. " \
     "Du hast Zugriff auf eine Websuche: nutze sie, wenn eine aktuelle Information " \
     "nötig ist (Wetter, Nachrichten, Öffnungszeiten, aktuelle Ereignisse, Preise). " \
     "Der Nutzer ist in Deutschland. Fasse die Ergebnisse gesprochen und knapp " \
-    "zusammen. Wenn du etwas nicht weißt, sag es einfach."
+    "zusammen. Wenn du etwas nicht weißt, sag es geradeheraus."
 //  Stazioni musica (web-radio MP3) editabili dal pannello. Una per riga, formato
 //  "chiave | nome | url": la CHIAVE e' cio' che si cerca nella frase ("metti
 //  <chiave>"), il NOME appare sul display, l'URL e' lo stream MP3. L'ordine conta:

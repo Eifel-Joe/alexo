@@ -1,40 +1,45 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Wake word locale "Alexo" (microWakeWord). Vedi WAKEWORD.md.
+//  ALEXO - Weckwort "Hey Jarvis", erkannt im Gerät selbst (microWakeWord).
+//  Siehe WAKEWORD.md.
 //
-//  Pipeline: I2S 16kHz continuo -> feature frontend (40 mel/10ms) -> modello
-//  INT8 streaming (inferenza ogni 20ms) -> probabilita' -> soglia+debounce ->
-//  trigger (stesso ingresso del click encoder). Il click resta come fallback.
+//  Ablauf: I2S mit 16 kHz im Dauerbetrieb -> Merkmalsberechnung (40 Mel je
+//  10 ms) -> INT8-Modell im Strombetrieb (eine Auswertung alle 20 ms) ->
+//  Wahrscheinlichkeit -> Schwelle und Entprellung -> Auslösung (derselbe
+//  Eingang wie der Klick auf den Drehgeber). Der Klick bleibt als Rückfallweg.
 //
-//  STATO: scaffold. L'inferenza TFLite e il modello NON ci sono ancora (work in
-//  progress): con WAKE_ENABLE=0 e' tutto inerte e il firmware e' invariato.
-//  L'API qui sotto e' il "seam" stabile su cui agganciare TFLite Micro.
+//  Die Erkennung ist vollständig umgesetzt und mit WAKE_ENABLE=1 ab Werk aktiv.
+//  Mit WAKE_ENABLE=0 bleibt alles wirkungslos und die Firmware unverändert.
 // ============================================================================
 #include <Arduino.h>
 
-// Inizializza il wake word (alloca arena in PSRAM, carica il modello, prepara il
-// frontend). Ritorna false se non disponibile (es. PSRAM mancante o stub).
-// No-op che ritorna false finche' l'inferenza non e' implementata.
+// Richtet das Weckwort ein (reserviert Speicher im PSRAM, lädt das Modell,
+// bereitet die Merkmalsberechnung vor). Liefert false, wenn es nicht zur
+// Verfügung steht, etwa bei fehlendem PSRAM oder abgeschaltet.
 bool wakeBegin();
 
-// Da chiamare a riposo con un blocco di campioni PCM 16-bit mono a 16 kHz (gli
-// STESSI letti per il livello del ring, per non leggere l'I2S due volte).
-// Accumula le stride, genera le feature, esegue l'inferenza streaming e
-// applica soglia+debounce. Ritorna true SOLO nel frame in cui "Alexo" e'
-// riconosciuto (un colpo solo, poi serve un nuovo trigger).
+// Bei Ruhe mit einem Block PCM-Abtastwerten aufzurufen, 16 Bit Mono mit 16 kHz
+// (DENSELBEN, die für den Pegel des Rings gelesen werden, damit der I2S-Bus
+// nicht zweimal gelesen wird). Sammelt die Schritte, berechnet die Merkmale,
+// führt die Auswertung im Strombetrieb aus und wendet Schwelle und Entprellung
+// an. Liefert NUR in dem Frame true, in dem "Hey Jarvis" erkannt wurde (ein
+// einziges Mal, danach braucht es eine neue Auslösung).
 bool wakeFeed(const int16_t *samples, size_t n);
 
-// true se il wake word e' attivo e pronto (modello caricato).
+// true, wenn das Weckwort aktiv und bereit ist (Modell geladen).
 bool wakeReady();
 
-// Azzera lo stato del rilevamento (finestra probabilita' + frontend). Da chiamare
-// dopo un'interazione, prima di riprendere l'ascolto, per non auto-ritriggerare.
+// Setzt den Erkennungszustand zurück (Fenster der Wahrscheinlichkeiten und
+// Merkmalsberechnung). Nach einem Wortwechsel aufzurufen, bevor das Zuhören
+// wieder beginnt, damit es sich nicht selbst erneut auslöst.
 void wakeReset();
 
-// Ultima probabilita' (0..255) calcolata dall'ultima inferenza, per debug/tuning.
+// Letzte Wahrscheinlichkeit (0..255) aus der jüngsten Auswertung, für Fehlersuche
+// und Feinabstimmung.
 uint8_t wakeLastProb();
 
-// Test della catena senza mic: genera audio sintetico, lo passa a
-// wakeFeed e stampa probabilita'/tempi su Serial+Telnet. Chiamabile in loop.
-// No-op se ne' WAKE_ENABLE ne' WAKE_TEST.
+// Test der Kette ohne Mikrofon: erzeugt künstlichen Ton, gibt ihn an wakeFeed
+// und schreibt Wahrscheinlichkeiten und Zeiten auf die serielle Schnittstelle
+// und Telnet. Kann im Loop aufgerufen werden. Ohne Wirkung, wenn weder
+// WAKE_ENABLE noch WAKE_TEST gesetzt ist.
 void wakeSelfTest();
