@@ -1,5 +1,5 @@
 // ============================================================================
-//  ALEXO - Riproduzione musica (web-radio MP3 -> VS1053). Vedi music.h.
+//  ALEXO - Musikwiedergabe (MP3-Webradio -> VS1053). Siehe music.h.
 // ============================================================================
 #include "music.h"
 #include "volume.h"
@@ -15,35 +15,45 @@
 #include <ArduinoOTA.h>
 #include <math.h>
 
-// Le stazioni ora sono EDITABILI dal pannello web: vivono in gSettings.musicStations
-// (una per riga "chiave | nome | url", default in config.h MUSIC_STATIONS_DEF).
-// Vedi musicMatch() piu' sotto.
+// Die Sender lassen sich im Web-Panel BEARBEITEN: sie stehen in
+// gSettings.musicStations (einer je Zeile, "Schlüssel | Name | URL", die
+// Werkseinstellung in config.h unter MUSIC_STATIONS_DEF). Siehe musicMatch()
+// weiter unten.
+// OFFEN: die Schlüssel des Katalogs sind noch italienisch, siehe
+// docs/specs/2026-09-12-uebersetzung-deutsch.md.
 
-// --- Livello del ring DURANTE la musica -------------------------------------
-//  Stessa logica "perfetta" dell'idle reattivo (micLevelFromChunk): passa-alto +
-//  noise-floor auto-calibrante ASIMMETRICO (scende in fretta = si aggancia al
-//  SILENZIO, sale lentissimo = i beat NON lo trascinano su) + envelope. Cosi' la
-//  baseline resta sul livello tenuto piu' basso e la MUSICA le sporge sopra ->
-//  segue il brano ed e' viva. La differenza con l'idle e' solo il GUADAGNO piu'
-//  basso (la cassa vicina satura) e un attack/release DEDICATI (macro qui sotto:
-//  NON toccano gSettings, quindi gli altri stati restano come li hai tarati).
-//  Manopole: MUSIC_LVL_DIV (guadagno; ALZA=piu' tenue), MUSIC_ATTACK (salita sul
-//  beat), MUSIC_RELEASE ("sustain": discesa dopo il beat), MUSIC_BASE_MULT/FLOOR
-//  (soglia sopra il silenzio). s_musMad/s_musBase esposti in /api/live.
-#define MUSIC_BASE_MULT 1.10f   // soglia = baseline*questo + FLOOR
-#define MUSIC_FLOOR     80.0f   // margine minimo sopra il silenzio
-#define MUSIC_LVL_DIV   10.0f   // scala (mad - soglia) -> 0..255
-#define MUSIC_ATTACK    1.00f   // salita ISTANTANEA sul colpo (niente inerzia in salita)
-#define MUSIC_RELEASE   0.45f   // discesa ("sustain"): quanto svelto si spegne dopo
+// --- Pegel des Rings WÄHREND der Musik --------------------------------------
+//  Dieselbe Rechnung wie beim Reagieren bei Ruhe (micLevelFromChunk): Hochpass,
+//  ein UNGLEICH nachgeführter Grundpegel (er fällt schnell und hängt sich damit
+//  an die STILLE, steigt aber sehr langsam, damit die Schläge ihn NICHT
+//  mitziehen) und eine Hüllkurve. So bleibt die Grundlinie auf dem leisesten
+//  gehaltenen Pegel, und die MUSIK ragt darüber hinaus. Der Ring folgt dem Stück
+//  und wirkt lebendig. Gegenüber dem Verhalten bei Ruhe unterscheiden sich nur
+//  die geringere VERSTÄRKUNG (der nahe Lautsprecher übersteuert sonst) und
+//  EIGENE Werte für Anstieg und Abklingen. Die Makros unten rühren gSettings
+//  NICHT an, die übrigen Zustände bleiben also so abgestimmt, wie sie waren.
+//  Die Stellschrauben: MUSIC_LVL_DIV (Verstärkung; höher heisst zurückhaltender),
+//  MUSIC_ATTACK (Anstieg beim Schlag), MUSIC_RELEASE (das Abklingen danach),
+//  MUSIC_BASE_MULT und MUSIC_FLOOR (Schwelle über der Stille). s_musMad und
+//  s_musBase erscheinen in /api/live.
+#define MUSIC_BASE_MULT 1.10f   // Schwelle = Grundlinie mal diesem Wert plus FLOOR
+#define MUSIC_FLOOR     80.0f   // kleinster Abstand über der Stille
+#define MUSIC_LVL_DIV   10.0f   // rechnet (mad minus Schwelle) auf 0..255 um
+#define MUSIC_ATTACK    1.00f   // SOFORTIGER Anstieg beim Schlag, ohne Trägheit
+#define MUSIC_RELEASE   0.45f   // Abklingen: wie schnell es danach ausgeht
 
-// Ring DURANTE la musica: 1 = REATTIVO al mic (default), 0 = "breathing" time-based.
-// NB: il mic bloccante NON era la causa della choppiness (Kiss Kiss e
-// Virgin sono MP3 identici 128k/48k ma solo la prima suona -> e' il SERVER/rete, non
-// il feed). Quindi il reattivo si tiene. Il breathing resta come opzione.
+// Ring WÄHREND der Musik: 1 = reagiert auf das Mikrofon (Werkseinstellung),
+// 0 = ein zeitgesteuertes Atmen.
+// Zu beachten: das blockierende Lesen des Mikrofons war NICHT die Ursache des
+// stockenden Tons. Kiss Kiss und Virgin sind beides MP3 mit 128 kbit/s und
+// 48 kHz, aber nur der erste läuft sauber, es liegt also am Server oder am Netz
+// und nicht an der Zuführung. Das Reagieren bleibt deshalb, das Atmen ist
+// weiterhin als Möglichkeit vorhanden.
 #define MUSIC_RING_REACTIVE 1
 
-// Definito in main.cpp: spegne/accende l'ampli PAM8302A. Qui serve per rispegnerlo
-// a volume 0 (muto) MENTRE la radio suona (altrimenti resta il fruscio Class-D).
+// In main.cpp definiert: schaltet den Verstärker PAM8302A ein und aus. Hier wird
+// es gebraucht, um ihn bei Lautstärke 0 abzuschalten, WÄHREND das Radio läuft,
+// sonst bliebe das Rauschen der Endstufe.
 void ampEnable(bool on);
 
 static volatile float s_musMad = 0, s_musBase = 0;
@@ -53,7 +63,8 @@ float musicLastBase() { return s_musBase; }
 #if MUSIC_RING_REACTIVE
 static uint8_t musicLevel(const int16_t *s, size_t n) {
   if (!n) return 0;
-  // MAD col passa-alto leggero (toglie DC/rumble), come micLevelFromChunk.
+  // MAD mit leichtem Hochpass (nimmt Gleichanteil und Brummen), wie in
+  // micLevelFromChunk.
   static double hpX = 0, hpY = 0;
   const double hpR = 0.95;
   float acc = 0;
@@ -66,8 +77,8 @@ static uint8_t musicLevel(const int16_t *s, size_t n) {
   float mad = acc / (float)n;
   s_musMad = mad;
 
-  // Noise floor auto-calibrante ASIMMETRICO: scende in fretta (aggancia il
-  // silenzio/quiet), sale lentissimo (i beat non lo tirano su).
+  // UNGLEICH nachgeführter Grundpegel: fällt schnell und hängt sich an die
+  // Stille, steigt sehr langsam, damit die Schläge ihn nicht hochziehen.
   static float nf = -1.0f;
   if (nf < 0.0f) nf = mad;
   float k = (mad < nf) ? 0.05f : 0.0005f;
@@ -78,7 +89,8 @@ static uint8_t musicLevel(const int16_t *s, size_t n) {
   float target = (mad - thresh) / MUSIC_LVL_DIV;
   if (target < 0) target = 0; else if (target > 255) target = 255;
 
-  // Envelope DEDICATO alla musica (macro sopra, non gSettings dell'idle).
+  // EIGENE Hüllkurve für die Musik (die Makros oben, nicht die Werte aus
+  // gSettings für den Ruhezustand).
   static float env = 0;
   float ek = (target > env) ? MUSIC_ATTACK : MUSIC_RELEASE;
   env += (target - env) * ek;
@@ -90,9 +102,10 @@ static uint8_t musicLevel(const int16_t *s, size_t n) {
 
 static inline bool has(const String &t, const char *w) { return t.indexOf(w) >= 0; }
 
-// true se 'key' compare in 't' come PAROLA INTERA (non incollata ad altre lettere
-// o cifre): cosi' "rock" NON scatta dentro "rockettaro" ne' "pop" dentro
-// "popolare" -> i casi ambigui cadono a Claude. t e key gia' minuscoli.
+// true, wenn 'key' in 't' als GANZES WORT vorkommt und nicht an andere Buchstaben
+// oder Ziffern geklebt: so löst "rock" nicht innerhalb von "Rocksaum" aus und
+// "pop" nicht in "populär". Zweifelsfälle übernimmt dann Claude. 't' und 'key'
+// sind bereits klein geschrieben.
 static inline bool isWordCh(char c) {
   return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
 }
@@ -105,13 +118,14 @@ static bool containsWord(const String &t, const String &key) {
     if (i < 0) return false;
     char before = (i > 0) ? t[i - 1] : ' ';
     char after  = (i + kl < (int)t.length()) ? t[i + kl] : ' ';
-    if (!isWordCh(before) && !isWordCh(after)) return true;   // bordi "puliti"
-    from = i + 1;                                             // era dentro una parola: cerca oltre
+    if (!isWordCh(before) && !isWordCh(after)) return true;   // saubere Wortgrenzen
+    from = i + 1;                                             // steckte in einem Wort: weitersuchen
   }
 }
 
-// Estrae da una riga "chiave | nome | url" i tre campi (con trim; chiave in
-// minuscolo). Ritorna false se la riga e' malformata (manca un campo).
+// Zerlegt eine Zeile "Schlüssel | Name | URL" in ihre drei Felder (mit
+// Leerzeichen abgeschnitten, der Schlüssel klein geschrieben). Liefert false,
+// wenn die Zeile unbrauchbar ist, weil ein Feld fehlt.
 static bool parseStationLine(const String &line, String &key, String &nome, String &url) {
   int p1 = line.indexOf('|'); if (p1 < 0) return false;
   int p2 = line.indexOf('|', p1 + 1); if (p2 < 0) return false;
@@ -121,23 +135,25 @@ static bool parseStationLine(const String &line, String &key, String &nome, Stri
   return key.length() && url.length();
 }
 
-// Storage per la stazione trovata: MusicStation punta a queste String, valide
-// finche' non si richiama musicMatch (single-thread: solo runInteraction lo usa).
+// Ablage für den gefundenen Sender: MusicStation zeigt auf diese Zeichenketten,
+// die bis zum nächsten Aufruf von musicMatch gültig bleiben. Es gibt nur einen
+// Aufrufer, runInteraction, also kommt sich nichts in die Quere.
 static String s_mUrl, s_mNome;
 static MusicStation s_mHit;
 
 const MusicStation *musicMatch(const String &t) {
-  // Serve un'INTENZIONE musicale, altrimenti "mi piace il rock" farebbe partire
-  // la radio. "strong" = parola inequivocabilmente musicale; "verb" = verbo di
-  // riproduzione (accettato solo se accompagnato da un genere).
-  bool strong = has(t, "musica") || has(t, "radio") || has(t, "canzon");
-  bool verb   = has(t, "metti") || has(t, "suona") || has(t, "riproduci") ||
-                has(t, "fai partire") || has(t, "play") || has(t, "ascolt") ||
-                has(t, "voglio");
+  // Es braucht eine erkennbare ABSICHT, sonst würde "ich mag Rock" das Radio
+  // starten. "strong" ist ein Wort, das eindeutig auf Musik zielt; "verb" ist ein
+  // Wort fürs Abspielen, das nur zusammen mit einem Genre zählt.
+  bool strong = has(t, "musik") || has(t, "radio") || has(t, "lied") ||
+                has(t, "song");
+  bool verb   = has(t, "spiel") || has(t, "leg auf") || has(t, "mach an") ||
+                has(t, "play") || has(t, "hör") || has(t, "will");
   if (!strong && !verb) return nullptr;
 
-  // Scorre la lista editabile (gSettings.musicStations, una stazione per riga).
-  // L'ordine conta: le chiavi piu' specifiche prima (le mette l'utente/il default).
+  // Geht die bearbeitbare Liste durch (gSettings.musicStations, ein Sender je
+  // Zeile). Die Reihenfolge zählt: die genaueren Schlüssel zuerst, so legt es der
+  // Nutzer oder die Werkseinstellung fest.
   const String &list = gSettings.musicStations;
   String key, nome, url, firstNome, firstUrl;
   bool haveFirst = false;
@@ -149,28 +165,31 @@ const MusicStation *musicMatch(const String &t) {
     start = nl + 1;
     if (line.length() == 0 || !parseStationLine(line, key, nome, url)) continue;
     if (!haveFirst) { firstNome = nome; firstUrl = url; haveFirst = true; }
-    if (containsWord(t, key)) {                 // genere riconosciuto (parola intera)
+    if (containsWord(t, key)) {                 // Genre erkannt (als ganzes Wort)
       s_mUrl = url; s_mNome = nome;
       s_mHit.url = s_mUrl.c_str(); s_mHit.nome = s_mNome.c_str();
       return &s_mHit;
     }
   }
 
-  // Intenzione musicale esplicita ma nessun genere ("metti musica") -> per ora la
-  // PRIMA stazione della lista. In FASE 2b qui subentrera' il tool di Claude.
+  // Ausgesprochene Musikabsicht ohne Genre ("spiel Musik") führt auf den ERSTEN
+  // Sender der Liste. Kommt kein Treffer zustande, übernimmt das Werkzeug von
+  // Claude.
   if (strong && haveFirst) {
     s_mUrl = firstUrl; s_mNome = firstNome;
     s_mHit.url = s_mUrl.c_str(); s_mHit.nome = s_mNome.c_str();
     return &s_mHit;
   }
-  return nullptr;   // solo un verbo, senza musica ne' genere: non e' un comando
+  return nullptr;   // nur ein Verb, ohne Musik und ohne Genre: kein Befehl
 }
 
-// --- Catalogo interno VERIFICATO (fallback di Claude, fase 2b) ---------------
-//  Quando la frase non combacia con la lista del pannello ma e' comunque una
-//  richiesta di musica, Claude sceglie un GENERE tra questi (vedi tool in
-//  llm.cpp) e qui lo mappiamo alla stazione. URL tutte provate 200/audio-mpeg
-//  (niente URL "inventati" da Claude: sceglie solo un genere, l'URL e' nostro).
+// --- GEPRÜFTER interner Katalog (Rückfallweg für Claude) --------------------
+//  Passt der Satz nicht zur Liste aus dem Panel, ist aber dennoch ein
+//  Musikwunsch, wählt Claude ein GENRE aus diesem Katalog (siehe das Werkzeug in
+//  llm.cpp), und hier wird es einem Sender zugeordnet. Alle Adressen sind
+//  geprüft und liefern 200 mit audio/mpeg. Claude erfindet keine Adressen, es
+//  wählt nur ein Genre, die Adresse stammt von uns.
+//  OFFEN: Schlüssel und Namen sind noch italienisch, siehe den Hinweis oben.
 #define U_181     "http://listen.181fm.com/"
 #define U_EAGLE   U_181 "181-eagle_128k.mp3"
 #define U_BUZZ    U_181 "181-buzz_128k.mp3"
@@ -192,9 +211,9 @@ const MusicStation *musicMatch(const String &t) {
 #define U_INDIE   "http://ice1.somafm.com/indiepop-128-mp3"
 #define U_AMBIENT "http://ice1.somafm.com/dronezone-128-mp3"
 
-// La CHIAVE e' cercata "contenuta" nel genere che ritorna Claude (robusto a
-// varianti). Le voci PIU' specifiche/ambigue prima (es. "jazz" prima di
-// "classic"; "alternativ"/"metal" prima di "rock").
+// Der SCHLÜSSEL wird als Teil des Genres gesucht, das Claude zurückgibt; das
+// verträgt Abwandlungen. Die genaueren und mehrdeutigen Einträge stehen zuerst,
+// etwa "jazz" vor "classic" und "alternativ" sowie "metal" vor "rock".
 struct CatVoce { const char *key; MusicStation st; };
 static const CatVoce CATALOG[] = {
   {"alternativ", {U_BUZZ,    "rock alternativo"}},
@@ -228,35 +247,38 @@ const MusicStation *musicFromGenre(const String &genere) {
   String g = genere; g.toLowerCase();
   for (const CatVoce &v : CATALOG)
     if (g.indexOf(v.key) >= 0) return &v.st;
-  return nullptr;   // genere non in catalogo
+  return nullptr;   // Genre steht nicht im Katalog
 }
 
-// Elenco dei generi del catalogo, per la descrizione del tool di Claude (llm.cpp).
+// Liste der Genres des Katalogs, für die Beschreibung des Werkzeugs von Claude
+// (llm.cpp).
 String musicCatalogList() {
   return F("rock, rock alternativo, metal, pop, anni 70, anni 80, anni 90, country, "
            "jazz, lounge, dance, reggae, salsa, classica, blues, hip hop, indie, "
            "ambient, oldies");
 }
 
-// Stop chiesto dal pannello web + stato "sta suonando" (letti dentro musicPlay).
+// Aus dem Web-Panel angeforderter Halt und der Zustand "läuft gerade" (beides
+// wird in musicPlay gelesen).
 static volatile bool s_stopWeb = false;
 static volatile bool s_playing = false;
-static volatile int  s_seekWeb = 0;      // cambio stazione chiesto dal pannello web
-static volatile bool s_startWeb = false;  // avvio chiesto dal pannello web
+static volatile int  s_seekWeb = 0;      // aus dem Web-Panel angeforderter Senderwechsel
+static volatile bool s_startWeb = false;  // aus dem Web-Panel angeforderter Start
 void musicRequestStop() { s_stopWeb = true; }
 void musicRequestStart() { s_startWeb = true; }
 bool musicTakeStartRequest() { bool r = s_startWeb; s_startWeb = false; return r; }
 void musicRequestSeek(int delta) { if (delta) s_seekWeb = (delta > 0) ? 1 : -1; }
 bool musicIsPlaying()   { return s_playing; }
 
-// --- Metadata ICY (nome emittente + titolo brano dallo stream) ---------------
-static String s_station;      // icy-name (nome emittente)
-static String s_nowPlaying;   // StreamTitle corrente ("Artista - Titolo")
+// --- ICY-Metadaten (Sendername und Titel aus dem Strom) ---------------------
+static String s_station;      // icy-name (Name des Senders)
+static String s_nowPlaying;   // aktueller StreamTitle ("Interpret - Titel")
 String musicStation()    { return s_station; }
 String musicNowPlaying() { return s_nowPlaying; }
 
-// Estrae StreamTitle='...' dal blocco metadata; se cambiato aggiorna e lo mostra
-// sul TFT (teleprompter). 'meta' e' la stringa del blocco (terminata a 0).
+// Liest StreamTitle='...' aus dem Metadatenblock; hat er sich geändert, wird er
+// übernommen und auf dem TFT angezeigt. 'meta' ist der Block als
+// nullterminierte Zeichenkette.
 static void parseStreamTitle(const char *meta) {
   const char *p = strstr(meta, "StreamTitle='");
   if (!p) return;
@@ -267,9 +289,9 @@ static void parseStreamTitle(const char *meta) {
   for (const char *q = p; q < e; q++) full += *q;
   full.trim();
   if (full.length() == 0 || full == s_nowPlaying) return;
-  s_nowPlaying = full;   // completo "Artista - Titolo" (per il pannello /api/live)
+  s_nowPlaying = full;   // vollständig "Interpret - Titel" (für /api/live im Panel)
 
-  // Split "Artista - Titolo" per la schermata IN ONDA (righe separate).
+  // "Interpret - Titel" für die Anzeige AUF SENDUNG auf zwei Zeilen aufteilen.
   String artist = "", title = full;
   int sep = full.indexOf(" - ");
   if (sep >= 0) {
@@ -277,18 +299,19 @@ static void parseStreamTitle(const char *meta) {
     title  = full.substring(sep + 3);  title.trim();
   }
   gobboNowPlaying(s_station.c_str(), title.c_str(), artist.c_str());
-  Serial.printf("[music] in onda: %s\n", full.c_str());
-  netlogPrintln((String("[music] in onda: ") + full).c_str());
+  Serial.printf("[music] auf Sendung: %s\n", full.c_str());
+  netlogPrintln((String("[music] auf Sendung: ") + full).c_str());
 }
 
-// Legge un blocco metadata ICY: 1 byte lunghezza (in unita' da 16) + il testo.
-// Va SEMPRE consumato per intero per non sfasare l'audio; ne teniamo solo i primi
-// ~500 char (StreamTitle e' corto). La gran parte dei blocchi ha lunghezza 0.
+// Liest einen ICY-Metadatenblock: ein Byte Länge (in Einheiten zu 16) und dann
+// der Text. Er muss IMMER vollständig gelesen werden, sonst gerät der Ton aus dem
+// Tritt. Behalten werden nur die ersten rund 500 Zeichen, denn StreamTitle ist
+// kurz. Die meisten Blöcke haben die Länge 0.
 static void readIcyMetadata(WiFiClient *stream) {
   uint8_t lenByte = 0;
   if (stream->readBytes(&lenByte, 1) != 1) return;
   int metaLen = (int)lenByte * 16;
-  if (metaLen == 0) return;                        // nessun aggiornamento (caso normale)
+  if (metaLen == 0) return;                        // keine Änderung (der Normalfall)
   static char meta[512];
   int got = 0, remaining = metaLen;
   uint8_t tmp[64];
@@ -304,13 +327,14 @@ static void readIcyMetadata(WiFiClient *stream) {
 }
 
 int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*seekRequested)()) {
-  int seekOut = 0;                 // != 0 = uscita per SEEK (delta stazioni); 0 = stop/fine
-  s_stopWeb = false;               // ignora richieste di stop "vecchie"
-  s_seekWeb = 0;                   // idem per il cambio stazione dal pannello
-  // Sorgente HTTP o HTTPS: molte radio italiane (RTL/R101/Deejay/Rai...) sono su
-  // https. WiFiClientSecure deriva da WiFiClient -> uso un riferimento polimorfico
-  // e TLS "insecure" (senza validare il cert, come STT/Claude/TTS). Le http (es.
-  // 181.fm, unitedradio) restano sul client normale.
+  int seekOut = 0;                 // != 0 = Ausstieg zum WECHSELN des Senders; 0 = Halt oder Ende
+  s_stopWeb = false;               // alte Halt-Anforderungen übergehen
+  s_seekWeb = 0;                   // dasselbe für den Senderwechsel aus dem Panel
+  // Quelle über HTTP oder HTTPS: viele Sender liegen auf https.
+  // WiFiClientSecure leitet sich von WiFiClient ab, deshalb genügt eine Referenz
+  // auf die Basisklasse, und TLS läuft ohne Zertifikatsprüfung, wie bei
+  // Spracherkennung, Claude und Sprachausgabe. Die reinen http-Adressen, etwa
+  // 181.fm, bleiben beim gewöhnlichen Client.
   bool isHttps = String(url).startsWith("https");
   WiFiClient       clientPlain;
   WiFiClientSecure clientTls;
@@ -319,37 +343,40 @@ int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*se
   HTTPClient http;
   http.setTimeout(15000);
   if (!http.begin(client, url)) {
-    Serial.printf("[music] begin fallito: %s\n", url);
-    netlogPrintln((String("[music] BEGIN fallito: ") + url).c_str());
+    Serial.printf("[music] Verbindungsaufbau fehlgeschlagen: %s\n", url);
+    netlogPrintln((String("[music] Verbindungsaufbau fehlgeschlagen: ") + url).c_str());
     return 0;
   }
-  // Chiedo i metadati ICY inline (nome emittente + titolo brano). Il server li
-  // interleava ogni "icy-metaint" byte: li separiamo dall'audio nel loop.
+  // Die ICY-Metadaten werden mit angefordert (Sendername und Titel). Der Server
+  // schiebt sie alle "icy-metaint" Byte in den Strom, im Loop trennen wir sie
+  // wieder vom Ton.
   static const char *ICY_HDRS[] = { "icy-metaint", "icy-name", "Content-Type", "icy-br" };
   http.collectHeaders(ICY_HDRS, 4);
   http.addHeader("Icy-MetaData", "1");
   int code = http.GET();
   if (code != 200) {
-    // Diagnostica via Telnet: codice HTTP (o errore negativo di HTTPClient) + tipo.
-    // Cosi' si vede PERCHE' una radio non parte (redirect, 403, TLS...).
-    Serial.printf("[music] HTTP %d su %s\n", code, url);
+    // Meldung über Telnet: HTTP-Code (oder ein negativer Fehler des HTTPClient)
+    // und der Inhaltstyp. So sieht man, WARUM ein Sender nicht startet, etwa
+    // wegen Umleitung, 403 oder TLS.
+    Serial.printf("[music] HTTP %d bei %s\n", code, url);
     netlogPrintln((String("[music] FAIL HTTP=") + code + " ct=" +
                    http.header("Content-Type") + " url=" + url).c_str());
     http.end();
     return 0;
   }
-  int metaint = http.header("icy-metaint").toInt();   // 0 se lo stream non li manda
+  int metaint = http.header("icy-metaint").toInt();   // 0, wenn der Strom keine schickt
   s_station    = http.header("icy-name");
   s_nowPlaying = "";
-  gobboNowPlaying(s_station.c_str(), "", "");   // emittente subito; titolo/artista col metadata
+  gobboNowPlaying(s_station.c_str(), "", "");   // Sender sofort; Titel und Interpret mit den Metadaten
   WiFiClient *stream = http.getStreamPtr();
   player.setVolume(volumeVsValue());
   s_playing = true;
-  // Log Telnet RICCO (per debug da remoto): nome emittente + bitrate + tipo +
-  // metaint + url. Il nome emittente (icy-name) c'e' SEMPRE dall'header, anche quando
-  // lo stream non manda StreamTitle (prima in Telnet il nome spesso mancava).
+  // AUSFÜHRLICHE Zeile über Telnet, für die Fehlersuche aus der Ferne:
+  // Sendername, Bitrate, Inhaltstyp, metaint und Adresse. Der Sendername
+  // (icy-name) steht IMMER in der Kopfzeile, auch wenn der Strom keinen
+  // StreamTitle mitschickt. Früher fehlte der Name über Telnet oft.
   String br = http.header("icy-br");
-  String det = String("[music] play: ") + (s_station.length() ? s_station : String("(senza nome)")) +
+  String det = String("[music] spielt: ") + (s_station.length() ? s_station : String("(ohne Namen)")) +
                (br.length() ? String(" [") + br + "k]" : String("")) +
                " ct=" + http.header("Content-Type") +
                (isHttps ? " https" : " http") +
@@ -360,44 +387,49 @@ int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*se
   uint8_t buf[512];
   uint32_t idle = millis();
   uint32_t lastLvl = 0;
-  bool ampOn = !volumeIsMuted();   // stato ampli: segue il muto (transizioni sotto)
-  int bytesToMeta = metaint;   // byte audio fino al prossimo blocco metadata (0 = no demux)
+  bool ampOn = !volumeIsMuted();   // Zustand des Verstärkers: folgt der Stummschaltung
+  int bytesToMeta = metaint;   // Tonbytes bis zum nächsten Metadatenblock (0 = keine Trennung)
   while (http.connected() || (stream && stream->available())) {
-    if (stopRequested && stopRequested()) break;   // click encoder = stop
-    if (s_stopWeb) break;                           // pulsante Stop del pannello
-    if (s_seekWeb) { seekOut = s_seekWeb; s_seekWeb = 0; break; }  // pulsanti del pannello
-    if (seekRequested) {                            // premuto+giro = cambia stazione
+    if (stopRequested && stopRequested()) break;   // Klick auf den Drehgeber hält an
+    if (s_stopWeb) break;                           // Halt-Schaltfläche im Panel
+    if (s_seekWeb) { seekOut = s_seekWeb; s_seekWeb = 0; break; }  // Schaltflächen im Panel
+    if (seekRequested) {                            // gedrückt und gedreht wechselt den Sender
       int sd = seekRequested();
       if (sd != 0) { seekOut = sd; break; }
     }
-    ArduinoOTA.handle();                            // OTA vivo anche mentre suona
+    ArduinoOTA.handle();                            // Funkweg bleibt auch während der Musik offen
     netlogHandle();
-    webuiHandle();                                  // pannello web raggiungibile mentre suona
-    volumeApplyPending(player);                     // volume al volo (premuto+giro)
+    webuiHandle();                                  // das Panel bleibt während der Musik erreichbar
+    volumeApplyPending(player);                     // Lautstärke im Betrieb nachführen
 
-    // Ampli segue il MUTO in tempo reale: a volume 0 lo spengo (via il fruscio
-    // Class-D), lo riaccendo appena rialzi. Solo sulle TRANSIZIONI (ampEnable ha un
-    // delay(20) in accensione: chiamarlo ogni giro affamerebbe il feed).
+    // Der Verstärker folgt der Stummschaltung unmittelbar: bei Lautstärke 0 wird
+    // er abgeschaltet, damit das Rauschen der Endstufe verschwindet, und beim
+    // Aufdrehen wieder eingeschaltet. Nur bei einem WECHSEL, denn ampEnable
+    // wartet beim Einschalten 20 ms, und ein Aufruf in jedem Durchgang würde die
+    // Tonzuführung aushungern.
     bool wantAmp = !volumeIsMuted();
     if (wantAmp != ampOn) { ampEnable(wantAmp); ampOn = wantAmp; }
 
-    // Ring durante la MUSICA. Aggiornato ogni ~30ms. Il flag "abilita effetto
-    // reattivo" del pannello (gSettings.idleReactive) accende/spegne il ring anche
-    // qui: se OFF, LED spenti (e si salta pure la lettura mic). Come a muto.
+    // Der Ring während der MUSIK, alle etwa 30 ms aufgefrischt. Der Schalter für
+    // das Reagieren auf Geräusche im Panel (gSettings.idleReactive) schaltet den
+    // Ring auch hier ein und aus: steht er auf aus, bleiben die LED dunkel und
+    // das Mikrofon wird gar nicht erst gelesen. Genau wie bei stumm.
     if (millis() - lastLvl >= 30) {
       lastLvl = millis();
       if (volumeIsMuted() || !gSettings.idleReactive) {
-        uiSetLevel(0);                              // muto o effetto reattivo OFF: ring spento
+        uiSetLevel(0);                              // stumm oder Reagieren aus: Ring dunkel
       } else {
 #if MUSIC_RING_REACTIVE
-        // REATTIVO al mic (⚠️ bloccante -> puo' affamare il feed = audio a scatti).
+        // Reagiert auf das Mikrofon. Achtung, das Lesen blockiert und kann die
+        // Tonzuführung aushungern, dann stockt der Ton.
         static int16_t mbuf[160];
-        micFlush();                                 // livello fresco (no lag sull'audio)
+        micFlush();                                 // frischer Pegel, ohne Nachlauf zum Ton
         size_t g = micReadChunk(mbuf, 160);
         if (g) uiSetLevel(musicLevel(mbuf, g));
 #else
-        // BREATHING time-based: niente lettura mic -> il feed del VS1053 non viene
-        // MAI affamato (audio liscio). Onda lenta ~2.6s (uso musicLevel() ampiezza).
+        // Zeitgesteuertes Atmen: das Mikrofon wird nicht gelesen, die Zuführung
+        // zum VS1053 hungert also NIE, und der Ton bleibt glatt. Eine langsame
+        // Welle von etwa 2,6 Sekunden.
         float ph = (float)(millis() % 2600) / 2600.0f;
         uiSetLevel((uint8_t)(35.0f + 120.0f * (0.5f - 0.5f * cosf(ph * 6.2831853f))));
 #endif
@@ -407,38 +439,39 @@ int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*se
     int avail = stream->available();
     if (avail > 0) {
       int toRead = avail > (int)sizeof(buf) ? (int)sizeof(buf) : avail;
-      // Non superare il confine del prossimo blocco metadata: cosi' i byte audio
-      // e quelli di metadata non si mescolano.
+      // Die Grenze zum nächsten Metadatenblock nicht überschreiten, sonst
+      // vermischen sich Ton- und Metadatenbytes.
       if (metaint > 0 && toRead > bytesToMeta) toRead = bytesToMeta;
       int c = stream->readBytes(buf, toRead);
       if (c > 0) {
-        player.playChunk(buf, c); idle = millis();   // audio -> VS1053
+        player.playChunk(buf, c); idle = millis();   // Ton an den VS1053
         if (metaint > 0) {
           bytesToMeta -= c;
           if (bytesToMeta <= 0) { readIcyMetadata(stream); bytesToMeta = metaint; }
         }
       }
     } else {
-      if (millis() - idle > 8000) break;            // stream morto/timeout
+      if (millis() - idle > 8000) break;            // Strom abgerissen oder Zeit abgelaufen
       delay(2);
     }
   }
   http.end();
   s_playing = false;
   s_nowPlaying = ""; s_station = "";
-  uiSetLevel(0);   // spegni il ring: fine musica
+  uiSetLevel(0);   // Ring aus: die Musik ist zu Ende
 
-  // coda di silenzio per svuotare il decoder (come la TTS)
+  // Stille zum Ausklingen, damit der Decoder leerläuft (wie bei der Sprachausgabe)
   memset(buf, 0, sizeof(buf));
   for (int i = 0; i < 4; i++) player.playChunk(buf, sizeof(buf));
-  Serial.println("[music] stop");
-  netlogPrintln("[music] stop");
+  Serial.println("[music] angehalten");
+  netlogPrintln("[music] angehalten");
   return seekOut;
 }
 
-// --- Navigazione della lista stazioni del pannello (seek premuto+giro) --------
-//  Scorrono gSettings.musicStations (le stazioni editabili dal pannello web),
-//  riusando parseStationLine. Lista piccola: parsing on-demand ad ogni chiamata.
+// --- Bewegen in der Senderliste des Panels (gedrückt und gedreht) -----------
+//  Gehen gSettings.musicStations durch (die im Web-Panel bearbeitbaren Sender)
+//  und benutzen dafür parseStationLine erneut. Die Liste ist klein, sie wird bei
+//  jedem Aufruf frisch zerlegt.
 int musicStationCount() {
   const String &list = gSettings.musicStations;
   String key, nome, url;
