@@ -1,12 +1,12 @@
 // ============================================================================
-//  ALEXO - Assistente vocale (firmware principale)
+//  ALEXO - Sprachassistent (Haupt-Firmware)
 //
-//  Flusso: tieni premuto -> ASCOLTO (registra) -> PENSO (Whisper + Claude)
-//          -> PARLO (ElevenLabs -> VS1053) -> riposo.
+//  Der Ablauf: Weckwort oder Klick -> ZUHÖREN (aufnehmen) -> DENKEN (Whisper
+//  und Claude) -> SPRECHEN (ElevenLabs über den VS1053) -> zurück zur Ruhe.
 //
-//  Due core: il loop (core 1) fa la pipeline; le animazioni del ring girano
-//  su un task dedicato (core 0, vedi ui.cpp), cosi' restano fluide anche
-//  mentre il core 1 e' bloccato sulle chiamate di rete.
+//  Zwei Kerne: der Loop auf Kern 1 führt diese Kette aus; die Animationen des
+//  Rings laufen in einer eigenen Aufgabe auf Kern 0 (siehe ui.cpp) und bleiben
+//  dadurch flüssig, auch während Kern 1 auf das Netz wartet.
 // ============================================================================
 
 #include <Arduino.h>
@@ -36,32 +36,36 @@
 #include "webui.h"
 #include "music.h"
 
-// --- Voce alternativa -------------------------------------------------------
-// Se la tua frase INIZIA con la parola-trigger, Alexo risponde con la voce
-// alternativa invece di quella di default (vedi tts.cpp). Ora sono RUNTIME:
-// gSettings.voiceIdAlt / gSettings.voiceTrigger (modificabili dal pannello web);
-// i default di fabbrica stanno in config.h (ELEVEN_VOICE_ALT_DEF/VOICE_TRIGGER_DEF).
+// --- Zweite Stimme ----------------------------------------------------------
+// BEGINNT der Satz mit dem Auslösewort, antwortet Alexo mit der zweiten Stimme
+// statt mit der voreingestellten (siehe tts.cpp). Beides ist zur Laufzeit
+// änderbar: gSettings.voiceIdAlt und gSettings.voiceTrigger über das Web-Panel;
+// die Werkseinstellungen stehen in config.h unter ELEVEN_VOICE_ALT_DEF und
+// VOICE_TRIGGER_DEF.
 
-// --- Periferiche ------------------------------------------------------------
-//  Il TFT sta su un bus SPI DEDICATO (HSPI), separato dal VS1053 (bus globale
-//  SPI = FSPI): cosi' lo scroll della chat (core 0) non litiga col feed audio
-//  (core 1). MISO non serve al display (sola scrittura) -> -1.
+// --- Angeschlossene Bauteile ------------------------------------------------
+//  Das TFT hängt an einem EIGENEN SPI-Bus (HSPI), getrennt vom VS1053, der am
+//  globalen SPI-Bus (FSPI) sitzt. So streitet der Bildlauf des Chats auf Kern 0
+//  nicht mit der Tonzuführung auf Kern 1. MISO braucht das Display nicht, es
+//  wird nur beschrieben, deshalb -1.
 SPIClass tftSPI(HSPI);
 Adafruit_ST7735 display(&tftSPI, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN);
 Adafruit_NeoPixel ring(LED_RING_COUNT, LED_RING_PIN, NEO_GRB + NEO_KHZ800);
 
-// Sottoclasse diagnostica: nella libreria `read_register` e' protected. La
-// esponiamo per leggere i registri SCI del VS1053 e mostrarli sul display
-// (cosi' si diagnostica senza la seriale). VS1053Diag E' un VS1053 a tutti gli
-// effetti -> nessun'altra parte del codice cambia.
+// Unterklasse zur Fehlersuche: in der Bibliothek ist `read_register` geschützt.
+// Wir machen es zugänglich, um die SCI-Register des VS1053 zu lesen und auf dem
+// Display zu zeigen, sodass sich auch ohne serielle Verbindung nachsehen lässt.
+// VS1053Diag IST in jeder Hinsicht ein VS1053, am übrigen Code ändert sich also
+// nichts.
 class VS1053Diag : public VS1053 {
 public:
   VS1053Diag(uint8_t cs, uint8_t dcs, uint8_t dreq) : VS1053(cs, dcs, dreq) {}
   uint16_t readReg(uint8_t r) { return read_register(r); }
-  // Legge un registro SCI SENZA attendere DREQ (read_register fa busy-wait su
-  // DREQ e si impiccherebbe). Serve a diagnosticare quando DREQ e' basso: se il
-  // chip risponde lo stesso, e' VIVO e alimentato -> il guasto e' SOLO la linea
-  // DREQ. Se torna 0000/FFFF, il chip non risponde (alimentazione/reset).
+  // Liest ein SCI-Register OHNE auf DREQ zu warten (read_register wartet aktiv
+  // auf DREQ und bliebe hängen). Das hilft bei der Suche, wenn DREQ auf LOW
+  // liegt: antwortet der Baustein trotzdem, LEBT er und ist versorgt, dann liegt
+  // der Fehler ALLEIN an der DREQ-Leitung. Kommt 0000 oder FFFF zurück,
+  // antwortet der Baustein nicht, es geht also um Versorgung oder Reset.
   uint16_t readRegNoWait(uint8_t r) {
     control_mode_on();
     SPI.write(3); SPI.write(r);
@@ -72,10 +76,11 @@ public:
 };
 VS1053Diag player(VS1053_XCS_PIN, VS1053_XDCS_PIN, VS1053_DREQ_PIN);
 
-// Istante (millis) in cui e' finito l'ultimo AUDIO dall'altoparlante (musica O
-// voce/TTS). Subito dopo, la coda acustica della cassa rientra nel mic e puo'
-// innescare un avvio spurio (falso wake o trigger che sfugge): per
-// ~AUDIO_COOLDOWN_MS ignoriamo OGNI avvio (wake e click).
+// Zeitpunkt, an dem der letzte TON aus dem Lautsprecher endete, sei es Musik
+// oder Sprache. Unmittelbar danach kommt der Nachhall aus dem Lautsprecher
+// wieder ins Mikrofon und kann einen ungewollten Start auslösen, etwa ein
+// falsches Weckwort. Für die Dauer von AUDIO_COOLDOWN_MS wird deshalb JEDER
+// Start übergangen, auch der per Klick.
 static uint32_t g_audioEndMs = 0;
 static const uint32_t AUDIO_COOLDOWN_MS = 1500;
 
@@ -84,31 +89,34 @@ bool tftOk = false;
 bool vsOk  = false;
 bool micOk = false;
 
-// Condizione di stop della registrazione: registra finche' NON arriva un click
-// di stop dall'encoder (toggle). Domani il wake-word/silenzio prenderanno il
-// posto di questo predicato senza toccare il resto della pipeline.
+// Abbruchbedingung der Aufnahme: es wird aufgenommen, solange KEIN Klick zum
+// Beenden vom Drehgeber kommt. Weckwort und Stille können diese Bedingung später
+// ersetzen, ohne den Rest der Kette anzufassen.
 static bool recKeepGoing() { return !gobboStopRequested(); }
 
-// Cambia stato: aggiorna SIA il ring (animazioni) SIA l'header del TFT.
+// Wechselt den Zustand und frischt SOWOHL den Ring (die Animationen) ALS AUCH
+// die Kopfleiste des TFT auf.
 static inline void setState(AlexoState s) { uiSetState(s); gobboSetState(s); }
 
-// CHAT CONTINUA: mentre si aspetta la domanda successiva il ring resta in
-// "segnalazione" (ST_FOLLOWUP, respiro ambra) e NON fa il VU-meter, che vorrebbe
-// dire "ti sto gia' registrando". Appena parti davvero - stessa soglia adattiva
-// dello stop-al-silenzio, non un livello inventato qui - si passa all'ascolto
-// normale. true finche' siamo nell'attesa.
+// FORTLAUFENDER CHAT: während auf die nächste Frage gewartet wird, bleibt der
+// Ring im Hinweiszustand (ST_FOLLOWUP, bernsteinfarbenes Atmen) und zeigt KEINE
+// Aussteuerung, die ja bedeuten würde "ich nehme dich bereits auf". Sobald
+// wirklich gesprochen wird, erkannt an derselben nachgeführten Schwelle wie beim
+// Abbruch bei Stille und nicht an einem hier erfundenen Pegel, geht es ins
+// gewöhnliche Zuhören über. true, solange gewartet wird.
 static bool g_attendo = false;
 static void recLevel(uint8_t l) {
   if (g_attendo && micVoiceStarted()) { g_attendo = false; setState(ST_LISTENING); }
   uiSetLevel(l);
 }
 
-// Allucinazioni tipiche di Whisper sul silenzio/rumore (italiano): quando la
-// registrazione non contiene voce, Whisper "inventa" queste frasi. Le scartiamo
-// per non far ripartire una chat col fantasma "Grazie". La lista e' editabile dal
-// pannello web (gSettings.hallucTerms, separata da virgola). Confronto sul testo
-// ripulito (minuscolo, senza punteggiatura/spazi ai bordi), match ESATTO su una
-// delle frasi in lista (o testo vuoto).
+// Typische Halluzinationen von Whisper auf Stille und Rauschen: enthält die
+// Aufnahme keine Sprache, "erfindet" Whisper solche Sätze. Sie werden verworfen,
+// damit kein Gespräch mit einem Geistersatz beginnt. Die Liste lässt sich im
+// Web-Panel bearbeiten (gSettings.hallucTerms, durch Komma getrennt). Verglichen
+// wird der bereinigte Text, also klein geschrieben und ohne Satzzeichen und
+// Leerzeichen an den Rändern, und es muss GENAU einer der Sätze der Liste sein
+// (oder der Text ist leer).
 static bool isAllucinazione(const String &testo) {
   String s = testo; s.toLowerCase(); s.trim();
   while (s.length() && strchr(".!?,;:- ", s[s.length() - 1])) s.remove(s.length() - 1);
@@ -127,10 +135,12 @@ static bool isAllucinazione(const String &testo) {
   return false;
 }
 
-// Confronta 't' (GIA' minuscolo) con un elenco di termini separati da virgola
-// (es. "bene, ok, ciao"). contains=false -> match se t INIZIA con un termine
-// (voce alternativa); contains=true -> match se t CONTIENE un termine (easter-egg).
-// Termini vuoti ignorati; elenco vuoto -> nessun match (funzione disattivata).
+// Vergleicht 't' (BEREITS klein geschrieben) mit einer durch Komma getrennten
+// Liste von Begriffen (etwa "gut, ok, hallo"). Bei contains=false trifft es zu,
+// wenn 't' mit einem Begriff BEGINNT (so arbeitet die zweite Stimme); bei
+// contains=true, wenn 't' einen Begriff ENTHÄLT. Leere Begriffe werden
+// übergangen; eine leere Liste trifft nie zu und schaltet die Funktion damit
+// ab.
 static bool matchAnyTerm(const String &t, const String &csv, bool contains) {
   int start = 0;
   while (start <= (int)csv.length()) {
@@ -145,9 +155,10 @@ static bool matchAnyTerm(const String &t, const String &csv, bool contains) {
   return false;
 }
 
-// RISPOSTA PERSONALIZZATA: se il trigger (gSettings.replyTrigger) e' valorizzato e la
-// domanda lo CONTIENE (confronto minuscolo), torna il testo fisso (gSettings.replyText)
-// e si salta l'AI. Trigger vuoto = disattivato (risponde l'AI). Per scherzi/riprese.
+// EIGENE ANTWORT: ist der Auslöser (gSettings.replyTrigger) gesetzt und die Frage
+// ENTHÄLT ihn (klein geschrieben verglichen), kommt der feste Text
+// (gSettings.replyText) zurück und die KI wird übersprungen. Ein leerer Auslöser
+// schaltet das ab, dann antwortet die KI. Gedacht für Scherze und Aufnahmen.
 static String customReplyMatch(const String &testo) {
   String trig = gSettings.replyTrigger; trig.trim(); trig.toLowerCase();
   if (trig.isEmpty()) return "";
@@ -157,8 +168,9 @@ static String customReplyMatch(const String &testo) {
 }
 
 // --- Display ----------------------------------------------------------------
-//  Splash di stato durante il boot (prima che il gobbo prenda il controllo del
-//  TFT). Disegno diretto sul TFT: qui siamo ancora single-task (solo setup()).
+//  Startanzeige während des Hochfahrens, bevor der Teleprompter das TFT
+//  übernimmt. Gezeichnet wird direkt aufs TFT: an dieser Stelle läuft noch alles
+//  in einer einzigen Aufgabe, nämlich setup().
 void tftStatus(const char *line1, const char *line2 = nullptr) {
   if (!tftOk) return;
   display.fillScreen(ST77XX_BLACK);
@@ -178,18 +190,20 @@ static void setRingSolid(uint8_t r, uint8_t g, uint8_t b) {
   ring.show();
 }
 
-// --- Amplificatore PAM8302A (SD attivo basso: HIGH = acceso, LOW = muto) -----
-//  Acceso solo quando c'e' audio (bip + voce); muto a riposo -> niente fruscio
-//  Class-D. Lo accendiamo un attimo PRIMA dell'audio (il pop cade nel silenzio).
-//  NON static: lo chiama anche music.cpp per rispegnerlo a volume 0 mentre suona.
+// --- Verstärker PAM8302A (SD ist LOW-aktiv: HIGH = an, LOW = stumm) ---------
+//  Er läuft nur, wenn Ton kommt, also bei Signaltönen und Sprache, und bleibt
+//  bei Ruhe stumm, damit das Rauschen der Endstufe verschwindet. Eingeschaltet
+//  wird er einen Augenblick VOR dem Ton, damit das Knacken in die Stille fällt.
+//  NICHT static: music.cpp ruft ihn ebenfalls auf, um ihn bei Lautstärke 0
+//  während der Wiedergabe abzuschalten.
 void ampEnable(bool on) {
 #if AMP_SD_PIN >= 0
   digitalWrite(AMP_SD_PIN, on ? HIGH : LOW);
-  if (on) delay(20);   // breve assestamento dell'ampli prima di mandare audio
+  if (on) delay(20);   // kurz einschwingen lassen, bevor Ton kommt
 #endif
 }
 
-// --- Gestione errore (feedback + ritorno a riposo) --------------------------
+// --- Fehlerbehandlung (Rückmeldung und zurück zur Ruhe) ---------------------
 static void fail(const char *msg) {
   Serial.printf(">> %s\n", msg);
   setState(ST_ERROR);
@@ -199,20 +213,20 @@ static void fail(const char *msg) {
   setState(ST_IDLE);
 }
 
-// --- Splash futuristico all'accensione (TFT HUD + ring "carica") ------------
+// --- Startbild beim Einschalten (Anzeigetafel auf dem TFT, der Ring "lädt") -
 #if SPLASH_BOOT
 static void bootSplash() {
   if (!tftOk) return;
   const int W = TFT_WIDTH, H = TFT_HEIGHT;            // 128 x 160
   const uint16_t BLK = ST77XX_BLACK;
-  const uint16_t CY  = display.color565(0, 255, 255); // cyan acceso
-  const uint16_t CYd = display.color565(0, 70, 85);   // cyan tenue (griglia)
-  const uint16_t CYm = display.color565(0, 150, 170); // cyan medio
-  const uint16_t MAG = display.color565(255, 0, 170); // accento magenta
+  const uint16_t CY  = display.color565(0, 255, 255); // kräftiges Cyan
+  const uint16_t CYd = display.color565(0, 70, 85);   // schwaches Cyan (das Raster)
+  const uint16_t CYm = display.color565(0, 150, 170); // mittleres Cyan
+  const uint16_t MAG = display.color565(255, 0, 170); // Magenta als Akzent
 
   display.fillScreen(BLK);
 
-  // 1) Scanline che scorre dall'alto in basso lasciando una griglia tenue
+  // 1) Eine Linie wandert von oben nach unten und lässt ein schwaches Raster zurück
   for (int y = 0; y < H; y += 4) {
     display.drawFastHLine(0, y, W, CYd);
     display.drawFastHLine(0, y + 2, W, CY);
@@ -221,14 +235,14 @@ static void bootSplash() {
   }
   for (int x = 0; x <= W; x += 16) display.drawFastVLine(x, 0, H, CYd);
 
-  // 2) Parentesi angolari stile HUD
+  // 2) Eckwinkel im Stil einer Anzeigetafel
   const int b = 12;
   display.drawFastHLine(2, 2, b, CY);          display.drawFastVLine(2, 2, b, CY);
   display.drawFastHLine(W - 2 - b, 2, b, CY);  display.drawFastVLine(W - 3, 2, b, CY);
   display.drawFastHLine(2, H - 3, b, CY);      display.drawFastVLine(2, H - 3 - b, b, CY);
   display.drawFastHLine(W - 2 - b, H - 3, b, CY); display.drawFastVLine(W - 3, H - 3 - b, b, CY);
 
-  // 3) "Reattore": cerchi concentrici che si espandono + punto che gira sul ring
+  // 3) Der "Reaktor": Kreise, die sich ausdehnen, und ein Punkt, der im Ring umläuft
   const int cx = W / 2, cy = 52;
   for (int r = 3; r <= 36; r += 3) {
     display.drawCircle(cx, cy, r, (r % 6 == 0) ? CY : CYd);
@@ -242,7 +256,7 @@ static void bootSplash() {
   display.fillCircle(cx, cy, 6, CY);
   display.drawCircle(cx, cy, 10, CYm);
 
-  // 4) "ALEXO" lettera per lettera (con ombra), poi sottotitolo
+  // 4) "ALEXO" Buchstabe für Buchstabe mit Schatten, danach die Unterzeile
   display.setTextSize(3);
   const char *name = "ALEXO";
   const int chW = 18, tw = 5 * chW, tx = (W - tw) / 2, ty = 96;
@@ -256,15 +270,15 @@ static void bootSplash() {
   }
   display.setTextSize(1);
   display.setTextColor(CYm);
-  const char *sub = "ASSISTENTE VOCALE";
+  const char *sub = "SPRACHASSISTENT";
   display.setCursor((W - (int)strlen(sub) * 6) / 2, ty + 26);
   display.print(sub);
 
-  // 5) Barra di avanzamento + ring che "carica" in proporzione
+  // 5) Fortschrittsbalken, der Ring füllt sich im gleichen Verhältnis
   const int bx = 12, by = 144, bw = W - 24, bh = 7;
   display.drawRect(bx, by, bw, bh, CYm);
   display.setTextColor(ST77XX_WHITE);
-  display.setCursor(bx + 14, by - 11); display.print("AVVIO SISTEMA");
+  display.setCursor(bx + 14, by - 11); display.print("SYSTEMSTART");
   for (int p = 0; p <= bw - 4; p += 3) {
     display.fillRect(bx + 2, by + 2, p, bh - 4, CY);
     int lit = (p * LED_RING_COUNT) / (bw - 4);
@@ -274,7 +288,7 @@ static void bootSplash() {
     delay(10);
   }
 
-  // 6) "PRONTO" + pulse del ring che svanisce
+  // 6) Abschliessendes Pulsieren des Rings, das ausklingt
   display.setTextColor(MAG);
   //display.setCursor(bx + bw - 42, by - 11); display.print("PRONTO");
   display.setCursor(bx + bw - 42, by - 11); display.print("");
@@ -288,65 +302,69 @@ static void bootSplash() {
 }
 #endif
 
-// Avvia una stazione radio: mostra il nome, stato ST_MUSIC (ring reattivo), suona
-// finche' non si ferma, poi ritorno PULITO a riposo (mute ampli, flush anti
-// falso-wake, finestra di raffreddamento). Usata sia dal match locale (lista del
-// pannello) sia dal fallback di Claude (catalogo). L'ampli e' gia' acceso (viene
-// dalla fase di ascolto di runInteraction).
+// Startet einen Radiosender: zeigt den Namen an, setzt den Zustand ST_MUSIC
+// (der Ring reagiert), spielt bis zum Anhalten und kehrt danach SAUBER zur Ruhe
+// zurück, also Verstärker stumm, Mikrofonpuffer geleert gegen ein falsches
+// Weckwort und eine Abkühlzeit. Benutzt wird sie sowohl beim Treffer in der
+// Liste des Panels als auch beim Rückfallweg über den Katalog von Claude. Der
+// Verstärker läuft bereits, er kommt aus der Zuhörphase von runInteraction.
 static void playStation(const MusicStation *st) {
-  // Copio url/nome in String locali: la sorgente (s_mHit / catalogo) verrebbe
-  // riusata da musicStationGet durante il seek.
+  // URL und Name werden in eigene Zeichenketten kopiert: die Quelle (s_mHit oder
+  // der Katalog) würde beim Senderwechsel von musicStationGet überschrieben.
   String url = st->url, nome = st->nome;
-  // Indice nella lista del pannello per il seek premuto+giro; -1 se la stazione
-  // non e' in lista (es. scelta da Claude dal catalogo): il primo seek entrera'
-  // allora dagli estremi della lista.
+  // Der Platz in der Liste des Panels für den Senderwechsel; -1, wenn der Sender
+  // nicht in der Liste steht, etwa weil Claude ihn aus dem Katalog gewählt hat.
+  // Der erste Wechsel steigt dann an einem Ende der Liste ein.
   int idx = musicStationIndexOf(url.c_str());
 
-  // A volume MUTO (0) spengo l'ampli: la musica e' comunque silenziosa e cosi'
-  // sparisce il "macinio"/ronzio Class-D che il mic sentirebbe. Se non muto,
-  // l'ampli e' gia' acceso dalla fase di ascolto.
+  // Bei Lautstärke 0 wird der Verstärker abgeschaltet: die Musik ist ohnehin
+  // still, und so verschwindet das Brummen der Endstufe, das sonst ins Mikrofon
+  // käme. Ist nicht stumm geschaltet, läuft der Verstärker bereits aus der
+  // Zuhörphase.
   ampEnable(!volumeIsMuted());
   setState(ST_MUSIC);
   gobboClearStopRequest();
 
-  // Loop di stazioni: musicPlay ritorna 0 = stop/fine, oppure il delta del seek
-  // (premuto+giro) -> passo alla stazione prec./succ. della lista e riparto.
+  // Schleife über die Sender: musicPlay liefert 0 bei Halt oder Ende, sonst die
+  // Richtung des Wechsels. Dann geht es zum vorherigen oder nächsten Sender der
+  // Liste und von vorn los.
   for (;;) {
-    Serial.printf(">> MUSICA: %s (%s)\n", nome.c_str(), url.c_str());
+    Serial.printf(">> MUSIK: %s (%s)\n", nome.c_str(), url.c_str());
     gobboPrint(String("\xE2\x99\xAA ") + nome);   // "♪ <nome>"
     int seek = musicPlay(player, url.c_str(),
-                         []() { return gobboTakeTalkRequest(); },       // click = stop
-                         []() { return (int)gobboTakeMusicSeek(); });   // premuto+giro = cambia
-    if (seek == 0) break;                          // stop / fine stream
+                         []() { return gobboTakeTalkRequest(); },       // Klick hält an
+                         []() { return (int)gobboTakeMusicSeek(); });   // gedrückt und gedreht wechselt
+    if (seek == 0) break;                          // Halt oder Ende des Stroms
     int n = musicStationCount();
-    if (n <= 0) break;                             // lista vuota: esci
-    if (idx < 0) idx = (seek > 0) ? 0 : n - 1;     // fuori lista: entra dagli estremi
-    else { idx = (idx + seek) % n; if (idx < 0) idx += n; }   // ciclico avanti/indietro
+    if (n <= 0) break;                             // Liste leer: hinaus
+    if (idx < 0) idx = (seek > 0) ? 0 : n - 1;     // nicht in der Liste: an einem Ende einsteigen
+    else { idx = (idx + seek) % n; if (idx < 0) idx += n; }   // im Kreis vor und zurück
     if (!musicStationGet(idx, url, nome)) break;
   }
 
   ampEnable(false);
   for (int i = 0; i < 10; i++) { micFlush(); delay(40); }
   wakeReset();
-  gobboTakeTalkRequest();        // scarta un eventuale click/talk accumulato
-  gobboTakeMusicSeek();          // scarta seek residui (niente salto alla prossima musica)
+  gobboTakeTalkRequest();        // verwirft einen angesammelten Klick
+  gobboTakeMusicSeek();          // verwirft übrige Wechselwünsche, damit nicht gleich weitergesprungen wird
   gobboClearStopRequest();
-  g_audioEndMs = millis();       // finestra di raffreddamento (loop)
+  g_audioEndMs = millis();       // beginnt die Abkühlzeit im Loop
   setState(ST_IDLE);
 }
 
-// --- Una interazione completa (ascolto -> pensa -> parla) -------------------
-//  followUp = questa e' una domanda di seguito, dentro una chat gia' aperta: il
-//  ring segnala "tocca a te" e si aspetta solo CHAT_FOLLOWUP_MS invece
-//  dell'attesa di cortesia. Ritorna true se ha detto una risposta, cioe' se ha
-//  senso riaprire il mic per la domanda dopo.
+// --- Ein vollständiger Wortwechsel (zuhören, denken, sprechen) --------------
+//  followUp bedeutet, dass dies eine Anschlussfrage innerhalb eines bereits
+//  offenen Chats ist: der Ring zeigt "du dran", und gewartet wird nur
+//  CHAT_FOLLOWUP_MS statt der sonst üblichen Zeit. Liefert true, wenn eine
+//  Antwort gesprochen wurde, wenn es sich also lohnt, das Mikrofon für die
+//  nächste Frage erneut zu öffnen.
 static bool runInteraction(bool followUp) {
-  // 1) ASCOLTO
-  gobboClearStopRequest();   // ignora click "vecchi": si ferma solo col prossimo
+  // 1) ZUHÖREN
+  gobboClearStopRequest();   // alte Klicks übergehen: es zählt erst der nächste
   g_attendo = followUp;
-  setState(followUp ? ST_FOLLOWUP : ST_LISTENING);  // un click qui = stop registrazione
-  if (followUp) micSetNoVoiceMs(CHAT_FOLLOWUP_MS);  // nessuno parla -> chiudi, non aspettare
-  if (vsOk) ampEnable(true); // accendi l'ampli: bip e voce passano, poi si muta
+  setState(followUp ? ST_FOLLOWUP : ST_LISTENING);  // ein Klick hier beendet die Aufnahme
+  if (followUp) micSetNoVoiceMs(CHAT_FOLLOWUP_MS);  // spricht niemand, wird geschlossen statt gewartet
+  if (vsOk) ampEnable(true); // Verstärker an: Ton und Stimme kommen durch, danach stumm
   if (vsOk) soundStart(player);
 
   uint32_t t0 = millis();
@@ -357,130 +375,139 @@ static bool runInteraction(bool followUp) {
   size_t wavLen = 0;
   const uint8_t *wav = micWav(&wavLen);
   float secs = (float)n / (float)micSampleRate();
-  Serial.printf("   campioni=%u  durata=%.2fs (%lums)  picco=%d/32767  WAV=%u byte\n",
+  Serial.printf("   Abtastwerte=%u  Dauer=%.2fs (%lums)  Spitze=%d/32767  WAV=%u Byte\n",
                 (unsigned)n, secs, (unsigned long)(millis() - t0), micLastPeak(),
                 (unsigned)wavLen);
 
-  // troppo corto: probabilmente premuto per sbaglio
+  // zu kurz: vermutlich versehentlich ausgelöst
   if (n < (size_t)(micSampleRate() / 4)) {
-    if (vsOk) ampEnable(false);   // muta l'ampli prima di tornare a riposo
+    if (vsOk) ampEnable(false);   // Verstärker stumm, bevor es zur Ruhe geht
     setState(ST_IDLE);
     return false;
   }
-  // Nessuna voce VERA rilevata (solo silenzio/rumore): probabile falso avvio
-  // (wake fantasma / click). NON mandare a Whisper (allucinerebbe "Grazie" e
-  // farebbe ripartire una chat). Torna a riposo in silenzio.
-  // In chat continua e' anche la via d'uscita normale: passati i 3 secondi senza
-  // che nessuno parli (o col click, che ferma la registrazione a vuoto) si finisce
-  // qui e la conversazione si chiude.
+  // Keine ECHTE Sprache erkannt, nur Stille oder Rauschen: vermutlich ein
+  // ungewollter Start durch ein falsches Weckwort oder einen Klick. Das geht
+  // NICHT an Whisper, das dort halluzinieren und einen Chat starten würde.
+  // Stattdessen still zurück zur Ruhe.
+  // Im fortlaufenden Chat ist das zugleich der übliche Ausgang: sind die drei
+  // Sekunden verstrichen, ohne dass jemand spricht, oder beendet ein Klick die
+  // leere Aufnahme, endet es hier und das Gespräch schliesst sich.
   if (!micHeardVoice()) {
-    Serial.println(">> nessuna voce rilevata: ignoro (niente Whisper)");
+    Serial.println(">> keine Sprache erkannt: übergangen, ohne Whisper zu fragen");
     if (vsOk) ampEnable(false);
     setState(ST_IDLE);
     return false;
   }
-  if (!wifiOk()) { fail("No WiFi"); return false; }
+  if (!wifiOk()) { fail("Kein WLAN"); return false; }
 
-  // 2) PENSO - trascrizione
+  // 2) DENKEN - Spracherkennung
   setState(ST_THINKING);
   String testo = sttTranscribe(wav, wavLen, "de");
-  if (testo.isEmpty()) { fail("Non ho capito"); return false; }
-  // Filtro anti-allucinazione di Whisper (il "Grazie" fantasma sul silenzio):
-  // scarta in silenzio, senza rispondere ne' far ripartire nulla.
+  if (testo.isEmpty()) { fail("Nicht verstanden"); return false; }
+  // Filter gegen die Halluzinationen von Whisper auf Stille: stillschweigend
+  // verwerfen, ohne zu antworten und ohne etwas neu zu starten.
   if (isAllucinazione(testo)) {
-    Serial.printf(">> scartata allucinazione STT: \"%s\"\n", testo.c_str());
+    Serial.printf(">> Halluzination der Spracherkennung verworfen: \"%s\"\n", testo.c_str());
     if (vsOk) ampEnable(false);
     setState(ST_IDLE);
     return false;
   }
   Serial.printf(">> TESTO: \"%s\"\n", testo.c_str());
-  gobboPrintUser(testo);   // mostra "Tu: ..." nella chat
+  gobboPrintUser(testo);   // zeigt "Du: ..." im Chat
 
-  // 2-bis) RISPOSTA PERSONALIZZATA: se la domanda contiene il trigger configurato
-  // (gSettings.replyTrigger) uso il testo fisso (replyText) e SALTO musica + Claude.
+  // 2b) EIGENE ANTWORT: enthält die Frage den eingestellten Auslöser
+  // (gSettings.replyTrigger), wird der feste Text (replyText) genommen und
+  // sowohl die Musik als auch Claude ÜBERSPRUNGEN.
   String risposta = customReplyMatch(testo);
   bool scripted = risposta.length() > 0;
 
   if (!scripted) {
-    // MUSICA (match LOCALE dalla lista del pannello) -> suona subito, veloce,
-    // senza disturbare Claude. Lo stop (click/pannello) e il ritorno pulito a
-    // riposo li gestisce playStation().
+    // MUSIK: trifft die Liste aus dem Panel, läuft es sofort und schnell, ohne
+    // Claude zu bemühen. Das Anhalten über Klick oder Panel und die saubere
+    // Rückkehr zur Ruhe übernimmt playStation().
     {
       String tLowerMus = testo; tLowerMus.toLowerCase();
       const MusicStation *st = musicMatch(tLowerMus);
-      if (st && vsOk) { playStation(st); return false; }   // la musica chiude la chat
+      if (st && vsOk) { playStation(st); return false; }   // die Musik beendet den Chat
     }
 
-    // 3) PENSO - cervello. Gli do il tool musica (solo se il VS1053 c'e'): per una
-    // richiesta di ASCOLTO non capita dal match locale, Claude sceglie una radio dal
-    // catalogo (musicGenre) invece di rispondere a voce -> non "cade" in chat.
+    // 3) DENKEN - das Gehirn. Es bekommt das Musik-Werkzeug, sofern der VS1053
+    // vorhanden ist: einen Musikwunsch, den die Liste nicht erkannt hat, löst
+    // Claude auf, indem es ein Genre aus dem Katalog wählt, statt zu antworten.
+    // So landet der Wunsch nicht als Gesprächsbeitrag.
     String musicGenre;
     risposta = llmAsk(testo, vsOk ? &musicGenre : nullptr);
 
-    // Claude ha deciso di mettere musica?
+    // Hat Claude sich für Musik entschieden?
     if (vsOk && musicGenre.length()) {
       const MusicStation *cs = musicFromGenre(musicGenre);
       if (cs) { playStation(cs); return false; }
-      // catalogo senza quel genere: lo dice a voce invece di tacere
-      Serial.printf(">> musica: genere \"%s\" non in catalogo\n", musicGenre.c_str());
-      risposta = String("Non ho una stazione per ") + musicGenre + ", mi dispiace.";
+      // Das Genre fehlt im Katalog: lieber sagen als schweigen
+      Serial.printf(">> Musik: Genre \"%s\" steht nicht im Katalog\n", musicGenre.c_str());
+      risposta = String("Für ") + musicGenre + " habe ich leider keinen Sender.";
     }
   }
 
-  if (risposta.isEmpty()) { fail("Errore cervello"); return false; }
+  if (risposta.isEmpty()) { fail("Fehler beim Denken"); return false; }
 
   Serial.printf(">> ALEXO: \"%s\"\n", risposta.c_str());
-  // "[LOC]" davanti = questa risposta la sta dicendo il server di casa. Solo a
-  // video (chat TFT e pannello): il testo mandato al TTS resta pulito.
+  // Ein vorangestelltes "[LOC]" heisst, dass der Server zu Hause diese Antwort
+  // spricht. Das steht nur auf dem Bildschirm, im Chat auf dem TFT und im Panel;
+  // der Text an die Sprachausgabe bleibt unberührt.
   gobboPrint(ttsUsesLocal() ? String("[LOC] ") + risposta : risposta);
 
-  // 4) PARLO
+  // 4) SPRECHEN
   if (vsOk) {
     setState(ST_SPEAKING);
-    // Se LA TUA frase inizia con la parola-trigger -> voce alternativa.
+    // Beginnt DEIN Satz mit dem Auslösewort, spricht die zweite Stimme.
     String t = testo; t.trim(); t.toLowerCase();
-    bool vocaltra = matchAnyTerm(t, gSettings.voiceTrigger, false);  // startsWith uno dei termini
-    Serial.printf("[tts] voce: %s\n", vocaltra ? "alternativa" : "default");
+    bool vocaltra = matchAnyTerm(t, gSettings.voiceTrigger, false);  // beginnt mit einem der Begriffe
+    Serial.printf("[tts] Stimme: %s\n", vocaltra ? "zweite" : "voreingestellt");
     bool detto = ttsSpeak(player, risposta, vocaltra ? gSettings.voiceIdAlt : String(""));
-    delay(50); ampEnable(false);   // lascia sfumare la coda di silenzio, poi muta
-    // Voce non uscita (server di casa giu' in "solo casa", o errore cloud): stesso
-    // trattamento di trascrizione e cervello -> ring rosso + bip, non silenzio.
-    if (!detto) { fail("Errore voce"); return false; }
-    // La coda della VOCE rientra nel mic: raffreddamento come per la musica, cosi'
-    // non parte una chat fantasma subito dopo la risposta.
+    delay(50); ampEnable(false);   // die Stille ausklingen lassen, dann stumm schalten
+    // Es kam keine Stimme heraus, etwa weil der Server zu Hause bei "nur zu
+    // Hause" nicht läuft oder die Cloud einen Fehler meldet. Behandelt wird das
+    // wie bei Spracherkennung und Gehirn: roter Ring und ein Ton, nicht Stille.
+    if (!detto) { fail("Fehler bei der Stimme"); return false; }
+    // Der Nachhall der STIMME kommt ins Mikrofon zurück: dieselbe Abkühlzeit wie
+    // bei der Musik, damit nicht gleich nach der Antwort ein Gespräch aus dem
+    // Nichts beginnt.
     g_audioEndMs = millis();
   } else {
-    Serial.println(">> VS1053 non collegato: salto la voce");
+    Serial.println(">> VS1053 nicht angeschlossen: die Sprachausgabe entfällt");
   }
   setState(ST_IDLE);
-  return true;   // risposta detta: si puo' riaprire il mic (chat continua)
+  return true;   // die Antwort wurde gesprochen: das Mikrofon darf wieder auf
 }
 
-// --- Conversazione: una domanda, o tante di fila -----------------------------
-//  Con la chat continua accesa, finita una risposta il mic si riapre da solo e
-//  la domanda dopo non vuole di nuovo "Hey Mycroft". Si esce da tre parti, tutte
-//  gia' esistenti: nessuno parla entro CHAT_FOLLOWUP_MS, un click dell'encoder
-//  (ferma la registrazione a vuoto = come non aver parlato), o un errore.
+// --- Gespräch: eine Frage oder viele hintereinander -------------------------
+//  Ist der fortlaufende Chat eingeschaltet, öffnet das Mikrofon nach einer
+//  Antwort von allein, und die nächste Frage braucht nicht erneut "Hey Jarvis".
+//  Es endet auf drei Wegen, die es alle schon gab: niemand spricht innerhalb von
+//  CHAT_FOLLOWUP_MS, ein Klick auf den Drehgeber beendet die leere Aufnahme, was
+//  so zählt wie Schweigen, oder es tritt ein Fehler auf.
 static void runConversation() {
   bool ancora = runInteraction(false);
   int giro = 0;
   while (ancora && gSettings.chatContinua) {
-    // Log dei giri: se un giorno sembrasse che si riapre da sola, qui si vede
-    // quante volte e' successo davvero (un giro = una risposta detta).
+    // Die Runden werden protokolliert: sollte es eines Tages so wirken, als
+    // öffne sich der Chat von selbst, steht hier, wie oft es tatsächlich
+    // geschah. Eine Runde ist eine gesprochene Antwort.
     char msg[48];
-    snprintf(msg, sizeof(msg), "[chat] continua: giro %d, a te", ++giro);
+    snprintf(msg, sizeof(msg), "[chat] fortlaufend: Runde %d, du bist dran", ++giro);
     Serial.println(msg);
     netlogPrintln(msg);
-    // La coda della voce appena detta rientra nel mic: se riaprissimo subito,
-    // Alexo si sentirebbe parlare e partirebbe una domanda fantasma. Stessa
-    // difesa usata all'uscita dalla musica.
+    // Der Nachhall der eben gesprochenen Antwort kommt ins Mikrofon zurück.
+    // Würde es sofort wieder öffnen, hörte Alexo sich selbst reden und eine
+    // Frage aus dem Nichts entstünde. Dieselbe Vorkehrung wie beim Verlassen
+    // der Musik.
     for (int i = 0; i < 10; i++) { micFlush(); delay(40); }
     gobboClearStopRequest();
     ancora = runInteraction(true);
   }
   if (giro) {
     char msg[48];
-    snprintf(msg, sizeof(msg), "[chat] chiusa dopo %d giri", giro);
+    snprintf(msg, sizeof(msg), "[chat] nach %d Runden geschlossen", giro);
     Serial.println(msg);
     netlogPrintln(msg);
   }
@@ -494,49 +521,55 @@ void setup() {
                 (unsigned)ESP.getPsramSize(), ESP.getPsramSize() > 0 ? "OK" : "NO",
                 (unsigned)ESP.getFlashChipSize());
 
-  // Impostazioni runtime (dal pannello web) caricate dall'NVS, default = config.h.
-  // Va PRIMA dei moduli che leggono gSettings (mic, wake, llm, tts).
+  // Die zur Laufzeit änderbaren Einstellungen aus dem Web-Panel werden aus dem
+  // NVS geladen, die Werkseinstellung steht in config.h. Das gehört VOR die
+  // Module, die gSettings lesen: Mikrofon, Weckwort, Gehirn und Sprachausgabe.
   settingsBegin();
 
-  // Backlight del display su GPIO (acceso subito = splash di boot visibile).
-  // Da qui in poi la sua accensione/spegnimento a riposo la gestisce il gobbo.
+  // Die Hintergrundbeleuchtung hängt an einem GPIO und geht sofort an, damit das
+  // Startbild zu sehen ist. Ab hier übernimmt der Teleprompter das Ein- und
+  // Ausschalten bei Ruhe.
   pinMode(TFT_BL_PIN, OUTPUT);
   digitalWrite(TFT_BL_PIN, HIGH);
 
-  // TFT ST7735 su bus SPI dedicato (HSPI). MISO non serve (sola scrittura).
+  // TFT ST7735 am eigenen SPI-Bus (HSPI). MISO wird nicht gebraucht, es wird
+  // nur geschrieben.
   tftSPI.begin(TFT_SCLK_PIN, -1, TFT_MOSI_PIN, TFT_CS_PIN);
   display.initR(TFT_INITR);
-  display.setSPISpeed(TFT_SPI_HZ);   // clock basso = meno EMI sul ring (vedi config.h)
-  display.setRotation(0);            // 0 = ritratto 128x160
+  display.setSPISpeed(TFT_SPI_HZ);   // niedriger Takt streut weniger auf den Ring (siehe config.h)
+  display.setRotation(0);            // 0 = Hochformat 128x160
   display.cp437(true);
   display.setTextWrap(false);
-  tftOk = true;                      // l'ST7735 non ha un "isConnected": assumiamo OK
-  display.fillScreen(ST77XX_BLACK);  // schermo nero fino allo splash (niente garbage)
+  tftOk = true;                      // der ST7735 meldet keine Verbindung, wir nehmen sie an
+  display.fillScreen(ST77XX_BLACK);  // schwarz bis zum Startbild, damit kein Müll erscheint
   Serial.println("[OK ] TFT ST7735");
 
-  // Ring: brightness PIENA (255) per non quantizzare il fading; la luminosita'
-  // effettiva e' tenuta bassa direttamente nei valori delle animazioni (ui.cpp).
+  // Der Ring läuft mit VOLLER Helligkeit (255), damit das Ausblenden nicht in
+  // Stufen zerfällt; wirklich hell wird es nicht, denn die Animationen selbst
+  // halten die Werte niedrig (ui.cpp).
   ring.begin();
   ring.setBrightness(255);
   setRingSolid(0, 0, 20);
   Serial.println("[OK ] Ring NeoPixel");
 
 #if SPLASH_BOOT
-  bootSplash();                      // splash futuristico (TFT HUD + ring "carica")
+  bootSplash();                      // Startbild auf dem TFT, der Ring "lädt" dazu
 #endif
 
-  // Nessun bottone dedicato: l'encoder e' l'unico comando (click = avvia/ferma
-  // la chat, premuto+giro = volume, giro = scroll). GPIO14 resta libero.
+  // Es gibt keine eigene Taste: der Drehgeber ist die einzige Bedienung. Klick
+  // startet und beendet den Chat, gedrückt und gedreht regelt die Lautstärke,
+  // freies Drehen blättert. GPIO14 bleibt frei.
 
   // VS1053
   SPI.begin(SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN);
 
-  // --- Init VS1053/VS1003 ROBUSTO + diagnostica AFFIDABILE -------------------
-  //  Configuriamo SUBITO i pin di controllo come OUTPUT. begin() lo farebbe, ma
-  //  se per un boot non chiamiamo begin() le letture SCI darebbero 0000 FASULLI
-  //  (il chip non viene selezionato perche' CS non e' pilotato). Con i CS gia'
-  //  impostati, la lettura grezza readRegNoWait() (che NON aspetta il DREQ) e'
-  //  SEMPRE attendibile: ci dice davvero se il chip risponde o no.
+  // --- Robustes Einrichten des VS1053/VS1003 mit verlässlicher Diagnose -----
+  //  Die Steueranschlüsse werden SOFORT als Ausgang gesetzt. begin() täte das
+  //  auch, aber wenn es bei einem Start nicht aufgerufen wird, lieferten die
+  //  SCI-Lesezugriffe FALSCHE Nullen, weil der Baustein ohne getriebenes CS gar
+  //  nicht ausgewählt ist. Mit bereits gesetzten CS-Leitungen ist das rohe Lesen
+  //  über readRegNoWait(), das NICHT auf DREQ wartet, IMMER verlässlich: es sagt
+  //  wirklich, ob der Baustein antwortet.
   pinMode(VS1053_XCS_PIN,  OUTPUT); digitalWrite(VS1053_XCS_PIN,  HIGH);
   pinMode(VS1053_XDCS_PIN, OUTPUT); digitalWrite(VS1053_XDCS_PIN, HIGH);
   pinMode(VS1053_DREQ_PIN, INPUT);
@@ -544,92 +577,97 @@ void setup() {
   pinMode(VS1053_XRST_PIN, OUTPUT);
 #endif
 
-  delay(300);                        // stabilizza l'alimentazione del chip al cold-boot
+  delay(300);                        // lässt die Versorgung beim Kaltstart einschwingen
   vsOk = false;
   uint16_t vsSt = 0, vsMode = 0;
   for (int i = 0; i < 8 && !vsOk; i++) {
 #if VS1053_XRST_PIN >= 0
-    digitalWrite(VS1053_XRST_PIN, LOW);  delay(60);   // reset hardware lungo (XRST)
+    digitalWrite(VS1053_XRST_PIN, LOW);  delay(60);   // langer Reset über die Hardware (XRST)
     digitalWrite(VS1053_XRST_PIN, HIGH);
 #endif
-    // Dai tempo al chip di uscire dal reset e avviarsi: poll dello SCI_STATUS
-    // (RAW, no DREQ) fino a 400ms. Al COLD-boot a volte ci mette di piu' a
-    // svegliarsi (alimentazione/oscillatore del modulo).
+    // Dem Baustein Zeit lassen, aus dem Reset zu kommen und anzulaufen: bis zu
+    // 400 ms lang wird SCI_STATUS roh und ohne DREQ abgefragt. Beim KALTSTART
+    // braucht er mitunter länger, das liegt an Versorgung und Schwingquarz des
+    // Moduls.
     uint32_t t = millis();
     do { vsSt = player.readRegNoWait(0x1); delay(5); }
     while ((vsSt == 0x0000 || vsSt == 0xFFFF) && (millis() - t) < 400);
     bool responds = !(vsSt == 0x0000 || vsSt == 0xFFFF);
     if (responds) {
-      player.begin();                 // chip presente e vivo -> init completa
+      player.begin();                 // Baustein vorhanden und wach: vollständig einrichten
       delay(20);
       vsMode = player.readRegNoWait(0x0);
       vsOk = (vsMode == 0x4800);
     } else {
-      delay(150);                     // non risponde: aspetta e ritenta col reset
+      delay(150);                     // antwortet nicht: warten und mit Reset erneut versuchen
     }
-    Serial.printf("[vs1053] tentativo %d: ST=%04X MODE=%04X %s\n",
+    Serial.printf("[vs1053] Versuch %d: ST=%04X MODE=%04X %s\n",
                   i + 1, (unsigned)vsSt, (unsigned)vsMode,
-                  vsOk ? "OK" : (responds ? "(reinit)" : "(chip non risponde)"));
+                  vsOk ? "OK" : (responds ? "(neu einrichten)" : "(Baustein antwortet nicht)"));
   }
-  if (vsOk) volumeBegin(player);   // volume salvato (o VOLUME_DEFAULT) -> VS1053
+  if (vsOk) volumeBegin(player);   // gespeicherte Lautstärke (oder VOLUME_DEFAULT) an den VS1053
   Serial.printf("[%s] VS1053\n", vsOk ? "OK " : "ERR");
 
-  // Ampli PAM8302A muto al boot (SD attivo basso) -> niente pop ne' fruscio.
+  // Der Verstärker PAM8302A ist beim Start stumm (SD ist LOW-aktiv), so knackt
+  // und rauscht nichts.
 #if AMP_SD_PIN >= 0
   pinMode(AMP_SD_PIN, OUTPUT);
   digitalWrite(AMP_SD_PIN, LOW);
 #endif
 
-  // Microfono
+  // Mikrofon
   micOk = micBegin();
-  Serial.printf("[%s] Microfono %s\n", micOk ? "OK " : "ERR",
+  Serial.printf("[%s] Mikrofon %s\n", micOk ? "OK " : "ERR",
                 MIC_USE_I2S ? "I2S (ICS-43434)" : "MAX4466");
 
 #if WAKE_ENABLE
-  // Wake word locale "Alexo" (work in progress, vedi WAKEWORD.md). Lo stub
-  // ritorna false finche' l'inferenza TFLite non e' implementata.
+  // Weckwort "Hey Jarvis", erkannt im Gerät selbst (siehe WAKEWORD.md). Liefert
+  // false, wenn es sich nicht einrichten lässt, etwa ohne PSRAM.
   bool wakeOk = wakeBegin();
   Serial.printf("[%s] Wake word\n", wakeOk ? "OK " : "off");
 #endif
 
   // WiFi
-  tftStatus("WiFi...", "connessione");
+  tftStatus("WLAN...", "verbinde");
   bool wifi = wifiBegin();
-  Serial.printf("[%s] WiFi\n", wifi ? "OK " : "ERR");
+  Serial.printf("[%s] WLAN\n", wifi ? "OK " : "ERR");
 
-  // OTA: aggiornamento firmware via WiFi (hostname "alexo" -> alexo.local)
+  // Aktualisierung der Firmware über Funk (Netzname "alexo" -> alexo.local)
   if (wifi) {
-    timeBegin();   // orologio via NTP: serve a Claude per rispondere sull'ora
+    timeBegin();   // Uhr über NTP: Claude braucht sie für Fragen nach der Zeit
     ArduinoOTA.setHostname("alexo");
-    // ArduinoOTA.setPassword("...");   // opzionale: protezione con password
-    ArduinoOTA.onStart([]() {                        // schermata OTA HUD verde
-      gobboOtaKind(ArduinoOTA.getCommand() == U_SPIFFS);   // FW (firmware) o DATA (filesystem)
+    // ArduinoOTA.setPassword("...");   // optional: mit Passwort schützen
+    ArduinoOTA.onStart([]() {                        // die grüne Anzeige dazu
+      gobboOtaKind(ArduinoOTA.getCommand() == U_SPIFFS);   // FW (Firmware) oder DATA (Dateisystem)
       gobboOtaProgress(0);
       setState(ST_OTA);
     });
     ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
-      gobboOtaProgress(t ? (uint8_t)((uint64_t)p * 100 / t) : 0);          // % ben visibile al centro
+      gobboOtaProgress(t ? (uint8_t)((uint64_t)p * 100 / t) : 0);          // gut sichtbar in der Mitte
     });
-    ArduinoOTA.onEnd([]()    { gobboOtaProgress(100); });                  // poi il device si riavvia
-    ArduinoOTA.onError([](ota_error_t){ setState(ST_IDLE); gobboPrint("[OTA errore]"); });
+    ArduinoOTA.onEnd([]()    { gobboOtaProgress(100); });                  // danach startet das Gerät neu
+    ArduinoOTA.onError([](ota_error_t){ setState(ST_IDLE); gobboPrint("[OTA Fehler]"); });
     ArduinoOTA.begin();
-    Serial.println("[OK ] OTA pronto (hostname: alexo.local)");
-    // Log via rete (Telnet porta 23): per leggere l'output senza USB.
-    // Vedi netlog.h. Collegarsi con `telnet alexo.local`.
+    Serial.println("[OK ] Aktualisierung über Funk bereit (alexo.local)");
+    // Protokoll über das Netz (Telnet, Port 23), um die Ausgabe ohne USB zu
+    // lesen. Siehe netlog.h. Verbinden mit `telnet alexo.local`.
     netlogBegin();
-    Serial.println("[OK ] netlog Telnet pronto (telnet alexo.local)");
-    // Pannello impostazioni web (LittleFS + API). http://alexo.local/
+    Serial.println("[OK ] Telnet-Protokoll bereit (telnet alexo.local)");
+    // Einstellungs-Panel im Browser (LittleFS und Schnittstelle). http://alexo.local/
     webuiBegin();
   }
 
-  // Step 0 wake-word: diagnostica rumore mic. Se MIC_DIAG=1 il firmware si ferma
-  // QUI in un loop che alterna la misura del mic, ArduinoOTA.handle() e
-  // netlogHandle(): NON prosegue (niente chat) ma l'OTA resta VIVO e l'output va
-  // anche su Telnet. Per uscire: rimetti MIC_DIAG=0 e riflasha via OTA.
+  // Schritt 0 des Weckworts: die Messung des Mikrofonrauschens. Steht MIC_DIAG
+  // auf 1, bleibt die Firmware HIER in einer Schleife stehen, die Messung,
+  // ArduinoOTA.handle() und netlogHandle() abwechselt. Es geht NICHT weiter, es
+  // gibt also keinen Chat, aber der Funkweg BLEIBT offen und die Ausgabe geht
+  // auch über Telnet. Zum Beenden MIC_DIAG wieder auf 0 setzen und über Funk neu
+  // flashen.
 #if TFL_SELFTEST
-  // Self-test TFLite Micro (passo 2 wake word): gira il modello hello_world in
-  // loop e stampa su Telnet, con OTA vivo. Rimetti TFL_SELFTEST=0 e riflasha OTA.
-  Serial.println("[tfl] SELF-TEST TFLite Micro ATTIVO (TFL_SELFTEST=1). OTA+Telnet attivi.");
+  // Selbsttest für TFLite Micro (Schritt 2 des Weckworts): lässt das Modell
+  // hello_world in einer Schleife laufen und gibt über Telnet aus, der Funkweg
+  // bleibt offen. Zum Beenden TFL_SELFTEST auf 0 setzen und neu flashen.
+  Serial.println("[tfl] SELBSTTEST TFLite Micro AKTIV (TFL_SELFTEST=1). Funk und Telnet offen.");
   for (;;) {
     ArduinoOTA.handle();
     netlogHandle();
@@ -639,35 +677,38 @@ void setup() {
 #endif
 
 #if WAKE_TEST
-  // Test catena wake senza mic: frontend->modello->prob su audio
-  // sintetico, senza mic. OTA vivo. Rimetti WAKE_TEST=0 e riflasha per uscire.
-  Serial.println("[wakeTest] TEST CATENA WAKE ATTIVO (WAKE_TEST=1). OTA+Telnet attivi.");
+  // Test der Weckwortkette ohne Mikrofon: Merkmalsberechnung, Modell und
+  // Wahrscheinlichkeit über künstlichen Ton. Der Funkweg bleibt offen. Zum
+  // Beenden WAKE_TEST auf 0 setzen und neu flashen.
+  Serial.println("[wakeTest] TEST DER WECKWORTKETTE AKTIV (WAKE_TEST=1). Funk und Telnet offen.");
   for (;;) {
     ArduinoOTA.handle();
     netlogHandle();
-    wakeSelfTest();   // ascolto CONTINUO: niente delay (il modello e' streaming)
+    wakeSelfTest();   // DAUERHAFTES Zuhören: keine Verzögerung, das Modell arbeitet im Strom
   }
 #endif
 
 #if MIC_DIAG
-  Serial.println("[micDiag] MODALITA' DIAGNOSTICA ATTIVA (MIC_DIAG=1). OTA+Telnet attivi.");
+  Serial.println("[micDiag] MESSBETRIEB AKTIV (MIC_DIAG=1). Funk und Telnet offen.");
   for (;;) {
     ArduinoOTA.handle();
     netlogHandle();
     if (micOk) micDiag();
-    else { Serial.println("[micDiag] mic non inizializzato");
-           netlogPrintln("[micDiag] mic non inizializzato"); delay(1000); }
+    else { Serial.println("[micDiag] Mikrofon nicht eingerichtet");
+           netlogPrintln("[micDiag] Mikrofon nicht eingerichtet"); delay(1000); }
   }
 #endif
 
-  // Connessione fatta: pulisci il display e avvia il "gobbo" (chat scrollabile)
-  // che da qui in poi e' l'unico a scrivere sul TFT (task su core 0).
+  // Die Verbindung steht: Display leeren und den Teleprompter mit dem
+  // blätterbaren Chat starten, der ab hier als einziger aufs TFT schreibt
+  // (eine Aufgabe auf Kern 0).
   if (tftOk) gobboBegin(&display);
 
-  // Encoder rotativo per scorrere la chat (su/giu' = storico, pulsante = live)
+  // Drehgeber zum Blättern im Chat (drehen bewegt sich im Verlauf, die Taste
+  // führt ans Ende)
   encoderBegin();
 
-  // Avvia le animazioni del ring (task sul core 0) ed entra in riposo
+  // Startet die Animationen des Rings (eine Aufgabe auf Kern 0) und geht in Ruhe
   uiBegin(&ring);
   setState(ST_IDLE);
 }
@@ -676,18 +717,19 @@ void loop() {
   static uint32_t lastInteraction = 0;
   static bool     convActive = false;
 
-  if (wifiOk()) { ArduinoOTA.handle();   // ascolta richieste di aggiornamento OTA
-                  netlogHandle();        // mantiene il client Telnet (log via rete)
-                  webuiHandle(); }       // serve il pannello impostazioni web
+  if (wifiOk()) { ArduinoOTA.handle();   // nimmt Aktualisierungen über Funk entgegen
+                  netlogHandle();        // hält den Telnet-Client (Protokoll über das Netz)
+                  webuiHandle(); }       // bedient das Einstellungs-Panel
 
-  // Applica eventuali cambi di volume chiesti dall'encoder (premuto + giro).
-  // Qui siamo a riposo; durante il parlato ci pensa ttsSpeak (stesso core/bus).
+  // Übernimmt Änderungen der Lautstärke vom Drehgeber. Hier ruht das Gerät;
+  // während des Sprechens erledigt das ttsSpeak auf demselben Kern und Bus.
   if (vsOk) volumeApplyPending(player);
 
-  // Pulsante "Accendi radio" del pannello web: l'handler HTTP lascia solo la
-  // richiesta (musicPlay blocca il core 1 finche' la radio suona), la partenza
-  // avviene qui, sulla PRIMA stazione della lista; poi si cambia con i pulsanti
-  // (o col click dell'encoder), come per la musica chiesta a voce.
+  // Die Schaltfläche "Radio einschalten" im Web-Panel: die HTTP-Bearbeitung
+  // hinterlässt nur den Wunsch, denn musicPlay blockiert Kern 1, solange das
+  // Radio läuft. Gestartet wird hier, auf dem ERSTEN Sender der Liste; gewechselt
+  // wird danach über die Schaltflächen oder den Klick auf den Drehgeber, genau
+  // wie bei Musik, die per Sprache angefordert wurde.
   if (musicTakeStartRequest() && vsOk) {
     String murl, mnome;
     if (musicStationGet(0, murl, mnome)) {
@@ -696,76 +738,82 @@ void loop() {
     }
   }
 
-  // DOPPIO click dell'encoder = accende/spegne il ring reattivo al suono (toggle
-  // runtime). Lo stato vive in gSettings.idleReactive (default = config.h), cosi'
-  // e' condiviso col pannello web e salvato in NVS.
+  // Ein DOPPELKLICK auf den Drehgeber schaltet das Reagieren des Rings auf
+  // Geräusche ein und aus. Der Zustand liegt in gSettings.idleReactive
+  // (Werkseinstellung in config.h), wird damit mit dem Web-Panel geteilt und im
+  // NVS gespeichert.
   if (encoderDoublePressed()) {
     gSettings.idleReactive = !gSettings.idleReactive;
     settingsSave();
-    Serial.printf("[ring] reattivo al suono: %s\n", gSettings.idleReactive ? "ON" : "OFF");
-    netlogPrintln(gSettings.idleReactive ? "[ring] reattivo ON" : "[ring] reattivo OFF");
-    for (int b = 0; b < 2; b++) { uiSetLevel(150); delay(80); uiSetLevel(0); delay(80); }  // blink di conferma
-    if (micOk) micFlush();   // scarta l'audio letto durante il blink (no falso wake)
+    Serial.printf("[ring] reagiert auf Geräusche: %s\n", gSettings.idleReactive ? "AN" : "AUS");
+    netlogPrintln(gSettings.idleReactive ? "[ring] reagiert AN" : "[ring] reagiert AUS");
+    for (int b = 0; b < 2; b++) { uiSetLevel(150); delay(80); uiSetLevel(0); delay(80); }  // Blinken zur Bestätigung
+    if (micOk) micFlush();   // verwirft den Ton während des Blinkens, sonst löst das Weckwort aus
   }
 
-  // Click dell'encoder a riposo = avvia la chat (toggle: un altro click ferma
-  // la registrazione, gestito dentro runInteraction via recKeepGoing).
-  // (il && consuma comunque il talk-request; se siamo nel raffreddamento post
-  // musica lo scartiamo per non riavviare una chat a vuoto)
+  // Ein Klick auf den Drehgeber bei Ruhe startet den Chat. Ein weiterer Klick
+  // beendet die Aufnahme, das erledigt runInteraction über recKeepGoing.
+  // Das && verbraucht den Wunsch in jedem Fall; liegt er in der Abkühlzeit nach
+  // der Musik, wird er verworfen, damit kein leerer Chat startet.
   if (gobboTakeTalkRequest() && (millis() - g_audioEndMs) > AUDIO_COOLDOWN_MS) {
     if (!micOk) {
-      fail("Mic non pronto");
+      fail("Mikrofon nicht bereit");
     } else {
       runConversation();
-      micFlush(); wakeReset();   // scarta l'audio accumulato, niente falso wake
+      micFlush(); wakeReset();   // verwirft den angesammelten Ton gegen ein falsches Weckwort
       lastInteraction = millis();
       convActive = true;
     }
   }
 
-  // Avvio chat: il click encoder (sopra) resta SEMPRE attivo in parallelo.
+  // Start des Chats: der Klick auf den Drehgeber oben bleibt IMMER parallel aktiv.
 #if WAKE_ENABLE
-  // Wake word "Hey Mycroft": ascolto CONTINUO del mic (chunk ~20ms). Al
-  // riconoscimento avvia la chat come un click encoder. Lo STESSO chunk pilota
-  // anche il livello del ring: niente doppia lettura I2S (che ruberebbe meta'
-  // dell'audio al modello streaming).
+  // Weckwort "Hey Jarvis": DAUERHAFTES Zuhören am Mikrofon in Blöcken von etwa
+  // 20 ms. Bei einer Erkennung startet der Chat wie bei einem Klick auf den
+  // Drehgeber. DERSELBE Block steuert auch den Pegel des Rings, damit der
+  // I2S-Bus nicht zweimal gelesen wird, was dem Modell im Strombetrieb die
+  // Hälfte des Tons nähme.
   if (micOk && wakeReady()) {
     static int16_t wbuf[320];
     size_t got = micReadChunk(wbuf, 320);
     if (got) {
       if (wakeFeed(wbuf, got) && (millis() - g_audioEndMs) > AUDIO_COOLDOWN_MS) {
-        Serial.println("[wake] *** WAKE WORD! avvio chat ***");
-        netlogPrintln("[wake] *** WAKE WORD! avvio chat ***");
+        Serial.println("[wake] *** WECKWORT! Chat startet ***");
+        netlogPrintln("[wake] *** WECKWORT! Chat startet ***");
         runConversation();
-        micFlush(); wakeReset();   // scarta l'audio della risposta, niente auto-wake
+        micFlush(); wakeReset();   // verwirft den Ton der Antwort, damit es sich nicht selbst weckt
         lastInteraction = millis();
         convActive = true;
       }
   #if IDLE_REACTIVE
-      // Livello del ring dallo STESSO chunk (algoritmo buono: passa-alto +
-      // auto-floor + envelope). Spento se il toggle (doppio click) e' OFF.
+      // Der Pegel des Rings aus DEMSELBEN Block (Hochpass, nachgeführter
+      // Grundpegel und Hüllkurve). Aus, wenn der Doppelklick ihn abgeschaltet
+      // hat.
       uiSetLevel(gSettings.idleReactive ? micLevelFromChunk(wbuf, got) : 0);
   #endif
     }
   }
 #elif IDLE_REACTIVE
-  // Idle reattivo (senza wake): il ring "balla" col suono. micPeekLevel legge
-  // l'I2S col passa-alto; va aggiornato OGNI giro o g_level resta "congelato".
+  // Reagieren bei Ruhe ohne Weckwort: der Ring "tanzt" zum Ton. micPeekLevel
+  // liest den I2S-Bus mit Hochpass und muss in JEDEM Durchgang aufgefrischt
+  // werden, sonst bleibt g_level stehen.
   if (micOk) uiSetLevel(gSettings.idleReactive ? micPeekLevel() : 0);
 #endif
 
-  // Giro di controllo dei servizi in casa (uno per volta, ogni ~20s): tiene
-  // onesti i pallini dell'header anche se non stai facendo domande. Col PC
-  // spento l'attesa vale qualche centinaio di ms, in cui il mic non viene letto:
-  // per questo subito dopo si butta l'audio accumulato e si riparte pulito, o il
-  // wake word si troverebbe un buco in mezzo alla parola.
+  // Kontrollgang über die Dienste zu Hause, einer nach dem anderen etwa alle
+  // 20 Sekunden. Das hält die Punkte in der Kopfleiste ehrlich, auch wenn gerade
+  // nichts gefragt wird. Bei ausgeschaltetem PC kostet das einige hundert
+  // Millisekunden, in denen das Mikrofon nicht gelesen wird. Deshalb wird gleich
+  // danach der angesammelte Ton verworfen und sauber neu begonnen, sonst fände
+  // das Weckwort ein Loch mitten im Wort.
   if (wifiOk() && localRefreshTick() && micOk) { micFlush(); wakeReset(); }
 
-  // Dopo 2 minuti di inattivita' azzera la memoria: nuova conversazione
+  // Nach zwei Minuten ohne Bedienung wird das Gedächtnis geleert, das Gespräch
+  // beginnt dann von vorn
   if (convActive && (millis() - lastInteraction) > 120000) {
     llmReset();
     convActive = false;
-    Serial.println("[mem] conversazione azzerata (inattivita')");
+    Serial.println("[mem] Gespräch zurückgesetzt (nichts geschehen)");
   }
 
   delay(8);
