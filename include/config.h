@@ -1,24 +1,26 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Configurazione hardware (ESP32-S3 N16R8 DevKitC-1)
-//  Modifica qui i pin se hai cablato diversamente. Tutto il resto del codice
-//  legge da questo file, quindi non serve toccare altro.
+//  ALEXO - Hardware-Konfiguration (ESP32-S3 N16R8 DevKitC-1)
+//  Hier die Anschlüsse ändern, wenn anders verdrahtet wurde. Der ganze übrige
+//  Code liest aus dieser Datei, sonst ist also nichts anzufassen.
 // ============================================================================
 //
-//  NOTE IMPORTANTI sui pin dell'ESP32-S3 N16R8:
-//   - La PSRAM octal usa internamente i GPIO 33..37: NON usarli.
-//   - GPIO 19/20 sono USB: lasciarli liberi.
-//   - L'ADC1 (per il microfono analogico) e' sui GPIO 1..10.
-//   - GPIO 0 / 45 / 46 / 3 sono strapping pin: evitarli per le periferiche.
+//  WICHTIGES zu den Anschlüssen des ESP32-S3 N16R8:
+//   - Der Octal-PSRAM belegt intern GPIO 33..37: diese NICHT benutzen.
+//   - GPIO 19/20 gehören zu USB: freilassen.
+//   - ADC1 (für das analoge Mikrofon) liegt auf GPIO 1..10.
+//   - GPIO 0 / 45 / 46 / 3 sind Strapping-Pins: für Peripherie meiden.
 //
 // ----------------------------------------------------------------------------
 
-// --- Display TFT ST7735 1.8" 128x160 (SPI) ----------------------------------
-//  Display TEMPORANEO (in attesa del 5"). Sta su un bus SPI DEDICATO (HSPI),
-//  separato da quello del VS1053 (FSPI): cosi' lo scroll della chat sul core 0
-//  non litiga col feed audio sul core 1 (niente singhiozzi).
-//  Tutti GPIO liberi (non strapping, non USB, non ADC2, non PSRAM).
-//  Cablaggio modulo ST7735: VCC->3V3  GND->GND  LED/BL->3V3  e i pin sotto.
+// --- TFT-Display ST7735 1,8" 128x160 (SPI) ----------------------------------
+//  ÜBERGANGSWEISE verbaut (bis das 5-Zoll-Display kommt). Es hängt an einem
+//  EIGENEN SPI-Bus (HSPI), getrennt von dem des VS1053 (FSPI): so streitet der
+//  Bildlauf des Chats auf Kern 0 nicht mit der Tonzuführung auf Kern 1, und es
+//  stockt nichts.
+//  Alle Anschlüsse sind frei (kein Strapping, kein USB, kein ADC2, kein PSRAM).
+//  Verdrahtung des ST7735-Moduls: VCC->3V3  GND->GND  LED/BL->3V3 und die
+//  Anschlüsse unten.
 #define TFT_SCLK_PIN     2      // SCK / SCL
 #define TFT_MOSI_PIN     1      // SDA / MOSI (DIN)
 #define TFT_CS_PIN       42     // CS
@@ -26,74 +28,86 @@
 #define TFT_RST_PIN      40     // RES / RST
 #define TFT_WIDTH        128
 #define TFT_HEIGHT       160
-//  Variante del "tab" del modulo: se i colori sono invertiti o c'e' un bordo,
-//  prova INITR_GREENTAB o INITR_REDTAB. Il classico 1.8" rosso e' BLACKTAB.
+//  Variante der Lasche am Modul: sind die Farben vertauscht oder bleibt ein
+//  Rand, INITR_GREENTAB oder INITR_REDTAB probieren. Das klassische rote
+//  1,8-Zoll-Modul ist BLACKTAB.
 #define TFT_INITR        INITR_BLACKTAB
-//  Clock SPI del TFT. Il lampeggio del ring durante lo
-//  scroll era EMI dei fronti SPI accoppiati sul filo DIN del WS2812: a 2MHz
-//  spariva ma lo scroll andava "a onde" (blit a schermo intero ~164ms = raster
-//  lento e visibile). FIX HW: DIN allontanato dai fili SCLK/MOSI (+ event. 330ohm
-//  serie sul DIN) -> si puo' tenere il clock alto. 24MHz = blit ~14ms, scroll
-//  liscio. Se il TUO modulo mostra garbage a 24MHz, scendi a 16/20 MHz.
+//  SPI-Takt des TFT. Das Flackern des Rings während des Bildlaufs kam von
+//  Einstreuungen der SPI-Flanken auf die Datenleitung des WS2812: bei 2 MHz war
+//  es weg, dafür lief der Bildlauf "wellig" (das Übertragen des ganzen Bildes
+//  dauerte etwa 164 ms und war als langsamer Aufbau sichtbar). Behoben wurde es
+//  an der Hardware: die Datenleitung wurde von SCLK und MOSI weggeführt (bei
+//  Bedarf zusätzlich 330 Ohm in Reihe), seither darf der Takt hoch bleiben.
+//  24 MHz bedeutet etwa 14 ms je Bild und einen glatten Lauf. Zeigt DEIN Modul
+//  bei 24 MHz Müll an, auf 16 oder 20 MHz heruntergehen.
 #define TFT_SPI_HZ       24000000
 
-//  Retroilluminazione (LED/BL) pilotata da GPIO, NON piu' fissa a 3V3: cosi'
-//  possiamo spegnerla a riposo per risparmiare. Il pin assorbe pochissimo
-//  (~2 mA misurati col multimetro) -> si pilota DIRETTAMENTE dal GPIO, senza
-//  transistor ne' resistenza esterna. HIGH = acceso, LOW = spento.
-//  CABLAGGIO: il pin LED/BL del modulo va a GPIO14 (prima andava a 3V3). GPIO14
-//  era libero (ex push-to-talk). Il catodo del LED e' gia' a GND dentro il modulo.
+//  Die Hintergrundbeleuchtung (LED/BL) hängt an einem GPIO und NICHT mehr fest
+//  an 3V3: so lässt sie sich bei Ruhe abschalten und spart Strom. Der Anschluss
+//  zieht sehr wenig (mit dem Messgerät etwa 2 mA), er wird deshalb DIREKT vom
+//  GPIO getrieben, ohne Transistor und ohne Vorwiderstand. HIGH = an, LOW = aus.
+//  VERDRAHTUNG: der Anschluss LED/BL des Moduls geht an GPIO14 (vorher an 3V3).
+//  GPIO14 war frei, dort sass früher die Sprechtaste. Die Kathode der LED liegt
+//  im Modul bereits auf Masse.
 #define TFT_BL_PIN       14
-//  Dopo questi ms SENZA interventi (nessun click/giro encoder/nuovo messaggio,
-//  e Alexo a riposo) il display si spegne; si riaccende al primo intervento.
-//  Metti 0 per tenerlo sempre acceso.
-#define DISPLAY_SLEEP_MS 120000   // 2 minuti
-//  Splash animato all'accensione (HUD futuristico su TFT + ring "carica"). 0 = off.
+//  Nach so vielen Millisekunden OHNE Bedienung (kein Klick, kein Drehen, keine
+//  neue Nachricht, und Alexo in Ruhe) schaltet sich das Display ab; beim ersten
+//  Eingriff geht es wieder an. 0 lässt es dauerhaft an.
+#define DISPLAY_SLEEP_MS 120000   // 2 Minuten
+//  Bewegtes Startbild beim Einschalten (Anzeigetafel auf dem TFT und ein Ring,
+//  der sich "lädt"). 0 = aus.
 #define SPLASH_BOOT      1
 
 // --- Ring NeoPixel 12 LED WS2812 --------------------------------------------
-#define LED_RING_PIN     48     // data in del ring
+#define LED_RING_PIN     48     // Dateneingang des Rings
 #define LED_RING_COUNT   12
-#define LED_BRIGHTNESS   40     // 0-255, tienilo basso per non scaldare/assorbire troppo
-//  Idle reattivo al suono: 1 = ring "balla" col microfono a riposo (psichedelico),
-//  0 = ring SPENTO a riposo (luci solo negli stati attivi). Riacceso
-//  dopo il fix del rumore mic (passa-alto in mic.cpp): ora il fondo a riposo e'
-//  basso e il ring non lampeggia piu' a vuoto.
+#define LED_BRIGHTNESS   40     // 0-255, niedrig halten, sonst wird es warm und zieht Strom
+//  Bei Ruhe auf Geräusche reagieren: 1 = der Ring "tanzt" zum Mikrofon, auch
+//  wenn nichts läuft; 0 = der Ring ist bei Ruhe AUS und leuchtet nur in den
+//  aktiven Zuständen. Wieder eingeschaltet, nachdem das Mikrofonrauschen behoben
+//  war (Hochpass in mic.cpp): seither ist der Grundpegel bei Ruhe niedrig und
+//  der Ring flackert nicht mehr grundlos.
 #define IDLE_REACTIVE    1
 
-// --- Bottone push-to-talk (RIMOSSO) -----------------------------------------
-//  Storico: c'era un bottone dedicato su GPIO14. Ora l'UNICO comando e' il
-//  pulsante dell'encoder (vedi sotto): click = avvia/ferma la chat, premuto+giro
-//  = volume, giro = scroll. GPIO14 e' ora usato dal backlight del display
-//  (TFT_BL_PIN sopra). Define rimossi (non piu' usati da nessuna parte).
+// --- Sprechtaste (ENTFERNT) -------------------------------------------------
+//  Zur Geschichte: es gab eine eigene Taste an GPIO14. Heute ist die EINZIGE
+//  Bedienung die Taste des Drehgebers (siehe unten): Klick = Chat starten und
+//  beenden, gedrückt und gedreht = Lautstärke, gedreht = blättern. GPIO14 treibt
+//  jetzt die Hintergrundbeleuchtung des Displays (TFT_BL_PIN oben). Die
+//  zugehörigen Definitionen sind entfernt, sie wurden nirgends mehr gebraucht.
 
-// --- MICROFONO --------------------------------------------------------------
-//  Selezione del microfono. L'API software e' identica per entrambi, quindi
-//  per cambiare basta questa riga (e ricablare): NON si tocca altro codice.
-//    0 = MAX4466 analogico (su ADC1) -> metti 0, ricompila, flasha
-//    1 = mic I2S digitale (ICS-43434 / INMP441) - ATTUALE
+// --- MIKROFON ---------------------------------------------------------------
+//  Auswahl des Mikrofons. Die Softwareschnittstelle ist für beide dieselbe, zum
+//  Wechseln genügt also diese Zeile (und das Umverdrahten): sonst ist KEIN Code
+//  anzufassen.
+//    0 = MAX4466 analog (an ADC1) -> auf 0 setzen, neu übersetzen, flashen
+//    1 = digitales I2S-Mikrofon (ICS-43434 / INMP441) - DERZEIT IN BETRIEB
 #define MIC_USE_I2S      1
 
-#define MIC_SAMPLE_RATE  16000  // Hz, quello che vuole Whisper (per entrambi)
+#define MIC_SAMPLE_RATE  16000  // Hz, so will es Whisper (für beide Mikrofone)
 
-//  MAX4466 (analogico, usato se MIC_USE_I2S = 0)
-#define MIC_ADC_PIN      4      // GPIO4 = ADC1_CH3 (uscita analogica del mic)
+//  MAX4466 (analog, in Betrieb bei MIC_USE_I2S = 0)
+#define MIC_ADC_PIN      4      // GPIO4 = ADC1_CH3 (analoger Ausgang des Mikrofons)
 
-//  ICS-43434 (I2S, usato se MIC_USE_I2S = 1). Alimentare a 3V3.
+//  ICS-43434 (I2S, in Betrieb bei MIC_USE_I2S = 1). Mit 3V3 versorgen.
 //    VDD->3V3  GND->GND  SCK->I2S_SCK  WS->I2S_WS  SD->I2S_SD  L/R->GND(=LEFT)
 #define I2S_SCK_PIN      5      // BCLK / SCK
 #define I2S_WS_PIN       6      // WS / LRCL
-#define I2S_SD_PIN       7      // SD / DOUT (dati dal microfono)
-#define I2S_SHIFT        15     // conversione 32->16 bit (alza = piu' volume). 15 scelto
-                                //  in diagnostica Step 0: voce ~10k di picco, niente
-                                //  clipping (13 saturava). La registrazione applica
-                                //  anche un passa-alto ~120Hz (vedi mic.cpp) che toglie
-                                //  il DC e il rumble a bassa freq (grosso del rumore).
-//  Diagnostica mic (Step 0 wake-word): metti 1, flasha via OTA, apri il monitor.
-//  Il firmware si ferma in modalita' diagnostica e stampa il rumore di fondo a 24
-//  bit + cosa darebbe ogni shift (13..16) a riposo e mentre parli: serve a
-//  scegliere I2S_SHIFT con un numero invece che a tentativi. La chat NON parte, ma
-//  l'OTA RESTA ATTIVO: per uscire rimetti 0 e riflasha via OTA. Default 0.
+#define I2S_SD_PIN       7      // SD / DOUT (Daten vom Mikrofon)
+#define I2S_SHIFT        15     // Umsetzung 32 -> 16 Bit (höher = lauter). Die 15 kam
+                                //  aus der Messung in Schritt 0: Sprache erreicht etwa
+                                //  10000 als Spitze, ohne Übersteuern (bei 13 lief es
+                                //  an). Die Aufnahme legt zusätzlich einen Hochpass bei
+                                //  etwa 120 Hz an (siehe mic.cpp), der den Gleichanteil
+                                //  und das tieffrequente Brummen entfernt, also den
+                                //  grössten Teil des Rauschens.
+//  Messbetrieb für das Mikrofon (Schritt 0 des Weckworts): auf 1 setzen, über
+//  Funk flashen, den seriellen Monitor öffnen. Die Firmware bleibt dann im
+//  Messbetrieb und gibt das Grundrauschen mit 24 Bit aus, dazu, was jede
+//  Verschiebung (13..16) bei Ruhe und beim Sprechen ergäbe. So lässt sich
+//  I2S_SHIFT anhand einer Zahl wählen statt durch Probieren. Der Chat startet
+//  NICHT, die Aktualisierung über Funk BLEIBT AKTIV: zum Beenden wieder 0 setzen
+//  und erneut über Funk flashen. Werkseinstellung 0.
 #define MIC_DIAG         0
 
 // --- Weckwort "Hey Jarvis", erkannt im Geraet selbst (microWakeWord) --------
@@ -102,7 +116,7 @@
 //  Klick auf den Drehgeber); 0 = Start NUR per Klick.
 //  GEAENDERT am 2026-09-12: vorher "Hey Mycroft", davor "Okay Nabu". "Okay
 //  Nabu" gehoert dem Balancing Robot, zwei Geraete im selben Haus koennen
-//  dieselbe Parole nicht teilen.
+//  dasselbe Weckwort nicht teilen.
 #define WAKE_ENABLE      1
 //  Erkennungsparameter (aus dem Manifest v2 "hey_jarvis"): Schwelle der
 //  Wahrscheinlichkeit 0..255 und Breite des gleitenden Fensters, ueber das
@@ -121,96 +135,117 @@
 //  sprechen muss; niedriger, wenn es faelschlich ausloest.
 #define WAKE_GAIN        3
 
-// --- Registrazione voce (dopo l'attivazione: wake word o click) -------------
-//  Stop automatico al silenzio: dopo aver sentito parlare, se restano REC_SILENCE_MS
-//  di silenzio continuo la registrazione si chiude da sola (niente attesa del tetto).
-#define REC_MAX_MS        20000   // tetto massimo registrazione (serve MIC_MAX_SECONDS>=20)
-#define REC_SILENCE_MS     1500   // stop dopo questo silenzio continuo (0 = disattiva)
-//  Stop-al-silenzio con SOGLIA AUTO-ADATTIVA (vedi mic.cpp). Non e' piu' un
-//  livello fisso: la "voce" e' relativa al rumore di fondo stimato in continuo
-//  (ventilatore/vento). soglia = noiseFloor * MARGIN + FLOOR (in unita' RMS, la
-//  stessa scala di AC_HP16 in MIC_DIAG). Cosi' si adatta da solo se cambia il
-//  rumore. MARGIN = quanto sopra il fondo conta come voce; FLOOR = margine minimo
-//  assoluto (col mic tranquillo il fondo e' ~100, la voce ~500).
-#define REC_SILENCE_MARGIN  1.6f  // moltiplicatore sul fondo (alza se il rumore fa da "voce")
-#define REC_SILENCE_FLOOR    150  // margine minimo assoluto in RMS (alza se taglia tardi)
-#define REC_MIN_MS          800   // grazia iniziale: non fermarti prima (lascia iniziare a parlare)
-//  CHAT CONTINUA: finita una risposta il mic si riapre da solo, cosi' la domanda
-//  dopo non vuole di nuovo la wake word. Si esce stando zitti (CHAT_FOLLOWUP_MS)
-//  o con un click dell'encoder. Interruttore runtime nel pannello; qui il default
-//  di fabbrica (spento: e' un cambio di comportamento, si accende scegliendolo).
+// --- Sprachaufnahme (nach dem Auslösen durch Weckwort oder Klick) -----------
+//  Selbsttätiger Abbruch bei Stille: nachdem Sprache zu hören war, endet die
+//  Aufnahme von allein, sobald REC_SILENCE_MS lang ununterbrochen Stille
+//  herrscht. Man muss also nicht bis zur Höchstdauer warten.
+#define REC_MAX_MS        20000   // Höchstdauer der Aufnahme (erfordert MIC_MAX_SECONDS>=20)
+#define REC_SILENCE_MS     1500   // Abbruch nach so viel ununterbrochener Stille (0 = aus)
+//  Der Abbruch bei Stille arbeitet mit einer SELBSTTÄTIG NACHGEFÜHRTEN SCHWELLE
+//  (siehe mic.cpp). Es ist kein fester Pegel mehr: was als "Sprache" gilt, misst
+//  sich am laufend geschätzten Grundrauschen (Lüfter, Wind).
+//  Schwelle = Grundpegel * MARGIN + FLOOR (in RMS, derselben Skala wie AC_HP16
+//  bei MIC_DIAG). So passt es sich von selbst an, wenn sich das Rauschen ändert.
+//  MARGIN sagt, wie weit über dem Grundpegel etwas als Sprache zählt; FLOOR ist
+//  der kleinste absolute Abstand (bei ruhigem Mikrofon liegt der Grundpegel bei
+//  etwa 100 und Sprache bei etwa 500).
+#define REC_SILENCE_MARGIN  1.6f  // Faktor auf den Grundpegel (höher, wenn Rauschen als Sprache gilt)
+#define REC_SILENCE_FLOOR    150  // kleinster absoluter Abstand in RMS (höher, wenn es zu spät abbricht)
+#define REC_MIN_MS          800   // Schonfrist am Anfang: vorher nicht abbrechen, damit man loslegen kann
+//  FORTLAUFENDER CHAT: nach einer Antwort öffnet das Mikrofon von allein, die
+//  nächste Frage braucht also nicht erneut das Weckwort. Beendet wird er durch
+//  Schweigen (CHAT_FOLLOWUP_MS) oder einen Klick auf den Drehgeber. Der Schalter
+//  sitzt im Panel; hier steht die Werkseinstellung. Sie ist aus, weil es das
+//  Verhalten ändert und man es bewusst einschalten soll.
 #define CHAT_CONTINUA_DEF     0
-#define CHAT_FOLLOWUP_MS   3000   // quanto aspetta la domanda dopo una risposta
-//  Self-test TFLite Micro (passo 2 di WAKEWORD.md): 1 = al boot gira il modello
-//  di prova "hello_world" (sin) + frontend, stampa su Telnet. OTA resta attivo.
+#define CHAT_FOLLOWUP_MS   3000   // wie lange nach einer Antwort auf die Frage gewartet wird
+//  Selbsttest für TFLite Micro (Schritt 2 in WAKEWORD.md): 1 = beim Start laufen
+//  das Testmodell "hello_world" (Sinus) und die Merkmalsberechnung, die Ausgabe
+//  geht über Telnet. Die Aktualisierung über Funk bleibt aktiv.
 #define TFL_SELFTEST     0
-//  Test catena wake senza mic: 1 = gira frontend->modello->prob su
-//  audio sintetico (silenzio/seno) e stampa la probabilita', SENZA mic. Per
-//  validare la catena e i falsi-positivi prima del test dal vivo. OTA resta attivo.
+//  Test der Weckwortkette ohne Mikrofon: 1 = Merkmalsberechnung, Modell und
+//  Wahrscheinlichkeit laufen über künstlichen Ton (Stille oder Sinus) und die
+//  Wahrscheinlichkeit wird ausgegeben, OHNE Mikrofon. Damit lassen sich die Kette
+//  und Fehlauslösungen prüfen, bevor man am lebenden Gerät testet. Die
+//  Aktualisierung über Funk bleibt aktiv.
 #define WAKE_TEST        0
 
-// --- VS1053 (uscita audio, bus SPI) -----------------------------------------
-//  Bus SPI condiviso (FSPI)
+// --- VS1053 (Tonausgabe, SPI-Bus) -------------------------------------------
+//  Gemeinsam genutzter SPI-Bus (FSPI)
 #define SPI_SCK_PIN      12
 #define SPI_MOSI_PIN     11
 #define SPI_MISO_PIN     13
-//  Pin di controllo del VS1053
-#define VS1053_XCS_PIN   10     // Chip Select (comandi)
-#define VS1053_XDCS_PIN  21     // Data Chip Select (dati)
-#define VS1053_DREQ_PIN  18     // Data Request (input) - spostato da GPIO47 a GPIO18
-#define VS1053_XRST_PIN  8      // Reset (-1 se non collegato) - spostato da GPIO38
-                                //  (il 38 e' il "BUILTIN LED" della board: il suo
-                                //  circuito a bordo sporcava XRST durante il float
-                                //  di boot -> reset del VS1003 inaffidabile a freddo)
+//  Steueranschlüsse des VS1053
+#define VS1053_XCS_PIN   10     // Chip Select (Befehle)
+#define VS1053_XDCS_PIN  21     // Data Chip Select (Daten)
+#define VS1053_DREQ_PIN  18     // Data Request (Eingang) - von GPIO47 auf GPIO18 verlegt
+#define VS1053_XRST_PIN  8      // Reset (-1 wenn nicht verbunden) - von GPIO38 verlegt
+                                //  (an 38 hängt die eingebaute LED der Platine: deren
+                                //  Beschaltung störte XRST, während der Anschluss beim
+                                //  Start offen war, und der Reset des VS1003 kam aus
+                                //  dem kalten Zustand unzuverlässig)
 
-// --- Amplificatore PAM8302A (shutdown via GPIO) -----------------------------
-//  Il pin SD (shutdown, /SD) del PAM8302A: e' la funzione SHUTDOWN a essere
-//  attiva-bassa, quindi per ACCENDERE l'ampli si porta il pin ALTO.
-//      GPIO39 HIGH -> shutdown OFF -> ampli ACCESO
-//      GPIO39 LOW  -> shutdown ON  -> ampli MUTO (consumo ~0, no fruscio, no pop)
-//  Lo teniamo acceso solo durante l'interazione (bip + voce) e muto a riposo.
-//  Cablaggio: SD del PAM8302A -> GPIO39. L'INGRESSO audio del PAM va preso dal
-//  LOUT/ROUT (+ AGND) del VS1053, NON da un GPIO. Alimenta il PAM dai 5V.
-//  GPIO39 e' libero (gruppo JTAG MTCK, gia' rinunciato: 40/41/42 sono il TFT).
-//  Metti -1 per disabilitare il controllo (ampli sempre acceso / SD scollegato).
+// --- Verstärker PAM8302A (Abschaltung über GPIO) ----------------------------
+//  Der Anschluss SD (shutdown, /SD) des PAM8302A: die Funktion ABSCHALTEN ist
+//  LOW-aktiv, zum EINSCHALTEN des Verstärkers wird der Anschluss also HIGH
+//  gelegt.
+//      GPIO39 HIGH -> Abschaltung AUS -> Verstärker AN
+//      GPIO39 LOW  -> Abschaltung AN  -> Verstärker STUMM (praktisch kein
+//                                        Verbrauch, kein Rauschen, kein Knacken)
+//  Er läuft nur während eines Wortwechsels (Ton und Stimme) und bleibt bei Ruhe
+//  stumm.
+//  Verdrahtung: SD des PAM8302A an GPIO39. Der Toneingang des PAM kommt von
+//  LOUT/ROUT (samt AGND) des VS1053, NICHT von einem GPIO. Den PAM aus 5 V
+//  versorgen.
+//  GPIO39 ist frei (aus der JTAG-Gruppe MTCK, auf die ohnehin verzichtet wurde:
+//  40, 41 und 42 gehören zum TFT).
+//  -1 schaltet die Steuerung ab (Verstärker dauerhaft an, SD nicht verbunden).
 #define AMP_SD_PIN       39
 
-// --- Encoder rotativo (scroll della chat sul gobbo) -------------------------
-//  KY-040 o simile: CLK->A, DT->B, SW->pulsante. Alimentare a 3V3.
-//  Pin scelti liberi e sicuri (non strapping, non USB, non ADC2, non PSRAM).
-//  Giro = scorri la chat su/giu'; pressione del pulsante = torna "live".
-#define ENC_A_PIN        16     // CLK (A) - GPIO16/15 invertiti: A/B scambiati in saldatura
+// --- Drehgeber (Blättern im Chat auf dem Teleprompter) ----------------------
+//  KY-040 oder ähnlich: CLK->A, DT->B, SW->Taste. Mit 3V3 versorgen.
+//  Die Anschlüsse sind frei und unbedenklich gewählt (kein Strapping, kein USB,
+//  kein ADC2, kein PSRAM).
+//  Drehen = im Chat nach oben und unten blättern; Tastendruck = zurück zum
+//  laufenden Ende.
+#define ENC_A_PIN        16     // CLK (A) - GPIO16/15 vertauscht: A und B sind beim Löten getauscht
 #define ENC_B_PIN        15     // DT  (B)
-#define ENC_SW_PIN       17     // SW  (pulsante, opzionale)
+#define ENC_SW_PIN       17     // SW  (Taste, optional)
 
-// --- Volume audio (VS1053, scala 0..100; 100 = massimo) ---------------------
-//  Si regola PREMENDO il pulsante dell'encoder e girando: orario = su, antiorario
-//  = giu' (vedi gobbo.cpp). Il valore e' salvato in NVS, quindi sopravvive ai
-//  riavvii. Se i versi sono invertiti, cambia segno a VOLUME_STEP.
-#define VOLUME_DEFAULT   90     // volume al primo avvio (poi vince quello salvato)
-#define VOLUME_MIN        0     // 0 = MUTO vero (VS1053 silenzio + ampli spento)
-#define VOLUME_STEP       5     // quanto cambia per ogni scatto dell'encoder
-//  Il VS1053 ha scala LOGARITMICA (dB): la sua 0..~60 e' praticamente muta, solo
-//  ~60..100 e' udibile. Per usare TUTTA la corsa dello slider/encoder rimappiamo
-//  il volume utente 1..100 nella zona udibile VOLUME_VS_MIN..100 (vedi
-//  volumeVsValue in volume.cpp). Alza VOLUME_VS_MIN se il minimo e' ancora muto.
-#define VOLUME_VS_MIN    63     // valore VS1053 corrispondente al volume utente = 1
+// --- Lautstärke (VS1053, Skala 0..100; 100 = höchste) -----------------------
+//  Eingestellt wird sie, indem man die Taste des Drehgebers DRÜCKT und dreht: im
+//  Uhrzeigersinn lauter, dagegen leiser (siehe gobbo.cpp). Der Wert liegt im NVS
+//  und übersteht einen Neustart. Sind die Richtungen vertauscht, das Vorzeichen
+//  von VOLUME_STEP ändern.
+#define VOLUME_DEFAULT   90     // Lautstärke beim ersten Start (danach gilt der gespeicherte Wert)
+#define VOLUME_MIN        0     // 0 = wirklich STUMM (VS1053 still und Verstärker aus)
+#define VOLUME_STEP       5     // Schrittweite je Rastung des Drehgebers
+//  Der VS1053 arbeitet mit einer LOGARITHMISCHEN Skala (dB): sein Bereich von 0
+//  bis etwa 60 ist praktisch stumm, hörbar wird es erst zwischen 60 und 100. Um
+//  den GANZEN Weg von Regler und Drehgeber zu nutzen, wird die Nutzerlautstärke
+//  1..100 auf den hörbaren Bereich VOLUME_VS_MIN..100 umgerechnet (siehe
+//  volumeVsValue in volume.cpp). VOLUME_VS_MIN erhöhen, wenn das Minimum noch
+//  immer stumm ist.
+#define VOLUME_VS_MIN    63     // Wert des VS1053, der der Nutzerlautstärke 1 entspricht
 
-// --- Pannello impostazioni via web (settings.cpp + webui.cpp) ---------------
-//  I parametri "tarabili" qui sotto sono i VALORI DI FABBRICA. All'avvio il
-//  modulo settings li carica dall'NVS (se l'utente li ha cambiati dal pannello
-//  web http://alexo.local/) altrimenti usa questi. "Ripristina default" nel
-//  pannello riscrive questi valori. NB: i default di mic/silenzio/LED/wake sono
-//  gia' le macro qui sopra (REC_SILENCE_*, MIC_LVL_*_DEF, WAKE_*, IDLE_REACTIVE).
-//  Livello LED reattivi (default, poi modificabili dal pannello). Prima erano
-//  #define fissi dentro mic.cpp; ora vivono qui come default.
-#define MIC_LVL_MARGIN_DEF  3.0f   // quanto sopra il fondo prima di accendere i LED
-#define MIC_LVL_FLOOR_DEF   40.0f  // margine assoluto minimo LED (anti-jitter)
-//  Envelope dei LED reattivi: velocita' di salita (reattivita') e di discesa
-//  (permanenza). 0..1: piu' basso = piu' lento. ATTACK basso = niente flash sugli
-//  impulsi isolati; RELEASE basso = i LED "trascinano" (sfumano piano).
-#define MIC_LVL_ATTACK_DEF  0.12f  // reattivita' (salita): quanto in fretta si accendono
-#define MIC_LVL_RELEASE_DEF 0.25f  // permanenza (discesa): quanto in fretta si spengono
+// --- Einstellungs-Panel im Browser (settings.cpp + webui.cpp) ---------------
+//  Die abstimmbaren Werte hier unten sind die WERKSEINSTELLUNGEN. Beim Start
+//  lädt das Modul settings sie aus dem NVS, sofern der Nutzer sie im Panel unter
+//  http://alexo.local/ geändert hat, sonst gelten diese. "Werkseinstellung
+//  wiederherstellen" im Panel schreibt genau diese Werte zurück. Zu beachten:
+//  die Werkseinstellungen für Mikrofon, Stille, LED und Weckwort stehen bereits
+//  in den Makros weiter oben (REC_SILENCE_*, MIC_LVL_*_DEF, WAKE_*,
+//  IDLE_REACTIVE).
+//  Pegel der reagierenden LED (Werkseinstellung, im Panel änderbar). Früher
+//  waren es feste Definitionen in mic.cpp, jetzt stehen sie hier.
+#define MIC_LVL_MARGIN_DEF  3.0f   // wie weit über dem Grundpegel, bevor die LED angehen
+#define MIC_LVL_FLOOR_DEF   40.0f  // kleinster absoluter Abstand der LED (gegen Zappeln)
+//  Hüllkurve der reagierenden LED: Anstiegsgeschwindigkeit und
+//  Abklinggeschwindigkeit. 0..1, niedriger bedeutet langsamer. Ein niedriger
+//  Anstieg verhindert Aufblitzen bei einzelnen Geräuschen; ein niedriges
+//  Abklingen lässt die LED nachziehen, sie blenden langsam aus.
+#define MIC_LVL_ATTACK_DEF  0.12f  // Anstieg: wie schnell sie angehen
+#define MIC_LVL_RELEASE_DEF 0.25f  // Abklingen: wie schnell sie ausgehen
 //  Standardstimme bei ElevenLabs (Voice ID).
 //  Dies ist noch die Stimme aus dem Originalprojekt. Fuer den Jarvis-Klang
 //  eine eigene Stimme im ElevenLabs-Konto waehlen und ihre Kennung im
@@ -250,13 +285,18 @@
     "nötig ist (Wetter, Nachrichten, Öffnungszeiten, aktuelle Ereignisse, Preise). " \
     "Der Nutzer ist in Deutschland. Fasse die Ergebnisse gesprochen und knapp " \
     "zusammen. Wenn du etwas nicht weißt, sag es geradeheraus."
-//  Stazioni musica (web-radio MP3) editabili dal pannello. Una per riga, formato
-//  "chiave | nome | url": la CHIAVE e' cio' che si cerca nella frase ("metti
-//  <chiave>"), il NOME appare sul display, l'URL e' lo stream MP3. L'ordine conta:
-//  le chiavi piu' specifiche prima (es. "alternativ" prima di "rock"). Solo stream
-//  MP3 (il VS1053 non decodifica AAC): NO url .aac/.m3u8/HLS. URL http:// e https://
-//  entrambi ok (music.cpp usa WiFiClientSecure per gli https). Righe doppie =
-//  sinonimi per la stessa radio. Stazioni VERIFICATE funzionanti (181.fm, SomaFM, Kiss Kiss).
+//  Sender (MP3-Webradio), im Panel bearbeitbar. Einer je Zeile im Format
+//  "Schlüssel | Name | URL": nach dem SCHLÜSSEL wird im Satz gesucht, der NAME
+//  erscheint auf dem Display, die URL ist der MP3-Strom. Die Reihenfolge zählt:
+//  die genaueren Schlüssel zuerst (etwa "alternativ" vor "rock"). Nur
+//  MP3-Ströme, der VS1053 decodiert kein AAC: KEINE Adressen auf .aac, .m3u8
+//  oder HLS. http:// und https:// sind beide in Ordnung (music.cpp nutzt für
+//  https WiFiClientSecure). Mehrere Zeilen mit derselben Adresse sind
+//  gleichbedeutende Schlüssel für denselben Sender. Die Sender sind als
+//  funktionierend GEPRÜFT (181.fm, SomaFM, Kiss Kiss).
+//  OFFEN: die Schlüssel sind noch italienisch ("ottanta", "anni 80"). Das
+//  Eindeutschen des Katalogs wurde zurückgestellt, siehe
+//  docs/specs/2026-09-12-uebersetzung-deutsch.md.
 #define MUSIC_STATIONS_DEF \
     "alternativo | rock alternativo | http://listen.181fm.com/181-buzz_128k.mp3\n" \
     "metal | metal | http://listen.181fm.com/181-hardrock_128k.mp3\n" \
@@ -280,48 +320,55 @@
     "kiss kiss | Radio Kiss Kiss | http://ice07.fluidstream.net/KissKiss.mp3\n" \
     "rock | rock | http://listen.181fm.com/181-eagle_128k.mp3\n" \
     "pop | pop | http://listen.181fm.com/181-power_128k.mp3"
-//  SERVIZI AI IN CASA (LM Studio e simili, vedi localai.h). Di fabbrica sono
-//  SPENTI (indirizzo vuoto): Alexo lavora in cloud esattamente come prima. Si
-//  accendono dal pannello mettendo l'indirizzo del PC, e da quel momento, se il
-//  PC risponde, quella parte della catena resta in casa. Il nome del modello
-//  lasciato VUOTO significa "usa quello che il server ha caricato adesso".
+//  KI-DIENSTE ZU HAUSE (LM Studio und ähnliche, siehe localai.h). Ab Werk sind
+//  sie AUS (leere Adresse): Alexo arbeitet in der Cloud wie bisher. Eingeschaltet
+//  werden sie im Panel, indem man die Adresse des PC einträgt; von da an bleibt
+//  dieses Glied der Kette zu Hause, sofern der PC antwortet. Ein LEER gelassener
+//  Modellname bedeutet "nimm das, was der Server gerade geladen hat".
 #define LOCAL_LLM_URL_DEF     ""
 #define LOCAL_LLM_MODEL_DEF   ""
-//  Temperatura del solo modello IN CASA (il cloud usa la sua). Bassa = si attiene
-//  alla parola piu' probabile (risposte aderenti e ripetibili), alta = osa di piu'
-//  (piu' varieta', ma anche piu' divagazioni). I server locali partono da 0.7-0.8.
+//  Temperatur allein des Modells ZU HAUSE (die Cloud nutzt ihre eigene). Niedrig
+//  heisst, es bleibt beim wahrscheinlichsten Wort, die Antworten sind nah am
+//  Thema und wiederholbar; hoch heisst, es wagt mehr, wird abwechslungsreicher,
+//  schweift aber auch eher ab. Server zu Hause starten meist bei 0,7 bis 0,8.
 #define LOCAL_LLM_TEMP_DEF    0.3f
 #define LOCAL_STT_URL_DEF     ""
 #define LOCAL_STT_MODEL_DEF   ""
 #define LOCAL_TTS_URL_DEF     ""
 #define LOCAL_TTS_MODEL_DEF   ""
 #define LOCAL_TTS_VOICE_DEF   ""
-//  PORTE DELLA VOCE IN CASA: se nell'indirizzo del pannello la porta NON e'
-//  scritta (es. "http://192.168.1.50"), Alexo prova queste in ordine e usa la
-//  prima che risponde - 8002 = Kokoro (lanciatore 15), 8003 = Chatterbox
-//  (lanciatore 16). Serve a non dover correggere il campo ogni volta che si
-//  avvia l'uno o l'altro. Porta scritta = si usa quella e basta, nessuna prova.
+//  PORTS DER STIMME ZU HAUSE: fehlt in der Adresse im Panel der Port (etwa
+//  "http://192.168.1.50"), probiert Alexo diese der Reihe nach und nimmt den
+//  ersten, der antwortet. 8002 gehört zu Kokoro, 8003 zu Chatterbox. So muss das
+//  Feld nicht jedes Mal geändert werden, wenn man den einen oder anderen
+//  startet. Steht der Port da, wird genau der benutzt und nichts probiert.
 #define LOCAL_TTS_PORTS_AUTO  { 8002, 8003 }
-//  Percorso di serie quando l'indirizzo e' senza porta (i server di casa parlano
-//  il dialetto OpenAI, che sta sotto /v1).
+//  Der übliche Pfad, wenn die Adresse ohne Port angegeben ist (die Server zu
+//  Hause sprechen die Sprache von OpenAI, und die liegt unter /v1).
 #define LOCAL_TTS_PATH_AUTO   "/v1"
-//  SOLO CASA: se acceso, i tre pezzi della catena vocale NON escono mai su
-//  internet. Se il servizio di casa non c'e' o sbaglia, Alexo lo dice e si ferma,
-//  invece di ripiegare sul cloud in silenzio (che manderebbe fuori voce, domanda
-//  o risposta senza che tu te ne accorga). Non tocca la radio (la chiedi tu) ne'
-//  l'orologio NTP (non contiene niente di detto). Di fabbrica SPENTO.
+//  NUR ZU HAUSE: ist das eingeschaltet, verlassen die drei Glieder der
+//  Sprachkette NIE das eigene Netz. Fehlt der Dienst zu Hause oder macht er einen
+//  Fehler, sagt Alexo es und hört auf, statt stillschweigend in die Cloud
+//  auszuweichen, was Stimme, Frage oder Antwort unbemerkt hinausschicken würde.
+//  Radio (das fordert man selbst an) und die NTP-Uhr (sie enthält nichts
+//  Gesprochenes) sind davon nicht betroffen. Ab Werk AUS.
 #define LOCAL_ONLY_DEF        0
-//  VOCE SEMPRE IN CASA: riguarda SOLO il TTS. Acceso, la voce si chiede sempre al
-//  server di casa, senza il controllo di raggiungibilita' e senza ripiego su
-//  ElevenLabs (il punto e' non consumare i crediti gratuiti). Trascrizione e
-//  cervello restano come sono. Ignorato se "solo casa" e' acceso (li' vale gia').
+//  STIMME IMMER ZU HAUSE: betrifft NUR die Sprachausgabe. Eingeschaltet wird die
+//  Stimme immer beim Server zu Hause angefordert, ohne vorherige Prüfung der
+//  Erreichbarkeit und ohne Ausweichen auf ElevenLabs. Genau darum geht es: die
+//  Freikontingente nicht zu verbrauchen. Spracherkennung und Gehirn bleiben, wie
+//  sie sind. Wird übergangen, wenn "nur zu Hause" eingeschaltet ist, dort gilt es
+//  ohnehin schon.
 #define TTS_LOCAL_ONLY_DEF    0
-//  RISPOSTA PERSONALIZZATA: se REPLY_TRIGGER (parola/frase) e' valorizzato e la domanda lo
-//  CONTIENE, Alexo dice REPLY_TEXT (testo fisso) e salta l'AI. Trigger VUOTO = disattivato
-//  (risponde l'AI). Per scherzi, battute fisse o riprese ripetibili. Runtime da /api/settings.
+//  EIGENE ANTWORT: ist REPLY_TRIGGER (ein Wort oder Satzteil) gesetzt und die
+//  Frage ENTHÄLT ihn, sagt Alexo den festen Text REPLY_TEXT und überspringt die
+//  KI. Ein LEERER Auslöser schaltet das ab, dann antwortet die KI. Gedacht für
+//  Scherze, feste Sprüche oder wiederholbare Aufnahmen. Zur Laufzeit über
+//  /api/settings änderbar.
 #define REPLY_TRIGGER_DEF    ""
 #define REPLY_TEXT_DEF       ""
 
-// --- WiFi -------------------------------------------------------------------
-//  Le credenziali e le API key stanno in include/secrets.h (NON versionato).
-//  Copia secrets.example.h in secrets.h e compila i valori.
+// --- WLAN -------------------------------------------------------------------
+//  Zugangsdaten und Schlüssel stehen in include/secrets.h, die NICHT im
+//  Repository liegt. secrets.example.h nach secrets.h kopieren und die Werte
+//  eintragen.
