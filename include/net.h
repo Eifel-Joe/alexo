@@ -4,19 +4,20 @@
 // ============================================================================
 #include <Arduino.h>
 
-// Connette al WiFi (credenziali in secrets.h). Ritorna true se connesso entro
-// timeoutMs. Mostra avanzamento sulla seriale.
+// Verbindet mit dem WLAN (Zugangsdaten in secrets.h). Liefert true, wenn die
+// Verbindung innerhalb von timeoutMs steht. Zeigt den Fortschritt seriell an.
 bool wifiBegin(uint32_t timeoutMs = 15000);
 
-// true se attualmente connesso.
+// true, wenn gerade verbunden.
 bool wifiOk();
 
-// Avvia la sincronizzazione dell'orologio via NTP con fuso ITALIANO (ora legale
-// automatica). Da chiamare una volta dopo la connessione WiFi. Non blocca: l'ora
-// arriva dopo qualche secondo.
+// Startet den Abgleich der Uhr via NTP mit DEUTSCHER Zeitzone (Sommerzeit
+// automatisch). Einmal nach dem Verbinden aufrufen. Blockiert nicht: die
+// Uhrzeit trifft erst nach einigen Sekunden ein.
 void timeBegin();
 
-// Ritorna data e ora correnti in italiano + fuso/UTC, pronte da dare a Claude,
-// es. "martedì 1 luglio 2026, ore 21:35 (Europe/Rome, UTC+2)". Stringa VUOTA se
-// l'orologio non e' ancora stato sincronizzato (NTP non ancora risposto).
+// Liefert Datum und Uhrzeit auf Deutsch samt Zeitzone und UTC, fertig fuer
+// Claude, etwa "Dienstag, 1. Juli 2026, 21:35 Uhr Ortszeit (Europe/Berlin)".
+// LEERE Zeichenkette, solange die Uhr nicht abgeglichen ist (NTP hat noch
+// nicht geantwortet).
 String nowContextString();

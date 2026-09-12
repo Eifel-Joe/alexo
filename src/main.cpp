@@ -383,7 +383,7 @@ static bool runInteraction(bool followUp) {
 
   // 2) PENSO - trascrizione
   setState(ST_THINKING);
-  String testo = sttTranscribe(wav, wavLen, "it");
+  String testo = sttTranscribe(wav, wavLen, "de");
   if (testo.isEmpty()) { fail("Non ho capito"); return false; }
   // Filtro anti-allucinazione di Whisper (il "Grazie" fantasma sul silenzio):
   // scarta in silenzio, senza rispondere ne' far ripartire nulla.

@@ -207,33 +207,40 @@
 //  impulsi isolati; RELEASE basso = i LED "trascinano" (sfumano piano).
 #define MIC_LVL_ATTACK_DEF  0.12f  // reattivita' (salita): quanto in fretta si accendono
 #define MIC_LVL_RELEASE_DEF 0.25f  // permanenza (discesa): quanto in fretta si spengono
-//  Voce ElevenLabs di default (Voice ID). Prima era in tts.cpp.
+//  Standardstimme bei ElevenLabs (Voice ID).
 #define ELEVEN_VOICE_DEF    "fTHp5NEBwS4InadKS0Ci"
-//  Voce ALTERNATIVA + parola-trigger: se la frase inizia con VOICE_TRIGGER_DEF,
-//  Alexo risponde con ELEVEN_VOICE_ALT_DEF. Prima erano in main.cpp. Trigger vuoto
-//  = disattiva la voce alternativa. Confronto in minuscolo.
+//  ZWEITE Stimme samt Auslösewort: beginnt der Satz mit VOICE_TRIGGER_DEF,
+//  antwortet Alexo mit ELEVEN_VOICE_ALT_DEF. Leeres Auslösewort schaltet die
+//  zweite Stimme ab. Verglichen wird klein geschrieben.
 #define ELEVEN_VOICE_ALT_DEF "CiwzbDpaN3pQXjTgx3ML"
-#define VOICE_TRIGGER_DEF    "bene"
-//  Frasi-fantasma di Whisper (separate da virgola): se la trascrizione e' ESATTAMENTE
-//  una di queste (tipiche allucinazioni sul silenzio), viene scartata in silenzio.
-//  Vuoto = filtro disattivato. Confronto minuscolo, senza punteggiatura ai bordi.
+#define VOICE_TRIGGER_DEF    "gut"
+//  Geisterphrasen von Whisper (durch Komma getrennt): stimmt die Transkription
+//  GENAU mit einer davon überein, wird sie stillschweigend verworfen. Das sind
+//  die typischen Halluzinationen auf Stille. Leer = Filter aus. Verglichen wird
+//  klein geschrieben und ohne Satzzeichen an den Rändern.
+//  ACHTUNG: kein Komma innerhalb einer Phrase, es trennt die Einträge. Die
+//  üblichen Abspann-Halluzinationen "... des ZDF für funk, 2017" stehen deshalb
+//  ohne Jahreszahl hier. Umlaute klein schreiben: der Vergleich setzt nur
+//  ASCII-Buchstaben auf Kleinschreibung.
 #define HALLUC_TERMS_DEF \
-    "grazie,grazie a tutti,grazie mille,grazie a tutti e arrivederci," \
-    "grazie per la visione,grazie per l'attenzione,grazie e arrivederci," \
-    "grazie per aver guardato,grazie per aver guardato il video," \
-    "sottotitoli e revisione a cura di qtss,sottotitoli creati dalla comunità amara.org," \
-    "ciao,ciao a tutti,buona giornata,arrivederci,prego"
-//  Cervello: modello Claude di default e "personalita'" (system prompt). Prima
-//  erano in llm.cpp. claude-haiku-4-5 = veloce/economico; claude-sonnet-5 = via di
-//  mezzo; claude-opus-5 = piu' intelligente ma piu' lento/costoso.
+    "vielen dank,vielen dank fürs zuschauen,vielen dank für's zuschauen," \
+    "danke,danke schön,dankeschön,danke fürs zuschauen," \
+    "untertitel der amara.org-community,untertitel von stephanie geiges," \
+    "untertitelung des zdf für funk,untertitel im auftrag des zdf," \
+    "mehr infos auf www.zdf.de,copyright wdr," \
+    "tschüss,auf wiedersehen,bis zum nächsten mal,das war's,so das war's"
+//  Gehirn: Standardmodell von Claude und die "Persönlichkeit" (System-Prompt).
+//  claude-haiku-4-5 = schnell und günstig; claude-sonnet-5 = Mittelweg;
+//  claude-opus-5 = klüger, dafür langsamer und teurer.
 #define LLM_MODEL_DEF       "claude-haiku-4-5"
 #define SYSTEM_PROMPT_DEF \
-    "Sei Alexo, un assistente vocale domestico in italiano. " \
-    "Rispondi in modo breve, naturale e colloquiale, come parlando ad alta voce. " \
-    "Massimo 2-3 frasi. Niente elenchi puntati, niente markdown, niente emoji. " \
-    "Hai accesso a una ricerca web: usala quando serve un'informazione aggiornata " \
-    "(meteo, notizie, orari, eventi recenti, prezzi). L'utente e' in Italia. " \
-    "Riassumi i risultati in modo parlato e conciso. Se non sai, dillo con semplicita'."
+    "Du bist Alexo, ein Sprachassistent für zu Hause und antwortest auf Deutsch. " \
+    "Antworte kurz, natürlich und umgangssprachlich, so wie man laut spricht. " \
+    "Höchstens 2 bis 3 Sätze. Keine Aufzählungen, kein Markdown, keine Emojis. " \
+    "Du hast Zugriff auf eine Websuche: nutze sie, wenn eine aktuelle Information " \
+    "nötig ist (Wetter, Nachrichten, Öffnungszeiten, aktuelle Ereignisse, Preise). " \
+    "Der Nutzer ist in Deutschland. Fasse die Ergebnisse gesprochen und knapp " \
+    "zusammen. Wenn du etwas nicht weißt, sag es einfach."
 //  Stazioni musica (web-radio MP3) editabili dal pannello. Una per riga, formato
 //  "chiave | nome | url": la CHIAVE e' cio' che si cerca nella frase ("metti
 //  <chiave>"), il NOME appare sul display, l'URL e' lo stream MP3. L'ordine conta:

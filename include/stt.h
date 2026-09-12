@@ -4,7 +4,7 @@
 // ============================================================================
 #include <Arduino.h>
 
-// Invia un WAV (header+PCM) all'endpoint Whisper di OpenAI e ritorna il testo
-// trascritto. Stringa vuota in caso di errore (loggato sulla seriale).
-// lang = codice ISO ("it", "en", ...) per migliorare la trascrizione.
-String sttTranscribe(const uint8_t *wav, size_t wavLen, const char *lang = "it");
+// Schickt ein WAV (Kopf und PCM) an den Whisper-Endpunkt von OpenAI und
+// liefert den erkannten Text. Leere Zeichenkette im Fehlerfall (seriell
+// protokolliert). lang = ISO-Code ("de", "en", ...), verbessert die Erkennung.
+String sttTranscribe(const uint8_t *wav, size_t wavLen, const char *lang = "de");
