@@ -1,17 +1,20 @@
 // ============================================================================
-//  ALEXO - Pannello impostazioni via web (vedi webui.h).
-//  Web server sincrono (WebServer di serie) sulla porta 80. La pagina sta in
-//  LittleFS (data/index.html). API JSON:
-//    GET  /api/settings  -> tutti i parametri correnti (+ volume)
-//    POST /api/settings  -> aggiorna i parametri presenti nel body e salva in NVS
-//    GET  /api/live      -> valori live del mic (livello/fondo/soglia) + stato
-//    POST /api/reset     -> ripristina i default di fabbrica
-//    POST /api/music/start-> accende la radio (prima stazione della lista)
-//    POST /api/music/seek-> cambia stazione radio (+1 avanti / -1 indietro)
-//    POST /api/local/test-> prova i servizi AI in casa (chi risponde, con che modello)
-//  Il server e' sincrono: durante un'interazione (registrazione/rete) il loop e'
-//  bloccato e la pagina non risponde per qualche secondo -> normale, il pannello
-//  si usa a riposo.
+//  ALEXO - Einstellungs-Panel im Browser (siehe webui.h).
+//  Synchroner Webserver (der mitgelieferte WebServer) auf Port 80. Die Seite
+//  liegt in LittleFS (data/index.html). Die JSON-Schnittstelle:
+//    GET  /api/settings  -> alle aktuellen Werte samt Lautstärke
+//    POST /api/settings  -> ändert die im Rumpf enthaltenen Werte und speichert
+//                           sie im NVS
+//    GET  /api/live      -> laufende Werte des Mikrofons (Pegel, Grundpegel,
+//                           Schwelle) samt Zustand
+//    POST /api/reset     -> stellt die Werkseinstellung wieder her
+//    POST /api/music/start-> schaltet das Radio ein (erster Sender der Liste)
+//    POST /api/music/seek-> wechselt den Sender (+1 vor / -1 zurück)
+//    POST /api/local/test-> prüft die KI-Dienste zu Hause: wer antwortet und mit
+//                           welchem Modell
+//  Der Server arbeitet synchron: während eines Wortwechsels (Aufnahme oder Netz)
+//  ist der Loop blockiert und die Seite antwortet einige Sekunden lang nicht.
+//  Das ist normal, das Panel benutzt man bei Ruhe.
 // ============================================================================
 #include "webui.h"
 #include "config.h"
@@ -21,7 +24,7 @@
 #include "mic.h"
 #include "wakeword.h"
 #include "music.h"
-#include "tts.h"      // ttsUsesLocal(): la voce ci passa davvero?
+#include "tts.h"      // ttsUsesLocal(): geht die Stimme wirklich dort hindurch?
 #include "gobbo.h"
 #include <WebServer.h>
 #include <LittleFS.h>
@@ -30,7 +33,7 @@
 
 static WebServer server(80);
 
-// --- Serializza gSettings (+ volume) in un oggetto JSON ---------------------
+// --- gSettings samt Lautstärke in ein JSON-Objekt schreiben -----------------
 static void fillSettingsJson(JsonDocument &doc) {
   doc["recSilenceMs"]     = gSettings.recSilenceMs;
   doc["recSilenceMargin"] = gSettings.recSilenceMargin;
@@ -77,9 +80,9 @@ static void handlePostSettings() {
   if (!server.hasArg("plain")) { server.send(400, "text/plain", "no body"); return; }
   JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) {
-    server.send(400, "text/plain", "json non valido"); return;
+    server.send(400, "text/plain", "JSON ungueltig"); return;
   }
-  // Aggiorna solo i campi presenti (il pannello puo' mandarne un sottoinsieme).
+  // Ändert nur die enthaltenen Felder, das Panel darf auch eine Auswahl senden.
   if (!doc["recSilenceMs"].isNull())     gSettings.recSilenceMs     = doc["recSilenceMs"].as<uint32_t>();
   if (!doc["recSilenceMargin"].isNull()) gSettings.recSilenceMargin = doc["recSilenceMargin"].as<float>();
   if (!doc["recSilenceFloor"].isNull())  gSettings.recSilenceFloor  = doc["recSilenceFloor"].as<int>();
@@ -113,9 +116,9 @@ static void handlePostSettings() {
   if (!doc["ttsLocalOnly"].isNull())     gSettings.ttsLocalOnly     = doc["ttsLocalOnly"].as<bool>();
   if (!doc["volume"].isNull())           volumeSet(doc["volume"].as<int>());
 
-  settingsSave();   // clampa e scrive in NVS
+  settingsSave();   // begrenzt die Werte und schreibt sie ins NVS
 
-  // Rispondi con lo stato aggiornato (cosi' il pannello vede i valori clampati).
+  // Mit dem neuen Zustand antworten, damit das Panel die begrenzten Werte sieht.
   JsonDocument out; fillSettingsJson(out);
   String s; serializeJson(out, s);
   server.send(200, "application/json", s);
@@ -125,25 +128,27 @@ static void handleLive() {
   uint8_t level = 0; float floorV = 0, thresh = 0;
   micGetLive(&level, &floorV, &thresh);
   JsonDocument doc;
-  doc["level"]    = level;                 // livello LED corrente 0..255
-  doc["floor"]    = floorV;                // rumore di fondo stimato (LED)
-  doc["thresh"]   = thresh;                // soglia di accensione LED
-  doc["wakeProb"] = wakeLastProb();        // ultima probabilita' wake 0..255
+  doc["level"]    = level;                 // aktueller LED-Pegel 0..255
+  doc["floor"]    = floorV;                // geschätztes Grundrauschen (LED)
+  doc["thresh"]   = thresh;                // Einschaltschwelle der LED
+  doc["wakeProb"] = wakeLastProb();        // letzte Wahrscheinlichkeit des Weckworts 0..255
   doc["heap"]     = ESP.getFreeHeap();
   doc["rssi"]     = WiFi.RSSI();
-  doc["music"]    = musicIsPlaying();      // true se una radio sta suonando
-  doc["musMad"]   = musicLastMad();        // MAD grezzo musica (per tarare il ring)
-  doc["musBase"]  = musicLastBase();       // baseline mobile musica
-  doc["station"]  = musicStation();        // nome emittente (metadata ICY)
-  doc["nowPlaying"] = musicNowPlaying();   // brano in onda "Artista - Titolo"
-  doc["chatRev"]  = gobboChatRev();        // cambia a ogni nuovo msg -> il pannello ricarica la chat
+  doc["music"]    = musicIsPlaying();      // true, wenn ein Sender läuft
+  doc["musMad"]   = musicLastMad();        // roher MAD-Wert der Musik (zum Abstimmen des Rings)
+  doc["musBase"]  = musicLastBase();       // gleitende Grundlinie der Musik
+  doc["station"]  = musicStation();        // Name des Senders (ICY-Metadaten)
+  doc["nowPlaying"] = musicNowPlaying();   // laufender Titel "Interpret - Titel"
+  doc["chatRev"]  = gobboChatRev();        // ändert sich bei jeder Nachricht -> das Panel lädt den Chat neu
   String out; serializeJson(doc, out);
   server.send(200, "application/json", out);
 }
 
-// GET /api/chat -> ultimi messaggi della chat (quella scrollabile sul TFT) in JSON.
-// STREAMING a pezzi (un messaggio alla volta): evita di costruire in RAM una String
-// grande quanto tutta la chat (fino a 40 x 2KB). JSON: [{"r":ruolo,"t":"testo"}].
+// GET /api/chat -> die letzten Nachrichten des Chats (desselben, durch den man
+// auf dem TFT blättert) als JSON.
+// Ausgeliefert wird STÜCKWEISE, eine Nachricht nach der anderen. So muss im RAM
+// keine Zeichenkette entstehen, die so gross ist wie der ganze Chat (bis zu
+// 40 mal 2 KB). Das JSON hat die Form [{"r":Rolle,"t":"Text"}].
 static void handleChat() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "application/json", "");
@@ -155,7 +160,7 @@ static void handleChat() {
     if (!gobboChatItem(i, &role, &t)) break;
     item = i ? "," : "";
     item += "{\"r\":"; item += (int)role; item += ",\"t\":\"";
-    for (const char *p = t; *p; p++) {                 // escape JSON (tiene l'UTF-8)
+    for (const char *p = t; *p; p++) {                 // JSON-Maskierung (UTF-8 bleibt erhalten)
       unsigned char c = (unsigned char)*p;
       if (c == '"' || c == '\\') { item += '\\'; item += (char)c; }
       else if (c == '\n')        { item += "\\n"; }
@@ -165,67 +170,69 @@ static void handleChat() {
     server.sendContent(item);
   }
   server.sendContent("]");
-  server.sendContent("");   // chiude il chunked transfer
+  server.sendContent("");   // beendet die stückweise Übertragung
 }
 
-// POST /api/local/test -> prova i tre servizi in casa e dice chi risponde e con
-// quale modello. Su richiesta e non in automatico: ogni prova costa un'attesa, e
-// farla di continuo rallenterebbe il loop (wake word compreso).
+// POST /api/local/test -> prüft die drei Dienste zu Hause und meldet, wer
+// antwortet und mit welchem Modell. Nur auf Anforderung und nicht selbsttätig:
+// jede Prüfung kostet Wartezeit, und sie ständig auszuführen würde den Loop
+// bremsen, das Weckwort eingeschlossen.
 static void handleLocalTest() {
-  localForget();                     // niente esiti vecchi: si riprova davvero
+  localForget();                     // keine alten Ergebnisse: es wird wirklich neu geprüft
   JsonDocument doc;
   const char *nome[LOC_COUNT] = { "stt", "llm", "tts" };
   for (int i = 0; i < LOC_COUNT; i++) {
     LocalSvc s = (LocalSvc)i;
     JsonObject o = doc[nome[i]].to<JsonObject>();
-    if (localBaseUrl(s).isEmpty()) { o["stato"] = "spento"; continue; }
-    if (!localConnected(s)) { o["stato"] = "non risponde"; continue; }
-    // Risponde: ora la domanda vera e' se ci si puo' lavorare. Il cervello senza
-    // modello caricato non serve a niente, e va detto invece di far vedere un
-    // "risponde" che poi in pratica va lo stesso in cloud.
+    if (localBaseUrl(s).isEmpty()) { o["stato"] = "aus"; continue; }
+    if (!localConnected(s)) { o["stato"] = "antwortet nicht"; continue; }
+    // Er antwortet. Die eigentliche Frage ist jetzt, ob sich damit arbeiten
+    // lässt. Ein Gehirn ohne geladenes Modell nützt nichts, und das gehört
+    // gesagt, statt ein "antwortet" zu zeigen, das in der Praxis doch in der
+    // Cloud endet.
     String m = localModelName(s);
-    // La VOCE risponde ma potrebbe non essere usata: senza uno dei due
-    // interruttori legge ElevenLabs lo stesso, e scrivere "in casa" qui sarebbe
-    // la stessa bugia del pallino verde (vedi localOn).
+    // Die STIMME antwortet vielleicht, wird aber nicht benutzt: ohne einen der
+    // beiden Schalter spricht ElevenLabs trotzdem, und hier "zu Hause" zu
+    // schreiben wäre dieselbe Unwahrheit wie der grüne Punkt (siehe localOn).
     if (s == LOC_TTS && !ttsUsesLocal())
-      o["stato"] = "risponde, ma la voce va a ElevenLabs (interruttore spento)";
+      o["stato"] = "antwortet, aber die Stimme geht zu ElevenLabs (Schalter aus)";
     else
-      o["stato"] = localReachable(s) ? "in casa" : "risponde, ma nessun modello caricato";
-    o["modello"] = m.length() ? m : String("(non dichiarato)");
-    // Indirizzo davvero usato: con la porta indovinata (voce) e' l'unico modo di
-    // sapere se ha risposto Kokoro o Chatterbox.
+      o["stato"] = localReachable(s) ? "zu Hause" : "antwortet, aber kein Modell geladen";
+    o["modello"] = m.length() ? m : String("(nicht genannt)");
+    // Die tatsächlich benutzte Adresse: bei erratenem Port (Stimme) ist das der
+    // einzige Weg zu erfahren, ob Kokoro oder Chatterbox geantwortet hat.
     o["indirizzo"] = localBaseUsed(s);
   }
   String out; serializeJson(doc, out);
   server.send(200, "application/json", out);
 }
 
-// POST /api/music/stop -> ferma la musica in riproduzione (pulsante del pannello).
+// POST /api/music/stop -> hält die laufende Musik an (Schaltfläche im Panel).
 static void handleMusicStop() {
   musicRequestStop();
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
-// POST /api/music/start -> accende la radio sulla prima stazione della lista.
-// Risponde SUBITO: la riproduzione la fa partire il loop di main.cpp, perche'
-// musicPlay blocca il core 1 finche' la radio suona (l'handler HTTP non potrebbe
-// mai rispondere). 409 se sta gia' suonando o se la lista e' vuota.
+// POST /api/music/start -> schaltet das Radio auf den ersten Sender der Liste.
+// Antwortet SOFORT: die Wiedergabe startet der Loop in main.cpp, denn musicPlay
+// blockiert Kern 1, solange das Radio läuft, und die HTTP-Bearbeitung käme nie
+// zum Antworten. 409, wenn bereits etwas läuft oder die Liste leer ist.
 static void handleMusicStart() {
   if (musicIsPlaying()) {
-    server.send(409, "application/json", "{\"ok\":false,\"err\":\"radio gia accesa\"}");
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"Radio laeuft bereits\"}");
     return;
   }
   if (musicStationCount() <= 0) {
-    server.send(409, "application/json", "{\"ok\":false,\"err\":\"nessuna stazione\"}");
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"kein Sender in der Liste\"}");
     return;
   }
   musicRequestStart();
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
-// POST /api/music/seek -> stazione successiva/precedente (pulsanti del pannello).
-// Body {"d":1} o {"d":-1}. Solo mentre una radio suona: e' un cambio stazione, non
-// un comando di avvio (la musica la si chiede a voce).
+// POST /api/music/seek -> nächster oder vorheriger Sender (Schaltflächen im
+// Panel). Der Rumpf lautet {"d":1} oder {"d":-1}. Nur während ein Sender läuft:
+// es ist ein Senderwechsel, kein Startbefehl. Musik fordert man per Sprache an.
 static void handleMusicSeek() {
   int d = 1;
   if (server.hasArg("plain")) {
@@ -234,7 +241,7 @@ static void handleMusicSeek() {
       d = doc["d"].as<int>();
   }
   if (!musicIsPlaying()) {
-    server.send(409, "application/json", "{\"ok\":false,\"err\":\"radio ferma\"}");
+    server.send(409, "application/json", "{\"ok\":false,\"err\":\"Radio laeuft nicht\"}");
     return;
   }
   musicRequestSeek(d >= 0 ? 1 : -1);
@@ -250,10 +257,10 @@ static void handleReset() {
 }
 
 bool webuiBegin() {
-  bool fs = LittleFS.begin(true);   // true = formatta se il mount fallisce
-  if (!fs) Serial.println("[web] LittleFS non montato (pagina assente, API ok)");
+  bool fs = LittleFS.begin(true);   // true = formatieren, wenn das Einbinden fehlschlägt
+  if (!fs) Serial.println("[web] LittleFS nicht eingebunden (Seite fehlt, Schnittstelle arbeitet)");
 
-  // API
+  // Schnittstelle
   server.on("/api/settings", HTTP_GET,  handleGetSettings);
   server.on("/api/settings", HTTP_POST, handlePostSettings);
   server.on("/api/live",     HTTP_GET,  handleLive);
@@ -264,20 +271,21 @@ bool webuiBegin() {
   server.on("/api/music/seek", HTTP_POST, handleMusicSeek);
   server.on("/api/local/test", HTTP_POST, handleLocalTest);
 
-  // Pagina statica da LittleFS (data/index.html).
+  // Unveränderliche Seite aus LittleFS (data/index.html).
   server.serveStatic("/", LittleFS, "/index.html");
   server.serveStatic("/index.html", LittleFS, "/index.html");
 
   server.onNotFound([]() {
-    // fallback: se la pagina non c'e' in LittleFS, un messaggio minimo utile.
+    // Rückfall: fehlt die Seite in LittleFS, wenigstens ein brauchbarer Hinweis.
     if (LittleFS.exists("/index.html")) { server.send(404, "text/plain", "not found"); return; }
     server.send(200, "text/html",
-      "<h3>ALEXO</h3><p>Pagina non caricata in LittleFS. Carica il filesystem: "
-      "<code>pio run -t uploadfs</code>. L'API JSON e' attiva su /api/settings.</p>");
+      "<h3>ALEXO</h3><p>Die Seite liegt nicht in LittleFS. Dateisystem uebertragen: "
+      "<code>pio run -t uploadfs</code>. Die JSON-Schnittstelle arbeitet unter "
+      "/api/settings.</p>");
   });
 
   server.begin();
-  Serial.println("[web] pannello pronto: http://alexo.local/");
+  Serial.println("[web] Panel bereit: http://alexo.local/");
   return fs;
 }
 

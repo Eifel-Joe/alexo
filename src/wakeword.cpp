@@ -1,12 +1,16 @@
 // ============================================================================
-//  ALEXO - Wake word locale "Alexo" (microWakeWord). Vedi wakeword.h + WAKEWORD.md.
+//  ALEXO - Weckwort "Hey Jarvis", erkannt im Geraet selbst (microWakeWord).
+//  Siehe wakeword.h und WAKEWORD.md.
 //
-//  Catena: PCM 16kHz -> microfrontend (40 feature mel/10ms) -> conversione int8
-//  -> modello streaming INT8 (input [1,stride,40], accumula 'stride' frame poi
-//  Invoke) -> probabilita' uint8 -> media mobile su WAKE_WINDOW > WAKE_PROB_CUTOFF
-//  -> rilevato. Logica e costanti ricalcate da ESPHome micro_wake_word.
+//  Die Kette: PCM mit 16 kHz -> Merkmalsberechnung (40 Mel-Merkmale je 10 ms)
+//  -> Umwandlung nach int8 -> INT8-Modell im Strombetrieb (Eingang [1,stride,40],
+//  es sammelt 'stride' Frames und ruft dann Invoke) -> Wahrscheinlichkeit als
+//  uint8 -> gleitender Mittelwert ueber WAKE_WINDOW groesser als
+//  WAKE_PROB_CUTOFF -> erkannt. Ablauf und Konstanten sind micro_wake_word aus
+//  ESPHome nachgebildet.
 //
-//  Compilato solo se WAKE_ENABLE o WAKE_TEST (altrimenti stub inerte).
+//  Wird nur uebersetzt, wenn WAKE_ENABLE oder WAKE_TEST gesetzt ist, sonst
+//  bleiben nur wirkungslose Rumpffunktionen.
 // ============================================================================
 #include "wakeword.h"
 #include "config.h"
@@ -28,15 +32,15 @@
 #include "wake_model.h"   // alignas(16) const unsigned char g_wake_model[]
 
 #define WAKE_FEATURE_SIZE 40
-#define WAKE_ARENA_BYTES  (40 * 1024)   // manifest ~22348; margine in PSRAM
+#define WAKE_ARENA_BYTES  (40 * 1024)   // Manifest nennt 22860; Reserve im PSRAM
 
 namespace {
   struct FrontendState   fe;
   tflite::MicroInterpreter *interp = nullptr;
   uint8_t *arena = nullptr;
-  int      model_stride  = 1;     // input->dims[1]: frame per Invoke
+  int      model_stride  = 1;     // input->dims[1]: Frames je Invoke
   int      current_step  = 0;
-  uint8_t  recent[16];            // finestra mobile delle probabilita'
+  uint8_t  recent[16];            // gleitendes Fenster der Wahrscheinlichkeiten
   int      recent_n = 0, recent_idx = 0;
   uint8_t  last_prob = 0;
   bool     s_ready = false;
@@ -45,9 +49,9 @@ namespace {
 static void wlogln(const char *s) { Serial.println(s); netlogPrintln(s); }
 
 bool wakeBegin() {
-  if (!psramFound()) { wlogln("[wake] PSRAM assente"); return false; }
+  if (!psramFound()) { wlogln("[wake] kein PSRAM vorhanden"); return false; }
 
-  // --- Frontend (parametri = preprocessor_settings.h di ESPHome) ---
+  // --- Merkmalsberechnung (Werte aus preprocessor_settings.h von ESPHome) ---
   struct FrontendConfig cfg;
   FrontendFillConfigWithDefaults(&cfg);
   cfg.window.size_ms = 30;  cfg.window.step_size_ms = 10;
@@ -64,29 +68,31 @@ bool wakeBegin() {
   cfg.pcan_gain_control.gain_bits = 21;
   cfg.log_scale.enable_log = 1;
   cfg.log_scale.scale_shift = 6;
-  if (!FrontendPopulateState(&cfg, &fe, 16000)) { wlogln("[wake] frontend init FALLITO"); return false; }
+  if (!FrontendPopulateState(&cfg, &fe, 16000)) { wlogln("[wake] Merkmalsberechnung liess sich nicht einrichten"); return false; }
 
-  // --- Modello ---
+  // --- Modell ---
   const tflite::Model *model = tflite::GetModel(g_wake_model);
-  if (model->version() != TFLITE_SCHEMA_VERSION) { wlogln("[wake] schema TFLite incompatibile"); return false; }
+  if (model->version() != TFLITE_SCHEMA_VERSION) { wlogln("[wake] TFLite-Schema passt nicht"); return false; }
   arena = (uint8_t *)ps_malloc(WAKE_ARENA_BYTES);
-  if (!arena) { wlogln("[wake] ps_malloc arena fallito"); return false; }
-  // Il modello streaming usa RESOURCE VARIABLES (op VAR_HANDLE) per lo stato tra
-  // le inferenze: serve un piccolo arena dedicato + MicroResourceVariables passati
-  // all'interprete (come fa ESPHome). Senza, AllocateTensors fallisce.
+  if (!arena) { wlogln("[wake] Speicher im PSRAM liess sich nicht reservieren"); return false; }
+  // Das Modell im Strombetrieb nutzt RESOURCE VARIABLES (den Operator VAR_HANDLE)
+  // fuer den Zustand zwischen zwei Auswertungen. Dafuer braucht es einen kleinen
+  // eigenen Speicherbereich und MicroResourceVariables, die dem Interpreter
+  // uebergeben werden, so wie ESPHome es macht. Ohne das schlaegt AllocateTensors
+  // fehl.
   static alignas(16) uint8_t var_arena[1024];
   tflite::MicroAllocator *ma = tflite::MicroAllocator::Create(var_arena, sizeof(var_arena));
   tflite::MicroResourceVariables *mrv = tflite::MicroResourceVariables::Create(ma, 20);
   static tflite::AllOpsResolver resolver;
   static tflite::MicroInterpreter si(model, resolver, arena, WAKE_ARENA_BYTES, mrv);
   interp = &si;
-  if (interp->AllocateTensors() != kTfLiteOk) { wlogln("[wake] AllocateTensors FALLITA"); return false; }
+  if (interp->AllocateTensors() != kTfLiteOk) { wlogln("[wake] AllocateTensors fehlgeschlagen"); return false; }
 
   TfLiteTensor *in  = interp->input(0);
   TfLiteTensor *out = interp->output(0);
-  // input atteso [1, stride, 40] int8 ; output [1,1] uint8
+  // erwarteter Eingang [1, stride, 40] als int8; Ausgang [1,1] als uint8
   if (in->dims->size != 3 || in->dims->data[2] != WAKE_FEATURE_SIZE || in->type != kTfLiteInt8) {
-    char l[120]; snprintf(l, sizeof(l), "[wake] input inatteso: dims=%d d2=%d type=%d", in->dims->size, in->dims->size>=3?in->dims->data[2]:-1, in->type); wlogln(l); return false;
+    char l[120]; snprintf(l, sizeof(l), "[wake] unerwarteter Eingang: dims=%d d2=%d type=%d", in->dims->size, in->dims->size>=3?in->dims->data[2]:-1, in->type); wlogln(l); return false;
   }
   model_stride = in->dims->data[1];
   char l[140];
@@ -101,9 +107,10 @@ bool wakeReady() { return s_ready; }
 uint8_t wakeLastProb() { return last_prob; }
 
 void wakeReset() {
-  // Azzera lo stato del rilevamento dopo un'interazione: finestra delle
-  // probabilita', accumulo delle stride e stato del frontend (noise reduction/
-  // PCAN). Cosi' l'audio stantio post-risposta non fa scattare un falso wake.
+  // Setzt den Erkennungszustand nach einem Wortwechsel zurueck: das Fenster der
+  // Wahrscheinlichkeiten, die gesammelten Frames und den Zustand der
+  // Merkmalsberechnung (Rauschunterdrueckung und PCAN). So loest der alte Ton
+  // nach einer Antwort das Weckwort nicht faelschlich aus.
   recent_n = 0; recent_idx = 0; current_step = 0; last_prob = 0;
   if (s_ready) FrontendReset(&fe);
 }
@@ -115,7 +122,8 @@ bool wakeFeed(const int16_t *samples, size_t n) {
   size_t pos = 0;
   while (pos < n) {
     size_t chunk = n - pos; if (chunk > 2048) chunk = 2048;
-    // Applica il guadagno wake (con clamp): alza il livello della voce normale.
+    // Verstaerkung des Weckwort-Wegs anwenden (mit Begrenzung): hebt den Pegel
+    // normal gesprochener Sprache an.
     for (size_t j = 0; j < chunk; j++) {
       int32_t v = (int32_t)samples[pos + j] * gSettings.wakeGain;
       g[j] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
@@ -127,9 +135,10 @@ bool wakeFeed(const int16_t *samples, size_t n) {
     struct FrontendOutput fo = FrontendProcessSamples(&fe, g + off, chunk - off, &processed);
     off += processed;
     if (processed == 0) break;
-    if (fo.size == 0) continue;   // finestra non ancora completa
+    if (fo.size == 0) continue;   // Fenster noch nicht voll
 
-    // uint16 frontend -> int8 feature (formula ESPHome: scala 256, div 666, -128)
+    // uint16 der Merkmalsberechnung -> int8 (Formel aus ESPHome: mal 256,
+    // geteilt durch 666, minus 128)
     TfLiteTensor *in = interp->input(0);
     int8_t *indata = tflite::GetTensorData<int8_t>(in);
     int8_t *slot = indata + WAKE_FEATURE_SIZE * current_step;
@@ -138,14 +147,15 @@ bool wakeFeed(const int16_t *samples, size_t n) {
       v += -128;
       slot[i] = (int8_t)(v < -128 ? -128 : (v > 127 ? 127 : v));
     }
-    if (++current_step < model_stride) continue;   // accumula 'stride' frame
+    if (++current_step < model_stride) continue;   // erst 'stride' Frames sammeln
     current_step = 0;
 
-    if (interp->Invoke() != kTfLiteOk) { wlogln("[wake] Invoke FALLITA"); continue; }
+    if (interp->Invoke() != kTfLiteOk) { wlogln("[wake] Invoke fehlgeschlagen"); continue; }
     last_prob = interp->output(0)->data.uint8[0];
 
-    // finestra mobile + media > cutoff (parametri runtime dal pannello web)
-    const int win = gSettings.wakeWindow;   // gia' clampato a 1..16 in settings
+    // gleitendes Fenster, Mittelwert ueber der Schwelle (Werte zur Laufzeit aus
+    // dem Web-Panel)
+    const int win = gSettings.wakeWindow;   // in settings bereits auf 1..16 begrenzt
     recent[recent_idx] = last_prob;
     recent_idx = (recent_idx + 1) % win;
     if (recent_n < win) recent_n++;
@@ -154,7 +164,7 @@ bool wakeFeed(const int16_t *samples, size_t n) {
       for (int i = 0; i < win; i++) sum += recent[i];
       if (sum > gSettings.wakeProbCutoff * win) {
         detected = true;
-        recent_n = 0; recent_idx = 0;   // refrattario: svuota la finestra (cool-off)
+        recent_n = 0; recent_idx = 0;   // Sperrzeit: Fenster leeren, damit es nicht nachfeuert
       }
     }
     }   // while (off < chunk)
@@ -162,25 +172,26 @@ bool wakeFeed(const int16_t *samples, size_t n) {
   return detected;
 }
 
-// --- Test della catena senza mic --------------------------------------------
+// --- Test der Kette ohne Mikrofon -------------------------------------------
 #if WAKE_TEST
 void wakeSelfTest() {
   static bool tried = false;
-  if (!tried) { tried = true; if (!wakeBegin()) wlogln("[wake] init test FALLITO"); }
+  if (!tried) { tried = true; if (!wakeBegin()) wlogln("[wake] Einrichten fuer den Test fehlgeschlagen"); }
   if (!s_ready) return;
 
-  // Ascolto CONTINUO: legge un chunk corto (~20 ms) dal mic e lo passa subito
-  // alla catena. Va chiamato in un loop STRETTO (niente delay), cosi' il modello
-  // streaming riceve un flusso continuo (e non perde gli "Alexa"). Stampa il
-  // picco di probabilita' ogni secondo e quando rileva.
-  static int16_t buf[320];          // 20 ms a 16 kHz
+  // DAUERHAFTES Zuhoeren: liest einen kurzen Block (etwa 20 ms) vom Mikrofon und
+  // gibt ihn sofort an die Kette. Der Aufruf gehoert in eine ENGE Schleife ohne
+  // Verzoegerung, damit das Modell im Strombetrieb einen durchgehenden Fluss
+  // bekommt und das Weckwort nicht verpasst. Gibt jede Sekunde die hoechste
+  // Wahrscheinlichkeit aus und meldet jede Erkennung.
+  static int16_t buf[320];          // 20 ms bei 16 kHz
   static uint8_t maxp = 0;
   static uint32_t lastPrint = 0;
   size_t got = micReadChunk(buf, 320);
   if (got) {
     if (wakeFeed(buf, got)) {
       char l[100];
-      snprintf(l, sizeof(l), "[wakeTest] *** ALEXA RILEVATO! *** (picco=%u)", maxp);
+      snprintf(l, sizeof(l), "[wakeTest] *** WECKWORT ERKANNT! *** (Spitze=%u)", maxp);
       wlogln(l);
       maxp = 0;
     }
@@ -189,7 +200,7 @@ void wakeSelfTest() {
   if (millis() - lastPrint > 1000) {
     lastPrint = millis();
     char l[80];
-    snprintf(l, sizeof(l), "[wakeTest] (1s) prob_max=%u/255", maxp);
+    snprintf(l, sizeof(l), "[wakeTest] (1 s) hoechste Wahrscheinlichkeit=%u/255", maxp);
     wlogln(l);
     maxp = 0;
   }
@@ -198,7 +209,7 @@ void wakeSelfTest() {
 void wakeSelfTest() {}
 #endif
 
-#else  // !(WAKE_ENABLE || WAKE_TEST) -- stub inerte
+#else  // !(WAKE_ENABLE || WAKE_TEST) -- wirkungslose Rumpffunktionen
 
 bool    wakeBegin()    { return false; }
 bool    wakeReady()    { return false; }

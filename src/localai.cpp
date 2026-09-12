@@ -1,28 +1,29 @@
 // ============================================================================
-//  ALEXO - Servizi AI in casa: aiutanti condivisi (vedi localai.h).
+//  ALEXO - KI-Dienste zu Hause: gemeinsame Helfer (siehe localai.h).
 // ============================================================================
 #include "localai.h"
 #include "config.h"
 #include "settings.h"
-#include "tts.h"          // ttsUsesLocal(): per la voce "raggiungibile" non basta
+#include "tts.h"          // ttsUsesLocal(): bei der Stimme genügt "erreichbar" nicht
 #include "gobbo.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-//  Quanto aspettare la risposta del PC prima di dichiararlo assente. Corto di
-//  proposito: e' il tempo che Alexo perde quando il PC e' spento. Sulla rete di
-//  casa un servizio vivo risponde in pochi millisecondi, quindi non serve di piu'.
+//  Wie lange auf die Antwort des PC gewartet wird, bevor er als abwesend gilt.
+//  Absichtlich kurz: es ist die Zeit, die Alexo bei ausgeschaltetem PC verliert.
+//  Im eigenen Netz antwortet ein laufender Dienst in wenigen Millisekunden, mehr
+//  braucht es also nicht.
 #define LOCAL_PROBE_MS     400
-//  Per quanto vale l'esito senza richiedere. Piu' lungo del giro di controllo
-//  qui sotto, cosi' le domande trovano quasi sempre la risposta gia' pronta.
+//  Wie lange ein Ergebnis ohne erneute Prüfung gilt. Länger als der Kontrollgang
+//  weiter unten, damit Anfragen die Antwort fast immer schon vorliegen haben.
 #define LOCAL_CACHE_MS   25000
-//  Ogni quanto il loop riprova UN servizio (a turno) per tenere aggiornati i
-//  pallini del display anche stando fermi.
+//  In welchem Abstand der Loop EINEN Dienst erneut prüft, reihum, damit die
+//  Punkte auf dem Display auch bei Stillstand aktuell bleiben.
 #define LOCAL_TICK_MS    20000
-//  Quanto vale il nome del modello saputo dal server. Tenuto uguale al giro di
-//  controllo: se scarichi il modello da LM Studio, la spia se ne accorge subito
-//  invece di restare verde a vuoto.
+//  Wie lange der vom Server erfragte Modellname gilt. Gleich lang wie der
+//  Kontrollgang: entlädt man das Modell in LM Studio, merkt die Anzeige es
+//  sofort, statt grundlos grün zu bleiben.
 #define LOCAL_MODEL_MS   20000
 
 String localBaseUrl(LocalSvc svc) {
@@ -43,12 +44,13 @@ static String preferredModel(LocalSvc svc) {
   }
 }
 
-// Spezza "http://192.168.1.50:1234/v1" in host, porta e path. La porta torna 0
-// se non e' scritta: e' il segnale che va indovinata (vedi le candidate sotto).
-// Torna false se l'indirizzo e' vuoto o non comincia per http:// .
+// Zerlegt "http://192.168.1.50:1234/v1" in Rechner, Port und Pfad. Der Port ist
+// 0, wenn er nicht angegeben war: das Zeichen, dass er zu erraten ist (siehe die
+// Kandidaten unten). Liefert false, wenn die Adresse leer ist oder nicht mit
+// http:// beginnt.
 static bool parseUrl(const String &url, String &host, uint16_t &port, String &path) {
-  if (!url.startsWith("http://")) return false;   // niente TLS in casa
-  int start = 7;                                  // dopo "http://"
+  if (!url.startsWith("http://")) return false;   // zu Hause ohne TLS
+  int start = 7;                                  // hinter "http://"
   int slash = url.indexOf('/', start);
   String hostPort = (slash < 0) ? url.substring(start) : url.substring(start, slash);
   path = (slash < 0) ? String("") : url.substring(slash);
@@ -57,7 +59,7 @@ static bool parseUrl(const String &url, String &host, uint16_t &port, String &pa
   if (hostPort.isEmpty()) return false;
 
   int colon = hostPort.indexOf(':');
-  if (colon < 0) { host = hostPort; port = 0; }   // porta da indovinare
+  if (colon < 0) { host = hostPort; port = 0; }   // Port muss erraten werden
   else {
     host = hostPort.substring(0, colon);
     port = (uint16_t)hostPort.substring(colon + 1).toInt();
@@ -66,13 +68,16 @@ static bool parseUrl(const String &url, String &host, uint16_t &port, String &pa
   return !host.isEmpty();
 }
 
-// Porte da provare quando nell'indirizzo non c'e' (vedi LOCAL_TTS_PORTS_AUTO).
+// Ports, die probiert werden, wenn in der Adresse keiner steht (siehe
+// LOCAL_TTS_PORTS_AUTO).
 static const uint16_t TTS_PORTS[] = LOCAL_TTS_PORTS_AUTO;
 
-// Il server risponde su host:porta? Attesa cortissima, come tutto il resto qui.
+// Antwortet der Server auf Rechner und Port? Sehr kurze Wartezeit, wie überall
+// hier.
 static bool probe(const String &host, uint16_t port) {
-  // Se l'host e' gia' un indirizzo numerico si evita la risoluzione del nome,
-  // che da sola puo' costare piu' dell'attesa che ci siamo dati.
+  // Ist der Rechner bereits als Zahlenadresse angegeben, entfällt das Auflösen
+  // des Namens, das für sich genommen länger dauern kann als die Wartezeit, die
+  // wir uns gesetzt haben.
   WiFiClient c;
   IPAddress ip;
   bool up = ip.fromString(host) ? c.connect(ip, port, LOCAL_PROBE_MS)
@@ -81,42 +86,42 @@ static bool probe(const String &host, uint16_t port) {
   return up;
 }
 
-// --- Stato per servizio -----------------------------------------------------
-//  'ok' lo scrive il core 1 (le prove) e lo legge il core 0 (il display): e' un
-//  bool, la lettura non puo' beccarlo a meta'.
-//  'up' = il server risponde;  'ok' = ci si puo' davvero lavorare (vedi refresh).
-//  Li scrive il core 1 (le prove) e li legge il core 0 (il display): sono bool,
-//  la lettura non puo' beccarli a meta'.
+// --- Zustand je Dienst ------------------------------------------------------
+//  'up' = der Server antwortet;  'ok' = man kann wirklich damit arbeiten (siehe
+//  refresh).
+//  Geschrieben werden sie von Kern 1 (den Prüfungen), gelesen von Kern 0 (dem
+//  Display). Es sind bool-Werte, ein Lesevorgang kann sie nicht halb erwischen.
 struct Svc {
   bool     up    = false;
   bool     ok    = false;
-  uint32_t when  = 0;      // quando e' stato provato (0 = mai / da riprovare)
-  String   model;          // nome modello saputo dal server
+  uint32_t when  = 0;      // wann geprüft wurde (0 = nie oder erneut zu prüfen)
+  String   model;          // vom Server erfragter Modellname
   uint32_t modelWhen = 0;
-  String   base;           // indirizzo risolto (porta indovinata, se mancava)
+  String   base;           // aufgelöste Adresse (mit erratenem Port, falls er fehlte)
 };
 static Svc gSvc[LOC_COUNT];
 
 static const char *svcName(LocalSvc svc) {
-  return svc == LOC_STT ? "trascrizione" : svc == LOC_LLM ? "cervello" : "voce";
+  return svc == LOC_STT ? "Spracherkennung" : svc == LOC_LLM ? "Gehirn" : "Stimme";
 }
 
-// Aggiorna lo stato del servizio, se l'ultima prova e' vecchia.
+// Frischt den Zustand des Dienstes auf, wenn die letzte Prüfung alt ist.
 static void refresh(LocalSvc svc) {
   Svc &s = gSvc[svc];
 
   const String cfg = localBaseUrl(svc);
   String host, path; uint16_t port;
-  if (!parseUrl(cfg, host, port, path)) {   // spento dal pannello o indirizzo storto
+  if (!parseUrl(cfg, host, port, path)) {   // im Panel aus oder Adresse unbrauchbar
     s.up = s.ok = false; s.base = ""; s.when = millis();
     return;
   }
 
-  if (s.when && millis() - s.when < LOCAL_CACHE_MS) return;   // esito ancora buono
+  if (s.when && millis() - s.when < LOCAL_CACHE_MS) return;   // Ergebnis noch gültig
 
-  // Porta scritta = una sola prova, quella. Porta mancante = per la VOCE si
-  // provano in ordine quelle dei due server di casa (la prima che risponde
-  // vince), per gli altri vale la 80 come in qualsiasi indirizzo http.
+  // Steht der Port da, wird genau dieser einmal geprüft. Fehlt er, werden bei
+  // der STIMME die Ports der beiden Server zu Hause der Reihe nach probiert (der
+  // erste, der antwortet, gewinnt); für die übrigen gilt 80 wie bei jeder
+  // http-Adresse.
   uint16_t cand[sizeof(TTS_PORTS) / sizeof(TTS_PORTS[0])];
   int nc = 0;
   if (port)                cand[nc++] = port;
@@ -125,44 +130,46 @@ static void refresh(LocalSvc svc) {
   else                     cand[nc++] = 80;
 
   bool up = false;
-  uint16_t used = cand[0];        // se non risponde nessuno resta la prima
+  uint16_t used = cand[0];        // antwortet keiner, bleibt der erste
   for (int i = 0; i < nc && !up; i++)
     if (probe(host, cand[i])) { up = true; used = cand[i]; }
 
-  // Con la porta scritta l'indirizzo resta quello del pannello, virgola per
-  // virgola: chi ce l'ha gia' buono non deve accorgersi di niente.
+  // Steht der Port da, bleibt die Adresse Zeichen für Zeichen die aus dem Panel:
+  // wer bereits eine gute eingetragen hat, soll nichts davon merken.
   const String prev = s.base;
   if (port) { s.base = cfg; while (s.base.endsWith("/")) s.base.remove(s.base.length() - 1); }
   else {
     if (path.isEmpty() && svc == LOC_TTS) path = LOCAL_TTS_PATH_AUTO;
     s.base = "http://" + host + ":" + String(used) + path;
-    // Solo quando CAMBIA: il giro di controllo passa di qui ogni ~20 s e un log
-    // a ogni passaggio coprirebbe tutto il resto.
-    if (up && nc > 1 && s.base != prev) Serial.printf("[loc] voce in casa: %s\n", s.base.c_str());
+    // Nur bei einer ÄNDERUNG: der Kontrollgang kommt etwa alle 20 Sekunden hier
+    // vorbei, und eine Zeile bei jedem Durchlauf würde alles andere zudecken.
+    if (up && nc > 1 && s.base != prev) Serial.printf("[loc] Stimme zu Hause: %s\n", s.base.c_str());
   }
 
   s.up = up;
   s.when = millis();
 
-  // Rispondere non basta per il CERVELLO: un server senza modello caricato non
-  // ha niente da far girare e la domanda fallirebbe, quindi non e' "in casa".
-  // Per trascrizione e voce non si puo' pretendere altrettanto: parecchi di quei
-  // server non dichiarano nessun modello e funzionano lo stesso.
+  // Für das GEHIRN genügt es nicht, dass der Server antwortet: ohne geladenes
+  // Modell hat er nichts zu rechnen, die Frage schlüge fehl, also gilt er nicht
+  // als "zu Hause". Von Spracherkennung und Stimme lässt sich dasselbe nicht
+  // verlangen: etliche dieser Server nennen gar kein Modell und arbeiten
+  // trotzdem.
   bool ok = up;
   if (up && svc == LOC_LLM && localModelName(svc).isEmpty()) ok = false;
 
   if (ok != s.ok)
     Serial.printf("[loc] %s: %s\n", svcName(svc),
-                  ok ? "in casa" : (up ? "risponde ma non e' pronto -> cloud" : "in cloud"));
+                  ok ? "zu Hause" : (up ? "antwortet, ist aber nicht bereit -> Cloud" : "in der Cloud"));
   s.ok = ok;
 }
 
 bool localOn(LocalSvc svc) {
   if (svc >= LOC_COUNT) return false;
-  // La VOCE e' l'eccezione: il server di casa puo' rispondere benissimo e la
-  // risposta andare lo stesso a ElevenLabs, perche' per il TTS decidono gli
-  // interruttori e non la raggiungibilita' (vedi ttsUsesLocal). Un pallino verde
-  // li' direbbe una cosa e ne succederebbe un'altra: verde solo se ci passa.
+  // Die STIMME ist die Ausnahme: der Server zu Hause kann bestens antworten, und
+  // die Antwort geht trotzdem zu ElevenLabs, weil bei der Sprachausgabe die
+  // Schalter entscheiden und nicht die Erreichbarkeit (siehe ttsUsesLocal). Ein
+  // grüner Punkt würde dort etwas anderes behaupten, als tatsächlich geschieht:
+  // grün also nur, wenn es wirklich dort hindurchgeht.
   if (svc == LOC_TTS && !ttsUsesLocal()) return false;
   return gSvc[svc].ok;
 }
@@ -185,16 +192,16 @@ bool localRefreshTick() {
   if (millis() - last < LOCAL_TICK_MS) return false;
   last = millis();
 
-  // Un servizio per giro, a rotazione: cosi' l'attesa peggiore resta una sola.
+  // Ein Dienst je Durchgang, reihum: so bleibt es bei höchstens einer Wartezeit.
   for (int i = 0; i < LOC_COUNT; i++) {
     LocalSvc s = (LocalSvc)((next + i) % LOC_COUNT);
-    if (localBaseUrl(s).isEmpty()) continue;     // spento: niente da provare
+    if (localBaseUrl(s).isEmpty()) continue;     // aus: nichts zu prüfen
     next = ((int)s + 1) % LOC_COUNT;
-    gSvc[s].when = 0; gSvc[s].modelWhen = 0;     // scade l'esito -> riprova davvero
+    gSvc[s].when = 0; gSvc[s].modelWhen = 0;     // Ergebnis verfällt -> wirklich neu prüfen
     localReachable(s);
     return true;
   }
-  return false;                                  // nessun servizio in casa configurato
+  return false;                                  // kein Dienst zu Hause eingerichtet
 }
 
 String localBaseUsed(LocalSvc svc) {
@@ -202,8 +209,8 @@ String localBaseUsed(LocalSvc svc) {
   const String cfg = localBaseUrl(svc);
   String host, path; uint16_t port;
   if (!parseUrl(cfg, host, port, path)) return "";
-  // Porta scritta: niente da indovinare, quindi nessuna prova e nessuna attesa
-  // (la voce con "sempre in casa" ci tiene: e' il suo vantaggio).
+  // Steht der Port da, ist nichts zu erraten, also weder Prüfung noch Wartezeit.
+  // Der Stimme mit "immer zu Hause" liegt daran, das ist ihr Vorteil.
   if (port) { String b = cfg; while (b.endsWith("/")) b.remove(b.length() - 1); return b; }
   refresh(svc);
   return gSvc[svc].base;
@@ -212,7 +219,7 @@ String localBaseUsed(LocalSvc svc) {
 String localModelName(LocalSvc svc) {
   if (svc >= LOC_COUNT) return "";
   String pref = preferredModel(svc);
-  if (pref.length()) return pref;                // scelto a mano dal pannello
+  if (pref.length()) return pref;                // im Panel von Hand gewählt
 
   const String base = localBaseUsed(svc);
   if (base.isEmpty()) return "";
@@ -236,7 +243,7 @@ String localModelName(LocalSvc svc) {
       name = (const char *)(doc["data"][0]["id"] | "");
   }
   if (name.isEmpty())
-    Serial.printf("[loc] non so quale modello e' caricato su %s (HTTP %d)\n",
+    Serial.printf("[loc] unbekannt, welches Modell auf %s geladen ist (HTTP %d)\n",
                   base.c_str(), code);
 
   s.model = name; s.modelWhen = millis();
@@ -247,47 +254,50 @@ void localForget() {
   for (int i = 0; i < LOC_COUNT; i++) { gSvc[i].when = 0; gSvc[i].modelWhen = 0; }
 }
 
-// --- Dirlo in faccia (vedi localai.h) ---------------------------------------
-//  Dove finisce ogni pezzo quando esce di casa: serve solo a scriverlo in chiaro
-//  nella riga rossa, cosi' si sa CHI ha ricevuto la roba.
+// --- Unmissverständlich sagen (siehe localai.h) -----------------------------
+//  Wohin jedes Glied geht, wenn es das Haus verlässt. Das dient allein dazu, es
+//  in der roten Zeile im Klartext zu nennen, damit man weiss, WER die Daten
+//  bekommen hat.
 static const char *cloudName(LocalSvc svc) {
   return svc == LOC_STT ? "Groq" : svc == LOC_LLM ? "Claude" : "ElevenLabs";
 }
 
 void localSayCloud(LocalSvc svc) {
   if (svc >= LOC_COUNT) return;
-  // L'avviso interessa solo a chi ha acceso "solo casa": e' li' che l'uscita
-  // su internet e' una cosa da sapere. A interruttore spento il cloud e' il
-  // funzionamento normale e la riga sarebbe solo rumore.
+  // Der Hinweis geht nur den an, der "nur zu Hause" eingeschaltet hat: dort ist
+  // der Weg ins Internet eine Nachricht wert. Bei ausgeschaltetem Schalter ist
+  // die Cloud der Normalbetrieb und die Zeile wäre nur Lärm.
   if (!gSettings.localOnly) return;
-  // In cloud di proposito (nessun indirizzo di casa): non c'e' niente da
-  // segnalare, sarebbe una riga rossa a ogni frase.
+  // Absichtlich in der Cloud (keine Adresse zu Hause): es gibt nichts zu melden,
+  // es wäre eine rote Zeile bei jedem Satz.
   if (localBaseUrl(svc).isEmpty()) return;
-  String msg = String("[uscito su internet: ") + svcName(svc) + " a " + cloudName(svc) + "]";
+  String msg = String("[ins Internet gegangen: ") + svcName(svc) + " an " + cloudName(svc) + "]";
   Serial.println(msg);
   gobboPrintWarn(msg);
 }
 
 void localSayBlocked(LocalSvc svc) {
   if (svc >= LOC_COUNT) return;
-  // Gli interruttori che vietano l'uscita sono DUE, e il messaggio deve nominare
-  // quello che ha bloccato davvero: leggendo "solo casa" con quell'interruttore
-  // spento si va a cercare un guasto che non c'e'. "Solo casa" e' la regola piu'
-  // larga e vince; se e' spento, l'unico caso rimasto e' la voce con "voce sempre
-  // in casa" (trascrizione e cervello chiamano qui solo dentro localOnly).
+  // Es gibt ZWEI Schalter, die den Weg nach draussen versperren, und die Meldung
+  // muss den nennen, der tatsächlich gesperrt hat: liest man "nur zu Hause",
+  // während dieser Schalter aus ist, sucht man einen Fehler, den es nicht gibt.
+  // "Nur zu Hause" ist die weiter gefasste Regel und hat Vorrang; ist sie aus,
+  // bleibt allein die Stimme mit "Stimme immer zu Hause" übrig. Spracherkennung
+  // und Gehirn landen hier nur innerhalb von localOnly.
   String msg;
   if (!gSettings.localOnly && svc == LOC_TTS && gSettings.ttsLocalOnly)
-    msg = "[voce sempre in casa: server non disponibile, non uso ElevenLabs]";
+    msg = "[Stimme immer zu Hause: Server nicht erreichbar, ElevenLabs wird nicht benutzt]";
   else
-    msg = String("[solo casa: ") + svcName(svc) + " non disponibile, non esco]";
+    msg = String("[nur zu Hause: ") + svcName(svc) + " nicht erreichbar, es geht nichts hinaus]";
   Serial.println(msg);
   gobboPrintWarn(msg);
 }
 
 String localStripThink(const String &s) {
-  // Si tiene cio' che viene DOPO l'ultima chiusura: qualunque cosa il modello
-  // abbia rimuginato prima, la risposta e' quella che segue. Copre anche i
-  // template che aprono il pensiero da soli e mandano solo la chiusura.
+  // Behalten wird, was NACH dem letzten schliessenden Element kommt: was das
+  // Modell davor auch gegrübelt hat, die Antwort ist das, was folgt. Das deckt
+  // auch die Vorlagen ab, die das Nachdenken selbst eröffnen und nur das
+  // schliessende Element mitschicken.
   int end = s.lastIndexOf("</think>");
   if (end < 0) return s;
   String out = s.substring(end + 8);
