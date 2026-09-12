@@ -88,10 +88,11 @@ Offen:
 - **Die Zeilenenden.** Alle Quelldateien sind UTF-8 ohne BOM mit CRLF. Wer sie
   mit Werkzeugen bearbeitet, die LF schreiben, erzeugt einen Diff über die
   ganze Datei. Das Hilfsmodul im Scratchpad prüfte das nach jeder Ersetzung.
-- **Escape-Sequenzen in Bash-Heredocs.** Ein `\n` in einem C-String wird dabei
-  zu einem echten Zeilenumbruch, auch bei einem Heredoc mit geschütztem
-  Begrenzer. Suchtexte mit Escape-Sequenzen deshalb meiden oder aus
-  Zeichencodes zusammensetzen.
+- **Backslashes in Bash-Heredocs.** Ein Heredoc frisst eine Ebene Backslashes,
+  auch mit geschütztem Begrenzer. Ein doppelt geschriebenes Escape kommt
+  einfach an und zerlegt damit C-Strings und mehrzeilige `#define`.
+  Suchtexte mit Escape-Sequenzen deshalb meiden oder aus Zeichencodes
+  zusammensetzen.
 - **Die Konsolenausgabe täuscht bei Akzenten.** Eine Zeile, die im Terminal als
   `già` erscheint, steht in der Datei als `gia'`. Bei Suchtexten mit Akzenten
   den Inhalt über `repr()` prüfen, nicht über die Anzeige.
