@@ -52,6 +52,17 @@ mentre finche affinche siccome poiche dunque allora ecco ormai appena
 # nicht als Treffer zaehlen.
 UNVERDAECHTIG = {'display', 'volume', 'numero'}
 
+# Italienische BEZEICHNER, die laut Spezifikation bleiben: Variablennamen, der
+# Werkzeugname fuer Claude und Dateinamen einer realen Installation. Sie werden
+# aus der Zeile entfernt, BEVOR gesucht wird, damit der Rest der Zeile weiter
+# geprueft wird. Ein vergessener italienischer Satz faellt trotzdem auf, denn er
+# enthaelt fast immer eines der vielen Funktionswoerter aus der Liste oben.
+BEZEICHNER = (
+    'riproduci_musica', 'MESI_VOCE', 'ST_COL', 'voce_alexo',
+    'campione_corto20', 'NonToccare', 'campioni',
+    'risposta', 'ancora', 'acceso', 'voce', 'col',
+)
+
 MUSTER = re.compile(
     r'(?<![A-Za-zÀ-ÿ])(' +
     '|'.join(w for w in WOERTER if w not in UNVERDAECHTIG) +
@@ -77,8 +88,11 @@ def main():
     for p, rel in dateien():
         treffer = []
         for nr, zeile in enumerate(p.read_text(encoding='utf-8', errors='replace').splitlines(), 1):
-            gefunden = set(m.group(1).lower() for m in MUSTER.finditer(zeile))
-            gefunden |= set(m.group(0) for m in APOSTROPH.finditer(zeile))
+            rein = zeile
+            for b in BEZEICHNER:
+                rein = re.sub(r'(?<![A-Za-z_])' + re.escape(b) + r'(?![A-Za-z_])', ' ', rein)
+            gefunden = set(m.group(1).lower() for m in MUSTER.finditer(rein))
+            gefunden |= set(m.group(0) for m in APOSTROPH.finditer(rein))
             if gefunden:
                 treffer.append((nr, sorted(gefunden), zeile.strip()[:90]))
         if treffer:
