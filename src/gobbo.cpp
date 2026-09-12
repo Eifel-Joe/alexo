@@ -135,6 +135,17 @@ static uint8_t cpFromUnicode(uint32_t u) {
     case 0x00FA: return 0xA3;  // ú
     case 0x00E7: return 0x87;  // ç
     case 0x00F1: return 0xA4;  // ñ
+    // Umlaute und Eszett: CP437 kennt diese Glyphen, die Tabelle bisher
+    // nicht - ohne die folgenden Zeilen wird auf dem Display aus jedem
+    // deutschen Sonderzeichen ein '?'. Werte gegen den cp437-Codec
+    // geprueft, siehe tools/test_cp437.py.
+    case 0x00E4: return 0x84;  // ä
+    case 0x00F6: return 0x94;  // ö
+    case 0x00FC: return 0x81;  // ü
+    case 0x00C4: return 0x8E;  // Ä
+    case 0x00D6: return 0x99;  // Ö
+    case 0x00DC: return 0x9A;  // Ü
+    case 0x00DF: return 0xE1;  // ß
     case 0x00C9: return 0x90;  // É
     case 0x00B0: return 0xF8;  // °
     // maiuscole accentate non presenti in CP437 -> lettera base
