@@ -4,7 +4,10 @@
 
 Spezifikation: `docs/specs/2026-09-12-uebersetzung-deutsch.md`
 Plan: `docs/plans/2026-09-12-uebersetzung-deutsch.md`
-Branch: `deutsch`, 21 Commits, noch nicht gepusht.
+
+**Gearbeitet wird ab jetzt ausschliesslich auf dem Branch `deutsch`.** Er trägt
+die vollständige Übersetzung. `main` bleibt unangetastet als Anschluss an das
+Originalprojekt, damit sich Änderungen von dort weiter zusammenführen lassen.
 
 ### Stand
 
@@ -13,11 +16,15 @@ Verifiziert:
 - Dokumentation, Kommentare, sichtbare Texte und Laufzeitverhalten sind deutsch.
   `python tools/pruefe_sprache.py` meldet keine Reste und schlägt in der
   Gegenprobe bei einem eingebauten italienischen Satz an.
-- Die Firmware übersetzt fehlerfrei: Flash 1476973 von 4194304 Byte, RAM 68596
+- Die Firmware übersetzt fehlerfrei: Flash 1477633 von 4194304 Byte, RAM 68596
   von 327680.
 - Umlaute und Eszett sind auf dem Display darstellbar.
   `python tools/test_cp437.py` prüft die Zuordnungstabelle gegen den
   cp437-Codec von Python und meldet 21 stimmende Zuordnungen.
+- Die Absichtserkennung vergleicht ganze Wörter.
+  `python tools/test_wortgrenzen.py` prüft das im Quelltext nach und lässt
+  21 deutsche Sätze gegen die nachgebildeten Regeln laufen; die Gegenprobe mit
+  wieder eingebautem Fehler schlägt an.
 - Das Web-Panel wurde lokal im Browser geöffnet: deutsch, Umlaute richtig,
   keine Fehler in der Konsole.
 - Das Weckwort ist auf "Hey Jarvis" umgestellt. Die eingebetteten Bytes des
@@ -27,6 +34,10 @@ Verifiziert:
   `include/config.h` überein.
 - Alle 34 Sprungmarken im Handbuch und jeder Dateiverweis in der Dokumentation
   zeigen auf vorhandene Ziele.
+- Eine Durchsicht vor dem Push hat 39 Punkte gemeldet, 30 davon nach dreifacher
+  Gegenprüfung bestätigt. Alle 30 sind behoben, siehe die Commits
+  "Zwei Fehler der Uebersetzung beheben" und "Die bestaetigten Funde der
+  Durchsicht vor dem Push beheben".
 
 Offen:
 
@@ -39,8 +50,8 @@ Offen:
 - **Die Stimmen-Kennung** ab Werk ist noch die des Originalprojekts. Der
   Betreiber wählt eine eigene Stimme im ElevenLabs-Konto und trägt sie im
   Web-Panel ein.
-- Nichts ist gepusht. Der Fork hat `origin` auf `Eifel-Joe/alexo` und
-  `upstream` auf `PeppeMinniti/alexo`.
+- **Der Standard-Branch auf GitHub** ist weiterhin `main`. Ob `deutsch` an
+  seine Stelle treten soll, ist noch nicht entschieden.
 
 ### Verworfen
 
@@ -55,34 +66,42 @@ Offen:
 - **Die STM32-Ordner umbenennen, um sie auszublenden.** Wirkungslos, weil
   PlatformIO die Plattform am Manifest erkennt und nicht am Ordnernamen.
   Erkennbar daran, dass `pio pkg list -g --only-platforms` sie weiter auflistete.
+- **Die ASCII-Umschreibungen über eine Sperrliste ersetzen.** Machte aus `true`
+  ein `trü` und aus `0xae` ein `0xä`, weil dieselben Buchstabenpaare in
+  englischen Wörtern, Bezeichnern und Hexzahlen vorkommen. Erkennbar am
+  Compilerfehler `stray '\303' in program`. Ersetzt wird jetzt über eine
+  Positivliste geprüften Wortguts.
 
 ### Fallen
 
 - **Der Build scheiterte an zwei Altlasten der Umgebung, nicht am Projekt.**
   Erstens eine defekte Plattform `ststm32@10.0.1` von 2021, deren Manifest ein
-  Paket nennt, das es selbst nicht führt; sie liegt jetzt unter
-  `C:\\Users\\Nutzer\\.platformio\\_disabled_platforms\\` und lässt sich durch
-  Zurückschieben wiederherstellen. Zweitens ein volles Laufwerk C. Der
-  Paketordner für dieses Projekt liegt deshalb auf D. **Jeder Build braucht
-  diese Umgebungsvariable:**
+  Paket nennt, das es selbst nicht führt; sie liegt beiseitegelegt und lässt
+  sich durch Zurückschieben wiederherstellen. Zweitens ein volles Laufwerk. Der
+  Paketordner für dieses Projekt liegt deshalb ausserhalb des Standardpfads.
+  **Jeder Build braucht diese Umgebungsvariable:**
 
   ```bash
-  PLATFORMIO_CORE_DIR="D:/Entwicklung/.platformio-alexo" pio run -e esp32-s3-devkitc-1
+  PLATFORMIO_CORE_DIR=<eigener Paketordner> pio run -e esp32-s3-devkitc-1
   ```
 
 - **Die Zeilenenden.** Alle Quelldateien sind UTF-8 ohne BOM mit CRLF. Wer sie
   mit Werkzeugen bearbeitet, die LF schreiben, erzeugt einen Diff über die
   ganze Datei. Das Hilfsmodul im Scratchpad prüfte das nach jeder Ersetzung.
-- **Escape-Sequenzen in Bash-Heredocs.** Ein `\n` in einem C-String wurde dabei
-  zu einem echten Zeilenumbruch und zerstörte die Zeilenfortsetzungen eines
-  mehrzeiligen `#define`. Ersetzungsskripte deshalb als Datei schreiben und
-  nicht über ein Heredoc einspeisen.
+- **Escape-Sequenzen in Bash-Heredocs.** Ein `\n` in einem C-String wird dabei
+  zu einem echten Zeilenumbruch, auch bei einem Heredoc mit geschütztem
+  Begrenzer. Suchtexte mit Escape-Sequenzen deshalb meiden oder aus
+  Zeichencodes zusammensetzen.
 - **Die Konsolenausgabe täuscht bei Akzenten.** Eine Zeile, die im Terminal als
   `già` erscheint, steht in der Datei als `gia'`. Bei Suchtexten mit Akzenten
   den Inhalt über `repr()` prüfen, nicht über die Anzeige.
 - **Abhängigkeiten zwischen Code und Web-Panel.** Das Skript in
   `data/index.html` vergleicht die Zustandstexte, die `src/webui.cpp` liefert,
   gegen feste Zeichenketten. Wer die einen ändert, muss die anderen mitziehen.
+- **Deutsche Zusammensetzungen und Beugung.** Wo das Original Wörter als
+  Teilzeichenkette suchte, traf im Deutschen "musik" in "Musiker", "lied" in
+  "Mitglied" und "gut" in "guten Morgen". `tools/test_wortgrenzen.py` hält das
+  fest; wer die Wortlisten erweitert, führt ihn aus.
 
 ### Nächste Schritte
 
@@ -95,8 +114,9 @@ Offen:
    beobachten. Der Werkswert 247 stammt aus dem Manifest des Modells.
 3. Den Senderkatalog eindeutschen, falls gewünscht: die Schlüssel in
    `MUSIC_STATIONS_DEF` und der Tabelle `CATALOG` in `src/music.cpp`.
+   Beobachtbares Kriterium: "spiel Rockmusik" muss den Rock-Sender liefern.
 4. Eine eigene Stimme im ElevenLabs-Konto wählen und im Web-Panel eintragen.
-5. Erst nach dem Gerätetest nach `origin` pushen.
+5. Entscheiden, ob `deutsch` der Standard-Branch auf GitHub werden soll.
 
 ### Empfohlene Skills für die Folgesitzung
 
