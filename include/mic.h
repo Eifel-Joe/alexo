@@ -1,76 +1,86 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Microfono MAX4466 (analogico) campionato su ADC1
-//  Registra PCM 16-bit mono a MIC_SAMPLE_RATE in un buffer PSRAM e produce
-//  un file WAV pronto da inviare allo speech-to-text.
+//  ALEXO - Mikrofon. Ab Werk das ICS-43434 über I2S (MIC_USE_I2S=1), als
+//  Alternative das analoge MAX4466 über ADC1 (MIC_USE_I2S=0).
+//  Nimmt PCM mit 16 Bit Mono bei MIC_SAMPLE_RATE in einen Puffer im PSRAM auf
+//  und erzeugt daraus eine WAV-Datei, die an die Spracherkennung gehen kann.
 // ============================================================================
 #include <Arduino.h>
 
-// Inizializza l'ADC e alloca i buffer in PSRAM. Ritorna false se la PSRAM
-// non e' disponibile o l'allocazione fallisce.
+// Richtet die Aufnahme ein und reserviert die Puffer im PSRAM. Liefert false,
+// wenn kein PSRAM vorhanden ist oder die Reservierung scheitert.
 bool micBegin();
 
-// Registra finche' keepGoing() ritorna true, oppure fino a maxMs.
-// onLevel(0..255), se passato, viene chiamato ~ogni 20 ms col livello audio
-// del momento (utile per un VU-meter su LED/display).
-// Ritorna il numero di campioni registrati.
-// silenceMs > 0: stop automatico dopo quel tanto di silenzio continuo (dopo aver
-// sentito parlare). 0 = disattivato (si ferma solo a keepGoing()==false o a maxMs).
+// Nimmt auf, solange keepGoing() true liefert, höchstens aber maxMs lang.
+// onLevel(0..255) wird, sofern übergeben, etwa alle 20 ms mit dem aktuellen
+// Pegel aufgerufen (nützlich für eine Aussteuerungsanzeige auf LED oder
+// Display).
+// Liefert die Zahl der aufgenommenen Abtastwerte.
+// silenceMs > 0: bricht nach so langer ununterbrochener Stille selbsttätig ab,
+// nachdem zuvor Sprache zu hören war. 0 = abgeschaltet, dann endet die Aufnahme
+// nur bei keepGoing()==false oder nach maxMs.
 size_t micRecord(uint32_t maxMs, bool (*keepGoing)(), void (*onLevel)(uint8_t) = nullptr, uint32_t silenceMs = 0);
 
-// Attesa massima, in ms, prima di mollare quando NON si sente nessuna voce.
-// Vale per la SOLA registrazione successiva, poi torna da sola all'attesa di
-// cortesia normale (REC_MIN_MS + silenceMs + 1s). Serve alla chat continua: dopo
-// una risposta si riapre il mic e, se nessuno parla entro pochi secondi, si
-// chiude - senza allungare l'attesa quando la chat la avvii tu.
+// Höchste Wartezeit in ms, bevor aufgegeben wird, wenn KEINE Stimme zu hören
+// ist. Gilt nur für die NÄCHSTE Aufnahme, danach gilt wieder die normale
+// Wartezeit (REC_MIN_MS + silenceMs + 1 s). Der fortlaufende Chat braucht das:
+// nach einer Antwort öffnet das Mikrofon erneut, und wenn binnen weniger
+// Sekunden niemand spricht, schliesst es wieder, ohne die Wartezeit zu
+// verlängern, wenn der Chat von Hand gestartet wurde.
 void micSetNoVoiceMs(uint32_t ms);
 
-// true se la registrazione IN CORSO ha gia' sentito voce vera (stessa soglia
-// adattiva di micHeardVoice, ma leggibile mentre si registra). Serve a capire
-// che la domanda e' partita, senza aspettare la fine.
+// true, wenn die LAUFENDE Aufnahme bereits echte Sprache gehört hat (dieselbe
+// mitlaufende Schwelle wie micHeardVoice, aber während der Aufnahme lesbar).
+// Damit lässt sich erkennen, dass die Frage begonnen hat, ohne das Ende
+// abzuwarten.
 bool micVoiceStarted();
 
-// Svuota il buffer DMA del mic (scarta l'audio accumulato). Da chiamare dopo una
-// interazione, prima di riprendere l'ascolto del wake word (evita falsi trigger).
+// Leert den DMA-Puffer des Mikrofons (verwirft den angesammelten Ton). Nach
+// einem Wortwechsel aufzurufen, bevor wieder auf das Weckwort gehört wird, sonst
+// löst es fälschlich aus.
 void micFlush();
 
-// Legge fino a 'maxn' campioni PCM 16-bit grezzi dal mic (un o piu' i2s_read,
-// bloccante ~maxn/16 ms). PCM "grezzo" (solo shift, NIENTE passa-alto): serve al
-// wake word, il cui frontend ha gia' filtri propri (filterbank da 125 Hz).
-// Ritorna i campioni effettivamente letti. 0 se non disponibile.
+// Liest bis zu 'maxn' rohe PCM-Abtastwerte mit 16 Bit vom Mikrofon (ein oder
+// mehrere i2s_read, blockierend etwa maxn/16 ms). "Roh" heisst nur verschoben,
+// OHNE Hochpass: das braucht das Weckwort, dessen Merkmalsberechnung eigene
+// Filter mitbringt (Filterbank ab 125 Hz).
+// Liefert die tatsächlich gelesenen Abtastwerte, 0 wenn nichts verfügbar ist.
 size_t micReadChunk(int16_t *out, size_t maxn);
 
-// Livello sonoro (0..255) per il ring calcolato da un blocco PCM 16-bit gia'
-// pronto (passa-alto + noise-floor auto-calibrante + envelope). Lo usa il loop
-// del wake word per pilotare il ring con lo STESSO chunk del modello.
+// Lautstärkepegel (0..255) für den Ring, berechnet aus einem bereits
+// vorliegenden PCM-Block mit 16 Bit (Hochpass, selbsttätig nachgeführter
+// Grundpegel, Hüllkurve). Der Loop des Weckworts steuert damit den Ring aus
+// DEMSELBEN Block, den auch das Modell bekommt.
 uint8_t micLevelFromChunk(const int16_t *s, size_t n);
 
-// Diagnostica del rumore di fondo del mic I2S (Step 0 wake-word). SINGLE-SHOT:
-// fa una misura (~600 ms) e stampa una riga sul monitor seriale, poi ritorna.
-// Va chiamata in loop alternata a ArduinoOTA.handle() cosi' l'OTA resta vivo.
-// Stampa il livello AC e il picco in dominio 24 bit e la proiezione su vari
-// I2S_SHIFT. Significativa solo col mic I2S; col MAX4466 stampa una nota.
+// Untersuchung des Grundrauschens am I2S-Mikrofon (Schritt 0 des Weckworts).
+// EINMALIG: misst etwa 600 ms, schreibt eine Zeile auf die serielle
+// Schnittstelle und kehrt zurück. Im Loop im Wechsel mit ArduinoOTA.handle()
+// aufzurufen, damit die Aktualisierung über Funk erreichbar bleibt.
+// Ausgegeben werden Wechselanteil und Spitzenwert im 24-Bit-Bereich sowie die
+// Hochrechnung auf verschiedene Werte von I2S_SHIFT. Aussagekräftig nur mit dem
+// I2S-Mikrofon; mit dem MAX4466 erscheint ein Hinweis.
 void micDiag();
 
-// Lettura rapida del livello sonoro ambientale (0..255), per animazioni
-// reattive a riposo. Campiona una finestrella brevissima (~2 ms) e ritorna
-// l'ampiezza picco-picco scalata. Non interferisce con la registrazione.
+// Schnelle Abfrage des Umgebungspegels (0..255), für Animationen bei Ruhe, die
+// auf Geräusche reagieren. Tastet ein sehr kurzes Fenster ab (etwa 2 ms) und
+// liefert den skalierten Spitze-Spitze-Wert. Stört die Aufnahme nicht.
 uint8_t micPeekLevel();
 
-// Ultimi valori "live" del percorso LED (micLevelFromChunk), per il pannello web:
-// livello 0..255, il rumore di fondo stimato e la soglia di accensione correnti.
-// Aggiornati a ogni chunk letto a riposo. Utile per tarare i parametri LED/silenzio
-// guardandoli in tempo reale dal browser.
+// Die jüngsten Werte des LED-Wegs (micLevelFromChunk) für das Web-Panel: Pegel
+// 0..255, der geschätzte Grundpegel und die aktuelle Einschaltschwelle. Werden
+// bei jedem Block aktualisiert, der bei Ruhe gelesen wird. Nützlich, um die
+// Werte für LED und Stille im Browser in Echtzeit abzustimmen.
 void micGetLive(uint8_t *level, float *noiseFloor, float *thresh);
 
-// Accesso ai dati dell'ultima registrazione.
-const int16_t *micPcm();         // campioni PCM 16-bit mono
-size_t         micSampleCount(); // quanti campioni
-uint32_t       micSampleRate();  // frequenza di campionamento (Hz)
-int            micLastPeak();    // picco assoluto dell'ultima registrazione (0..32767)
-bool           micHeardVoice();  // true se e' stata rilevata voce vera (sopra soglia adattiva)
+// Zugriff auf die Daten der letzten Aufnahme.
+const int16_t *micPcm();         // PCM-Abtastwerte, 16 Bit Mono
+size_t         micSampleCount(); // wie viele Abtastwerte
+uint32_t       micSampleRate();  // Abtastrate (Hz)
+int            micLastPeak();    // absoluter Spitzenwert der letzten Aufnahme (0..32767)
+bool           micHeardVoice();  // true, wenn echte Sprache erkannt wurde (über der mitlaufenden Schwelle)
 
-// Costruisce in PSRAM un WAV completo (header 44 byte + PCM) dall'ultima
-// registrazione. Ritorna il puntatore e scrive la lunghezza totale in *len.
-// Il buffer resta valido fino alla registrazione successiva.
+// Baut im PSRAM eine vollständige WAV-Datei (44 Byte Kopf und PCM) aus der
+// letzten Aufnahme. Liefert den Zeiger und schreibt die Gesamtlänge nach *len.
+// Der Puffer gilt bis zur nächsten Aufnahme.
 const uint8_t *micWav(size_t *len);

@@ -1,67 +1,81 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Riproduzione musica (web-radio MP3 -> VS1053).
-//  Le stazioni sono stream MP3 in HTTP semplice (181.fm): il VS1053/VS1003
-//  decodifica l'MP3 in hardware, quindi si riusa lo stesso feed a pezzetti
-//  della TTS (tts.cpp), solo che la sorgente e' uno stream INFINITO.
-//  Comando vocale: "metti/suona <genere>" (rock/pop/country/anni 80/anni 90).
-//  Fase 1 (semplice): stazioni FISSE qui sotto. Fase 2 (elegante): editabili
-//  dal pannello web + tool di Claude.
+//  ALEXO - Musikwiedergabe (MP3-Webradio -> VS1053).
+//  Die Sender sind MP3-Ströme über einfaches HTTP (181.fm): der VS1053/VS1003
+//  decodiert MP3 in Hardware, deshalb wird dieselbe stückweise Zuführung wie
+//  bei der Sprachausgabe (tts.cpp) wiederverwendet, nur ist die Quelle hier ein
+//  ENDLOSER Strom.
+//  Sprachbefehl: "spiel <Genre>". Die Senderliste lässt sich im Web-Panel
+//  bearbeiten (gSettings.musicStations), und Claude wählt über das Werkzeug
+//  riproduci_musica aus dem internen Katalog.
+//  Hinweis: Die Schlüsselwörter der Senderliste sind noch italienisch, siehe
+//  den offenen Punkt in docs/specs/2026-09-12-uebersetzung-deutsch.md.
 // ============================================================================
 #include <Arduino.h>
 #include <VS1053.h>
 
-// Una stazione: URL dello stream MP3 + etichetta da mostrare sul gobbo.
+// Ein Sender: die URL des MP3-Stroms und die Bezeichnung für das Display.
 struct MusicStation { const char *url; const char *nome; };
 
-// Riconosce un comando musicale nel testo (GIA' minuscolo) confrontandolo con la
-// lista editabile del pannello (gSettings.musicStations). Ritorna la stazione da
-// suonare, oppure nullptr se non e' un match locale.
+// Erkennt einen Musikbefehl im Text (der BEREITS klein geschrieben ist), indem
+// er mit der im Panel bearbeitbaren Liste verglichen wird
+// (gSettings.musicStations). Liefert den zu spielenden Sender oder nullptr,
+// wenn nichts passt.
 const MusicStation *musicMatch(const String &testoLower);
 
-// Fallback fase 2b: mappa un GENERE scelto da Claude (tool riproduci_musica) a una
-// stazione del catalogo interno verificato. nullptr se il genere non e' in catalogo.
+// Rückfallweg: bildet ein von Claude gewähltes GENRE (Werkzeug
+// riproduci_musica) auf einen Sender des geprüften internen Katalogs ab.
+// nullptr, wenn das Genre nicht im Katalog steht.
 const MusicStation *musicFromGenre(const String &genere);
-// Elenco dei generi del catalogo, per la descrizione del tool di Claude.
+// Liste der Genres im Katalog, für die Beschreibung des Werkzeugs für Claude.
 String musicCatalogList();
 
-// Riproduce lo stream MP3 sul VS1053 finche' stopRequested() non ritorna true
-// (click encoder), musicRequestStop() non viene chiamata (pulsante del pannello
-// web) o lo stream cade. Se seekRequested() ritorna un delta != 0 (premuto+giro
-// in musica), interrompe e RITORNA quel delta, cosi' il chiamante passa a un'altra
-// stazione; ritorna 0 se la riproduzione e' finita o fermata. Blocca il core 1 per
-// tutta la durata, ma tiene VIVI OTA, Telnet e il pannello web (flash solo via OTA).
+// Spielt den MP3-Strom über den VS1053, bis stopRequested() true liefert (Klick
+// auf den Drehgeber), musicRequestStop() gerufen wird (Schaltfläche im
+// Web-Panel) oder der Strom abreisst. Liefert seekRequested() einen Unterschied
+// != 0 (gedrückt und gedreht während der Musik), bricht die Wiedergabe ab und
+// GIBT diesen Unterschied ZURÜCK, damit der Aufrufer zu einem anderen Sender
+// wechselt; 0, wenn die Wiedergabe zu Ende ist oder angehalten wurde. Blockiert
+// Kern 1 für die gesamte Dauer, hält aber die Aktualisierung über Funk, Telnet
+// und das Web-Panel AM LEBEN (neu flashen geht nur über Funk).
 int musicPlay(VS1053 &player, const char *url, bool (*stopRequested)(), int (*seekRequested)());
 
-// --- Navigazione della lista stazioni del pannello (per il seek premuto+giro) --
-// Numero di stazioni valide in gSettings.musicStations.
+// --- Bewegen in der Senderliste des Panels (für gedrückt und gedreht) -------
+// Zahl der gültigen Sender in gSettings.musicStations.
 int  musicStationCount();
-// Riempie url/nome con la stazione all'indice idx (0-based). false se fuori range.
+// Füllt url und nome mit dem Sender an der Stelle idx (ab 0). false, wenn die
+// Stelle ausserhalb der Liste liegt.
 bool musicStationGet(int idx, String &url, String &nome);
-// Indice della stazione con quell'URL nella lista, oppure -1 se non presente.
+// Stelle des Senders mit dieser URL in der Liste, oder -1, wenn er fehlt.
 int  musicStationIndexOf(const char *url);
 
-// Chiede lo stop della riproduzione (chiamata dal pannello web, thread-safe).
+// Fordert das Anhalten der Wiedergabe an (Aufruf aus dem Web-Panel,
+// threadsicher).
 void musicRequestStop();
-// Chiede di ACCENDERE la radio dal pannello web (pulsante "Accendi radio"): parte
-// la prima stazione della lista. L'handler HTTP non puo' avviarla da se' (musicPlay
-// blocca il core 1 finche' la radio suona), quindi lascia solo la richiesta e la
-// riproduzione parte dal loop di main.cpp.
+// Fordert das EINSCHALTEN des Radios aus dem Web-Panel an (Schaltfläche "Radio
+// einschalten"): es startet der erste Sender der Liste. Die HTTP-Bearbeitung
+// kann das nicht selbst starten (musicPlay blockiert Kern 1, solange das Radio
+// läuft), sie hinterlässt also nur den Wunsch, und die Wiedergabe beginnt im
+// Loop von main.cpp.
 void musicRequestStart();
-// Preleva e azzera la richiesta di avvio (letta dal loop). true = radio da accendere.
+// Holt den Startwunsch ab und setzt ihn zurück (wird vom Loop gelesen).
+// true = das Radio ist einzuschalten.
 bool musicTakeStartRequest();
-// Chiede il CAMBIO stazione dal pannello web (pulsanti avanti/indietro): stesso
-// delta del premuto+giro sull'encoder (+1 = successiva, -1 = precedente). Vale
-// solo mentre una radio suona; a musica ferma non fa partire niente.
+// Fordert den SENDERWECHSEL aus dem Web-Panel an (Schaltflächen vor und
+// zurück): derselbe Unterschied wie bei gedrückt und gedreht am Drehgeber
+// (+1 = nächster, -1 = vorheriger). Gilt nur, während ein Sender läuft; bei
+// stummer Musik startet dadurch nichts.
 void musicRequestSeek(int delta);
-// true mentre uno stream sta suonando (per lo stato nel pannello web).
+// true, solange ein Strom läuft (für die Anzeige im Web-Panel).
 bool musicIsPlaying();
-// MAD grezzo e baseline dell'ultimo chunk musicale (per tarare la sensibilita'
-// del ring: campi musMad/musBase in /api/live). 0 se non sta suonando.
+// Roher MAD-Wert und Grundlinie des letzten Musikblocks (zum Abstimmen der
+// Empfindlichkeit des Rings: Felder musMad und musBase in /api/live). 0, wenn
+// nichts läuft.
 float musicLastMad();
 float musicLastBase();
 
-// Metadata ICY dello stream in corso: nome emittente (icy-name) e brano corrente
-// ("Artista - Titolo" da StreamTitle). Stringa vuota se assenti / non in musica.
+// ICY-Metadaten des laufenden Stroms: Name des Senders (icy-name) und aktueller
+// Titel ("Interpret - Titel" aus StreamTitle). Leere Zeichenkette, wenn sie
+// fehlen oder gerade keine Musik läuft.
 String musicStation();
 String musicNowPlaying();

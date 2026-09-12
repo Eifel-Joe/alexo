@@ -1,16 +1,19 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Pannello impostazioni via web (http://alexo.local/).
-//  Web server sulla porta 80 (WebServer di serie, sincrono): serve la pagina da
-//  LittleFS (cartella data/) ed espone una piccola API JSON per leggere/scrivere
-//  i parametri (gSettings + volume) e per la lettura LIVE del microfono.
-//  webuiHandle() va chiamato spesso dal loop (accanto a ArduinoOTA.handle()).
+//  ALEXO - Einstellungs-Panel im Browser (http://alexo.local/).
+//  Webserver auf Port 80 (mitgelieferter WebServer, synchron): liefert die
+//  Seite aus LittleFS (Ordner data/) und bietet eine kleine JSON-Schnittstelle
+//  zum Lesen und Schreiben der Parameter (gSettings und Lautstärke) sowie für
+//  die Live-Anzeige des Mikrofons.
+//  webuiHandle() muss häufig aus dem Loop aufgerufen werden (neben
+//  ArduinoOTA.handle()).
 // ============================================================================
 #include <Arduino.h>
 
-// Monta LittleFS e avvia il web server. Ritorna false se LittleFS non monta
-// (in quel caso la pagina non c'e', ma l'API JSON funziona lo stesso).
+// Bindet LittleFS ein und startet den Webserver. Liefert false, wenn LittleFS
+// nicht eingebunden werden kann (dann fehlt die Seite, die JSON-Schnittstelle
+// arbeitet aber weiter).
 bool webuiBegin();
 
-// Da chiamare nel loop: gestisce le richieste HTTP in arrivo.
+// Im Loop aufzurufen: bearbeitet eintreffende HTTP-Anfragen.
 void webuiHandle();

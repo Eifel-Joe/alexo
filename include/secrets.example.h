@@ -1,15 +1,16 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Segreti (COPIA questo file in "secrets.h" e compila i valori).
-//  secrets.h e' ignorato da git: non finira' mai in un repo pubblico.
+//  ALEXO - Geheimnisse (dieses File nach "secrets.h" KOPIEREN und die Werte
+//  eintragen). secrets.h wird von git ignoriert und landet nie in einem
+//  öffentlichen Repository.
 // ============================================================================
 
-// --- WiFi -------------------------------------------------------------------
-#define WIFI_SSID        "il-tuo-wifi"
-#define WIFI_PASSWORD    "la-tua-password"
+// --- WLAN -------------------------------------------------------------------
+#define WIFI_SSID        "dein-wlan"
+#define WIFI_PASSWORD    "dein-passwort"
 
-// --- API key ----------------------------------------------------------------
-#define GROQ_API_KEY       "gsk_..."      // Whisper STT (gratis su console.groq.com)
-#define OPENAI_API_KEY     "sk-..."       // opzionale (STT/TTS OpenAI)
-#define ANTHROPIC_API_KEY  "sk-ant-..."   // Claude (il cervello)
-#define ELEVENLABS_API_KEY "sk_..."       // voce TTS (elevenlabs.io)
+// --- Schlüssel für die Dienste ----------------------------------------------
+#define GROQ_API_KEY       "gsk_..."      // Whisper-Spracherkennung (kostenlos auf console.groq.com)
+#define OPENAI_API_KEY     "sk-..."       // optional (Spracherkennung/Sprachausgabe von OpenAI)
+#define ANTHROPIC_API_KEY  "sk-ant-..."   // Claude (das Gehirn)
+#define ELEVENLABS_API_KEY "sk_..."       // Stimme für die Sprachausgabe (elevenlabs.io)

@@ -1,16 +1,16 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Cervello (Claude / Anthropic Messages API)
+//  ALEXO - Gehirn (Claude / Anthropic Messages API)
 // ============================================================================
 #include <Arduino.h>
 
-// Manda il testo dell'utente a Claude (col contesto della conversazione) e
-// ritorna la risposta. Stringa vuota in caso di errore (loggato sulla seriale).
-// Se 'musicReq' != nullptr, Claude ha a disposizione il tool "riproduci_musica":
-// quando l'utente vuole ascoltare musica, invece di rispondere a voce Claude
-// chiama il tool e qui viene messo il GENERE scelto in *musicReq (la risposta
-// testo torna vuota). Vuoto = nessuna richiesta musicale.
+// Schickt den Text des Nutzers samt Gesprächsverlauf an Claude und liefert die
+// Antwort. Leere Zeichenkette im Fehlerfall (seriell protokolliert).
+// Ist 'musicReq' != nullptr, steht Claude das Werkzeug "riproduci_musica" zur
+// Verfügung: Will der Nutzer Musik hören, ruft Claude statt einer gesprochenen
+// Antwort das Werkzeug auf, und das gewählte GENRE landet in *musicReq (die
+// Textantwort bleibt dann leer). Leer = kein Musikwunsch.
 String llmAsk(const String &userText, String *musicReq = nullptr);
 
-// Azzera la memoria della conversazione (riparte da zero).
+// Leert den Gesprächsverlauf (es geht bei null weiter).
 void llmReset();

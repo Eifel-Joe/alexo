@@ -1,83 +1,95 @@
 #pragma once
 // ============================================================================
-//  ALEXO - "Gobbo" (teleprompter) sul display TFT ST7735 a colori.
-//  Il testo scorre dolcemente verso l'alto come un gobbo da studio TV.
-//  Gira su un task dedicato sul CORE 0 (unico proprietario del bus SPI HSPI
-//  del TFT), cosi' lo scorrimento resta fluido anche mentre il core 1 e'
-//  bloccato su STT/Claude/TTS. Il testo arriva da core 1 via coda (thread-safe).
-//  Rende su un canvas in RAM e fa il blit a schermo intero -> niente flicker.
+//  ALEXO - "Gobbo", der Teleprompter auf dem farbigen TFT-Display ST7735.
+//  Der Text wandert sanft nach oben wie auf einem Teleprompter im Fernsehstudio.
+//  Läuft in einer eigenen Aufgabe auf KERN 0 (dem alleinigen Besitzer des
+//  HSPI-Busses zum TFT), damit der Bildlauf flüssig bleibt, auch während Kern 1
+//  bei Spracherkennung, Claude oder Sprachausgabe wartet. Der Text kommt von
+//  Kern 1 über eine Warteschlange (threadsicher). Gezeichnet wird auf eine
+//  Fläche im RAM, die als Ganzes auf den Bildschirm kommt, deshalb flimmert
+//  nichts.
+//  Der Modulname "gobbo" bleibt, damit der Abgleich mit dem Originalprojekt
+//  möglich bleibt.
 // ============================================================================
 #include <Arduino.h>
 #include <Adafruit_ST7735.h>
-#include "ui.h"   // AlexoState (per l'header di stato a colori)
+#include "ui.h"   // AlexoState (für die farbige Zustandszeile am Kopf)
 
-// Avvia il task del gobbo (core 0). Il display dev'essere gia' inizializzato.
-// Pulisce subito lo schermo.
+// Startet die Aufgabe des Teleprompters (Kern 0). Das Display muss bereits
+// eingerichtet sein. Löscht den Bildschirm sofort.
 void gobboBegin(Adafruit_ST7735 *disp);
 
-// Aggiorna l'indicatore di stato nell'header del TFT (pronto/ascolto/penso/...).
-// Thread-safe (scrittura atomica di un byte). Chiamabile da qualsiasi core.
+// Aktualisiert die Zustandsanzeige am Kopf des TFT (bereit/höre zu/denke/...).
+// Threadsicher (ein Byte wird unteilbar geschrieben). Von jedem Kern aufrufbar.
 void gobboSetState(AlexoState s);
 
-// Aggiunge una RISPOSTA di Alexo alla chat ("Alexo: ..."), seguita da una riga
-// vuota. Parte con una velocita' di scroll di default (leggibile); chiamare
-// subito dopo gobboScrollOver() per legarlo alla durata della voce.
+// Hängt eine ANTWORT von Alexo an den Chat an ("Alexo: ..."), gefolgt von einer
+// Leerzeile. Startet mit der voreingestellten Bildlaufgeschwindigkeit (gut
+// lesbar); gleich danach gobboScrollOver() aufrufen, um den Lauf an die Dauer
+// der Stimme zu binden.
 void gobboPrint(const String &text);
 
-// Aggiunge una DOMANDA dell'utente alla chat ("Tu: ..."). Mostra l'ultimo
-// contenuto (scroll a fondo). Chiamabile da qualsiasi core.
+// Hängt eine FRAGE des Nutzers an den Chat an ("Du: ..."). Zeigt den neuesten
+// Inhalt (Bildlauf ans Ende). Von jedem Kern aufrufbar.
 void gobboPrintUser(const String &text);
 
-// Riga di AVVISO (verde sul TFT, rossa nel pannello web: il rosso su questo
-// display non si legge), senza il prefisso "Alexo:". Serve a dire in faccia
-// una cosa che altrimenti passerebbe inosservata - oggi solo "questo pezzo e'
-// uscito su internet" (vedi localai.h). Chiamabile da qualsiasi core.
+// HINWEIS-Zeile (grün auf dem TFT, rot im Web-Panel: Rot ist auf diesem Display
+// nicht lesbar), ohne das Präfix "Alexo:". Damit lässt sich etwas unmissverständlich
+// sagen, das sonst unbemerkt bliebe. Bisher nur der Hinweis "dieser Teil ist ins
+// Internet gegangen" (siehe localai.h). Von jedem Kern aufrufbar.
 void gobboPrintWarn(const String &text);
 
-// Imposta il tempo (ms) entro cui completare lo scroll fino in fondo: serve a
-// sincronizzare lo scorrimento con la durata del parlato (chiamata da ttsSpeak
-// quando l'audio inizia). Chiamabile da qualsiasi core.
+// Legt die Zeit (ms) fest, in der der Bildlauf bis ans Ende gelaufen sein soll.
+// Damit lässt er sich auf die Dauer des Gesprochenen abstimmen (wird von
+// ttsSpeak aufgerufen, sobald der Ton beginnt). Von jedem Kern aufrufbar.
 void gobboScrollOver(uint32_t ms);
 
-// Svuota il gobbo e pulisce lo schermo.
+// Leert den Teleprompter und löscht den Bildschirm.
 void gobboClear();
 
-// Percentuale (0..100) dell'aggiornamento OTA in corso. La disegna la schermata
-// OTA dedicata (stile HUD verde) quando lo stato e' ST_OTA. Chiamabile da core 1
-// (callback ArduinoOTA): aggiorna solo un valore, il render lo fa il task del gobbo.
+// Fortschritt (0..100) der laufenden Aktualisierung über Funk. Gezeichnet wird
+// er von der eigenen Aktualisierungsanzeige (im Stil einer grünen Anzeigetafel),
+// sobald der Zustand ST_OTA ist. Von Kern 1 aufrufbar (Rückruf von ArduinoOTA):
+// es wird nur ein Wert gesetzt, gezeichnet wird in der Aufgabe des Teleprompters.
 void gobboOtaProgress(uint8_t percent);
 
-// Info del brano in onda (metadata ICY della radio): mostrate nella schermata
-// dedicata "IN ONDA" quando lo stato e' ST_MUSIC (3 righe size 2 con marquee:
-// emittente / titolo / artista). Chiamabile da core 1 (music.cpp).
+// Angaben zum laufenden Titel (ICY-Metadaten des Radios): erscheinen in der
+// eigenen Anzeige "AUF SENDUNG", sobald der Zustand ST_MUSIC ist (drei Zeilen in
+// Größe 2 als Laufschrift: Sender / Titel / Interpret). Von Kern 1 aufrufbar
+// (music.cpp).
 void gobboNowPlaying(const char *station, const char *title, const char *artist);
 
-// Tipo di aggiornamento OTA in corso: true = filesystem/pagina web ("DATA"),
-// false = firmware ("FW"). Mostrato come sottotitolo nella schermata OTA.
+// Art der laufenden Aktualisierung über Funk: true = Dateisystem und Webseite
+// ("DATA"), false = Firmware ("FW"). Erscheint als Unterzeile in der
+// Aktualisierungsanzeige.
 void gobboOtaKind(bool isData);
 
-// --- Input dall'encoder (core 0) verso la pipeline (core 1) -----------------
-//  L'encoder e' l'UNICO comando: il click avvia/ferma la chat (toggle), il
-//  task del gobbo lo interpreta e qui sotto lo espone al loop principale.
+// --- Eingaben vom Drehgeber (Kern 0) an die Verarbeitung (Kern 1) -----------
+//  Der Drehgeber ist die EINZIGE Bedienung: der Klick startet und stoppt den
+//  Chat (Umschalter), die Aufgabe des Teleprompters wertet ihn aus und stellt
+//  ihn hier dem Hauptloop zur Verfügung.
 //
-// true UNA volta (poi si azzera) se l'utente ha chiesto di AVVIARE la chat.
+// EINMAL true (danach zurückgesetzt), wenn der Nutzer den Chat STARTEN möchte.
 bool gobboTakeTalkRequest();
-// true finche' e' pendente una richiesta di FERMARE la registrazione (click
-// durante l'ascolto). Usata come condizione di stop in micRecord.
+// true, solange ein Wunsch offen ist, die Aufnahme zu BEENDEN (Klick während des
+// Zuhörens). Dient micRecord als Abbruchbedingung.
 bool gobboStopRequested();
-// Azzera la richiesta di stop: chiamare appena prima di iniziare a registrare.
+// Setzt den Abbruchwunsch zurück: unmittelbar vor dem Aufnahmestart aufrufen.
 void gobboClearStopRequest();
-// Detenti "premuto+giro" accumulati DURANTE la musica (cambio stazione): ritorna
-// il delta avanti/indietro e lo azzera. 0 se nessun seek richiesto. Attivo solo
-// in ST_MUSIC (fuori dalla musica premuto+giro resta volume).
+// Rastungen aus "gedrückt und gedreht", gesammelt WÄHREND der Musik
+// (Senderwechsel): liefert den Unterschied vorwärts/rückwärts und setzt ihn
+// zurück. 0, wenn kein Wechsel gewünscht ist. Nur in ST_MUSIC aktiv, ausserhalb
+// der Musik bleibt "gedrückt und gedreht" die Lautstärke.
 int32_t gobboTakeMusicSeek();
 
-// --- Chat per il pannello web -----------------------------------------------
-// Contatore di revisione: cambia a ogni nuovo messaggio in chat. Il pannello lo
-// legge (in /api/live) e ricarica la chat SOLO quando e' cambiato.
+// --- Chat für das Web-Panel -------------------------------------------------
+// Zähler für Änderungen: springt bei jeder neuen Nachricht im Chat weiter. Das
+// Panel liest ihn (in /api/live) und lädt den Chat NUR neu, wenn er sich
+// geändert hat.
 uint32_t gobboChatRev();
-// Accesso ai messaggi della chat per servirli in streaming (r: 0=Alexo, 1=utente,
-// 2=sistema; testo UTF-8). gobboChatCount() = quanti; gobboChatItem() riempie role/text
-// (puntatore valido per la durata della richiesta). Da chiamare dal core 1 (webui).
+// Zugriff auf die Nachrichten des Chats, um sie auszuliefern (r: 0=Alexo,
+// 1=Nutzer, 2=System; Text in UTF-8). gobboChatCount() = wie viele;
+// gobboChatItem() füllt role und text (der Zeiger gilt für die Dauer der
+// Anfrage). Von Kern 1 aufzurufen (webui).
 int  gobboChatCount();
 bool gobboChatItem(int i, uint8_t *role, const char **text);

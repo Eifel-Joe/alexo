@@ -1,84 +1,97 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Servizi AI IN CASA (LM Studio & co.)
-//  Aiutanti condivisi dai tre moduli della catena vocale (stt / llm / tts): a
-//  loro serve sapere se il PC di casa risponde e quale modello ha caricato, il
-//  resto lo fanno da soli. Regola unica per tutti e tre:
-//    indirizzo VUOTO  -> servizio locale spento, si va in cloud come sempre
-//    indirizzo pieno  -> se il PC risponde si usa quello, altrimenti cloud
-//  ECCEZIONE, gSettings.localOnly ("solo casa", dal pannello): il cloud non si
-//  usa MAI per questi tre. Se il servizio di casa non c'e' o sbaglia, Alexo lo
-//  dice in chat e si ferma. Non tocca la radio (la chiedi tu) ne' l'orologio NTP.
-//  Gli indirizzi e i nomi modello li legge da gSettings (pannello web), quindi
-//  chi chiama deve dire solo DI QUALE servizio si parla.
-//  I servizi in casa parlano http:// in chiaro (niente TLS): sono sulla LAN.
+//  ALEXO - KI-Dienste ZU HAUSE (LM Studio und ähnliche)
+//  Gemeinsame Helfer für die drei Glieder der Sprachkette (stt / llm / tts):
+//  Sie müssen wissen, ob der PC zu Hause antwortet und welches Modell er
+//  geladen hat, den Rest erledigen sie selbst. Für alle drei gilt dieselbe
+//  Regel:
+//    LEERE Adresse   -> Dienst zu Hause aus, es geht wie immer in die Cloud
+//    Adresse gesetzt -> antwortet der PC, wird er benutzt, sonst die Cloud
+//  AUSNAHME, gSettings.localOnly ("nur zu Hause", aus dem Panel): für diese
+//  drei wird die Cloud NIE benutzt. Fehlt der Dienst zu Hause oder macht er
+//  einen Fehler, sagt Alexo es im Chat und hört auf. Radio (das fordert man
+//  selbst an) und die NTP-Uhr bleiben unberührt.
+//  Adressen und Modellnamen kommen aus gSettings (Web-Panel), der Aufrufer muss
+//  also nur sagen, UM WELCHEN Dienst es geht.
+//  Die Dienste zu Hause sprechen unverschlüsseltes http:// (kein TLS): sie
+//  stehen im eigenen Netz.
 // ============================================================================
 #include <Arduino.h>
 
-// L'ordine e' quello in cui i pallini compaiono sul display.
+// Die Reihenfolge ist die, in der die Punkte auf dem Display erscheinen.
 enum LocalSvc { LOC_STT = 0, LOC_LLM = 1, LOC_TTS = 2, LOC_COUNT = 3 };
 
-// Questo pezzo si puo' davvero fare in casa? Prova ad aprire la connessione con
-// un'attesa cortissima, cosi' col PC spento non si blocca la catena vocale.
-// Attenzione: non basta che il server risponda. Per il CERVELLO serve anche un
-// modello caricato, altrimenti la domanda fallirebbe e si finirebbe in cloud
-// dopo aver perso tempo. L'esito resta in cache per qualche secondo, quindi si
-// puo' chiedere a ogni domanda senza pagare ogni volta.
+// Lässt sich dieses Glied wirklich zu Hause erledigen? Versucht die Verbindung
+// mit sehr kurzer Wartezeit, damit die Sprachkette bei ausgeschaltetem PC nicht
+// hängt.
+// Achtung: es genügt nicht, dass der Server antwortet. Das GEHIRN braucht auch
+// ein geladenes Modell, sonst schlüge die Frage fehl und man landete nach
+// verlorener Zeit doch in der Cloud. Das Ergebnis bleibt einige Sekunden
+// gespeichert, es lässt sich also bei jeder Frage abrufen, ohne jedes Mal zu
+// kosten.
 bool localReachable(LocalSvc svc);
 
-// Solo "il server risponde", senza chiedersi se e' pronto a lavorare. Serve al
-// pannello per distinguere "spento" da "acceso ma senza modello caricato".
+// Nur "der Server antwortet", ohne die Frage, ob er arbeitsbereit ist. Das Panel
+// braucht es, um "aus" von "an, aber ohne geladenes Modell" zu unterscheiden.
 bool localConnected(LocalSvc svc);
 
-// Questo pezzo sta girando in casa ADESSO? E' l'ultimo esito NOTO di
-// localReachable, senza provare niente e senza toccare la rete: lo guarda il
-// display (gira sul core 0, non puo' aspettare). Per la VOCE vuole anche che uno
-// dei due interruttori sia acceso: senza, il server di casa puo' rispondere
-// quanto vuole ma a parlare e' ElevenLabs (vedi ttsUsesLocal in tts.h).
+// Läuft dieses Glied GERADE JETZT zu Hause? Das ist das letzte BEKANNTE Ergebnis
+// von localReachable, ohne einen neuen Versuch und ohne das Netz anzufassen:
+// das Display sieht darauf (es läuft auf Kern 0 und kann nicht warten). Für die
+// STIMME muss zusätzlich einer der beiden Schalter gesetzt sein: ohne ihn darf
+// der Server zu Hause antworten, so viel er will, gesprochen wird von
+// ElevenLabs (siehe ttsUsesLocal in tts.h).
 bool localOn(LocalSvc svc);
 
-// Riprova UN servizio, a turno, se e' passato abbastanza tempo. Va chiamata dal
-// loop quando Alexo e' a riposo: serve a tenere onesti i pallini del display
-// anche se non stai facendo domande. Torna true se ha davvero provato (chi
-// chiama ne approfitta per buttare l'audio letto nel frattempo).
+// Versucht es bei EINEM Dienst erneut, reihum, wenn genug Zeit vergangen ist.
+// Aus dem Loop aufzurufen, während Alexo ruht: so bleiben die Punkte auf dem
+// Display ehrlich, auch wenn gerade nichts gefragt wird. Liefert true, wenn
+// wirklich ein Versuch stattfand (der Aufrufer verwirft dann den inzwischen
+// gelesenen Ton).
 bool localRefreshTick();
 
-// Nome del modello da usare per questo servizio. Se nel pannello e' scritto,
-// torna quello; se e' VUOTO chiede al server quale ha caricato adesso (GET
-// <base>/models, il primo della lista) - cosi' si cambia modello dal PC senza
-// toccare il pannello. Torna "" se non riesce a saperlo.
+// Name des Modells für diesen Dienst. Steht er im Panel, wird er genommen; ist
+// er LEER, wird der Server gefragt, welches Modell gerade geladen ist (GET
+// <base>/models, das erste der Liste). So lässt sich das Modell am PC wechseln,
+// ohne das Panel anzufassen. Liefert "", wenn es sich nicht ermitteln lässt.
 String localModelName(LocalSvc svc);
 
-// Indirizzo base del servizio COSI' COM'E' SCRITTO nel pannello, "" se spento.
-// Non tocca la rete: serve a sapere se il servizio e' configurato, non a parlarci.
+// Basisadresse des Dienstes SO, WIE SIE IM PANEL STEHT, "" wenn er aus ist.
+// Rührt das Netz nicht an: sie sagt, ob der Dienst eingerichtet ist, nicht, ob
+// er erreichbar ist.
 String localBaseUrl(LocalSvc svc);
 
-// Indirizzo da usare DAVVERO per le richieste. Se nel pannello c'e' la porta e'
-// identico a localBaseUrl e non costa niente. Se la porta manca (solo per la
-// VOCE) sono provate quelle di LOCAL_TTS_PORTS_AUTO e torna quella che risponde
-// - cosi' si passa da Kokoro a Chatterbox accendendo l'uno o l'altro sul PC,
-// senza correggere il campo. Se non risponde nessuna torna la prima, cosi' il
-// messaggio d'errore dice un indirizzo sensato. "" se il servizio e' spento.
+// Die Adresse, die für Anfragen WIRKLICH benutzt wird. Steht im Panel der Port,
+// ist sie mit localBaseUrl identisch und kostet nichts. Fehlt der Port (nur bei
+// der STIMME), werden die Ports aus LOCAL_TTS_PORTS_AUTO durchprobiert und der
+// antwortende geliefert. So wechselt man zwischen Kokoro und Chatterbox, indem
+// man am PC den einen oder anderen startet, ohne das Feld zu ändern. Antwortet
+// keiner, kommt der erste zurück, damit die Fehlermeldung eine sinnvolle
+// Adresse nennt. "" wenn der Dienst aus ist.
 String localBaseUsed(LocalSvc svc);
 
-// Dimentica gli esiti in cache (raggiungibilita' e nome modello): la prossima
-// prova richiede tutto da capo. Serve al pulsante "Prova" del pannello e dopo
-// aver cambiato gli indirizzi.
+// Vergisst die gespeicherten Ergebnisse (Erreichbarkeit und Modellname): beim
+// nächsten Versuch wird alles neu erfragt. Das braucht die Schaltfläche
+// "Testen" im Panel und der Wechsel der Adressen.
 void localForget();
 
-// --- Dirlo in faccia --------------------------------------------------------
-//  Il ripiego sul cloud e' comodo ma silenzioso: con le spie verdi si crede di
-//  essere in casa mentre voce, domanda o risposta sono appena uscite su internet.
-//  Queste due lo scrivono in ROSSO nella chat (TFT e pannello web).
+// --- Unmissverständlich sagen -----------------------------------------------
+//  Der Rückfall auf die Cloud ist bequem, aber leise: bei grünen Anzeigen
+//  glaubt man, zu Hause zu sein, während Stimme, Frage oder Antwort soeben ins
+//  Internet gegangen sind. Die beiden folgenden schreiben es in ROT in den Chat
+//  (auf dem TFT und im Web-Panel).
 
-// "Questo pezzo e' appena uscito su internet". Scrive SOLO se il servizio in casa
-// e' configurato: a chi lavora in cloud di proposito non serve dirlo ogni volta.
+// "Dieses Glied ist soeben ins Internet gegangen." Schreibt NUR, wenn der Dienst
+// zu Hause eingerichtet ist: wer absichtlich in der Cloud arbeitet, braucht den
+// Hinweis nicht jedes Mal.
 void localSayCloud(LocalSvc svc);
 
-// "Solo casa acceso e il servizio di casa non c'e': mi fermo qui". Scrive sempre.
+// "Nur zu Hause ist eingeschaltet und der Dienst zu Hause fehlt: ich höre hier
+// auf." Schreibt immer.
 void localSayBlocked(LocalSvc svc);
 
-// Toglie il "pensiero" che parecchi modelli locali stampano prima della risposta
-// vera (blocco <think>...</think>). Va fatto comunque, anche chiedendo di non
-// ragionare: non tutti i modelli ubbidiscono.
+// Entfernt das "Nachdenken", das etliche Modelle zu Hause vor der eigentlichen
+// Antwort ausgeben (der Block <think>...</think>). Es ist ohnehin nötig, auch
+// wenn man darum bittet, nicht nachzudenken: nicht alle Modelle halten sich
+// daran.
 String localStripThink(const String &s);

@@ -1,30 +1,33 @@
 #pragma once
 // ============================================================================
-//  ALEXO - UI luminosa: animazioni del ring NeoPixel guidate da uno stato.
-//  Gira su un task dedicato sul CORE 0, cosi' le animazioni restano fluide
-//  anche mentre il core 1 (loop principale) e' bloccato su STT/Claude/TTS.
+//  ALEXO - Lichtanzeige: Animationen des NeoPixel-Rings, gesteuert über einen
+//  Zustand. Läuft in einer eigenen Aufgabe auf KERN 0, damit die Animationen
+//  flüssig bleiben, auch während Kern 1 (der Hauptloop) bei Spracherkennung,
+//  Claude oder Sprachausgabe wartet.
 // ============================================================================
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
 
 enum AlexoState {
-  ST_IDLE,       // a riposo: respiro arcobaleno
-  ST_LISTENING,  // ascolto: VU-meter dal microfono
-  ST_THINKING,   // elaborazione: cometa che gira
-  ST_SPEAKING,   // parla: pulsazione
-  ST_ERROR,      // errore: lampeggio rosso
-  ST_OTA,        // aggiornamento OTA: cometa verde
-  ST_MUSIC,      // musica: arcobaleno psichedelico reattivo al livello audio
-  ST_FOLLOWUP    // chat continua: "tocca a te", respiro ambra finche' non parli
+  ST_IDLE,       // Ruhe: Regenbogen, der atmet
+  ST_LISTENING,  // Zuhören: Aussteuerungsanzeige vom Mikrofon
+  ST_THINKING,   // Verarbeitung: umlaufender Komet
+  ST_SPEAKING,   // Sprechen: Pulsieren
+  ST_ERROR,      // Fehler: rotes Blinken
+  ST_OTA,        // Aktualisierung über Funk: grüner Komet
+  ST_MUSIC,      // Musik: bunter Regenbogen, reagiert auf den Pegel
+  ST_FOLLOWUP    // Fortlaufender Chat: "du bist dran", bernsteinfarbenes Atmen,
+                 // bis gesprochen wird
 };
-// Ultimo valore dell'enum: chi indicizza tabelle per stato (gobbo) si ferma qui.
+// Letzter Wert der Aufzählung: wer Tabellen nach Zustand durchgeht (gobbo),
+// hört hier auf.
 #define ST_LAST ST_FOLLOWUP
 
-// Avvia il task di animazione (core 0). Il ring dev'essere gia' inizializzato.
+// Startet die Animationsaufgabe (Kern 0). Der Ring muss bereits eingerichtet sein.
 void uiBegin(Adafruit_NeoPixel *ring);
 
-// Cambia lo stato animato (thread-safe, non blocca).
+// Wechselt den animierten Zustand (threadsicher, blockiert nicht).
 void uiSetState(AlexoState s);
 
-// Livello 0..255 per il VU-meter in ascolto.
+// Pegel 0..255 für die Aussteuerungsanzeige beim Zuhören.
 void uiSetLevel(uint8_t level);

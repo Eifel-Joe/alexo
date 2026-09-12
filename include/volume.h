@@ -1,37 +1,42 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Controllo volume del VS1053 (scala 0..100, salvato in NVS).
+//  ALEXO - Lautstärke des VS1053 (Skala 0..100, in NVS gespeichert).
 //
-//  Due core: l'encoder gira sul TASK del gobbo (core 0) e accumula le richieste
-//  con volumeRequest(); il VS1053 sta sul bus SPI del core 1, quindi e' SEMPRE
-//  il core 1 ad applicarle con volumeApplyPending() (nel loop a riposo e dentro
-//  lo streaming TTS mentre Alexo parla). Cosi' non si litiga sul bus.
+//  Zwei Kerne: der Drehgeber läuft in der AUFGABE der Anzeige (Kern 0) und
+//  sammelt die Wünsche mit volumeRequest(); der VS1053 hängt am SPI-Bus von
+//  Kern 1, deshalb wendet IMMER Kern 1 sie mit volumeApplyPending() an (im Loop
+//  bei Ruhe und während der Sprachausgabe, solange Alexo spricht). So streiten
+//  sich die beiden nicht um den Bus.
 // ============================================================================
 #include <Arduino.h>
 #include <VS1053.h>
 
-// Carica il volume salvato (o VOLUME_DEFAULT) e lo applica al player.
+// Lädt die gespeicherte Lautstärke (oder VOLUME_DEFAULT) und übergibt sie dem
+// Player.
 void volumeBegin(VS1053 &player);
 
-// Chiamata dal task encoder (core 0): accumula "detents" (>0 / <0). Non tocca
-// l'hardware, si limita a registrare la richiesta.
+// Aufruf aus der Drehgeber-Aufgabe (Kern 0): sammelt Rastungen (>0 / <0). Rührt
+// die Hardware nicht an, merkt sich nur den Wunsch.
 void volumeRequest(int32_t detents);
 
-// Imposta un valore ASSOLUTO 0..100 (dal pannello web, core 0/altro task): non
-// tocca l'hardware, lascia che sia il core 1 ad applicarlo con volumeApplyPending.
+// Setzt einen ABSOLUTEN Wert 0..100 (aus dem Web-Panel, Kern 0 oder eine andere
+// Aufgabe): rührt die Hardware nicht an, das Anwenden übernimmt Kern 1 mit
+// volumeApplyPending.
 void volumeSet(int percent);
 
-// Chiamata dal core 1: se c'e' una richiesta in sospeso aggiorna il volume,
-// lo scrive sul VS1053 e lo salva. Ritorna true se il volume e' cambiato.
+// Aufruf aus Kern 1: liegt ein Wunsch vor, wird die Lautstärke geändert, an den
+// VS1053 geschrieben und gespeichert. Liefert true, wenn sie sich geändert hat.
 bool volumeApplyPending(VS1053 &player);
 
-// Volume corrente "utente" (0..100), per display/pannello.
+// Aktuelle Lautstärke aus Sicht des Nutzers (0..100), für Display und Panel.
 uint8_t volumeGet();
 
-// Valore da passare a player.setVolume(): il volume utente 1..100 rimappato nella
-// zona UDIBILE del VS1053 (VOLUME_VS_MIN..100), 0 se muto. Da usare in TUTTE le
-// chiamate a setVolume (tts/music/volume) al posto di volumeGet().
+// Wert für player.setVolume(): die Nutzerlautstärke 1..100, umgerechnet auf den
+// HÖRBAREN Bereich des VS1053 (VOLUME_VS_MIN..100), 0 bei stumm. In ALLEN
+// Aufrufen von setVolume (Sprachausgabe, Musik, Lautstärke) statt volumeGet()
+// zu verwenden.
 uint8_t volumeVsValue();
 
-// true se il volume utente e' 0 (muto vero: silenzio + ampli da spegnere).
+// true, wenn die Nutzerlautstärke 0 ist (wirklich stumm: Stille, und der
+// Verstärker ist abzuschalten).
 bool volumeIsMuted();

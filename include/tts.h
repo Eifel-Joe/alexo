@@ -1,15 +1,18 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Text-to-Speech (ElevenLabs) con riproduzione sul VS1053
+//  ALEXO - Text-to-Speech (ElevenLabs) mit Wiedergabe über den VS1053
 // ============================================================================
 #include <Arduino.h>
 #include <VS1053.h>
 
-// Sintetizza "text" con ElevenLabs e lo riproduce in streaming sul VS1053.
-// Ritorna true se ha riprodotto audio. Il player dev'essere gia' inizializzato.
-// voiceId: Voice ID ElevenLabs da usare. Se vuoto ("") usa la voce di default.
+// Lässt "text" von ElevenLabs sprechen und gibt es als Strom über den VS1053
+// aus. Liefert true, wenn Ton abgespielt wurde. Der Player muss bereits
+// eingerichtet sein.
+// voiceId: die zu verwendende ElevenLabs-Stimme. Bleibt sie leer (""), gilt die
+// voreingestellte Stimme.
 bool ttsSpeak(VS1053 &player, const String &text, const String &voiceId = "");
 
-// true = la prossima risposta la sintetizza il server di casa (lo dicono gli
-// interruttori "voce sempre in casa" / "solo casa", non la raggiungibilita').
+// true = die nächste Antwort spricht der Server zu Hause. Das entscheiden die
+// Schalter "Stimme immer zu Hause" und "nur zu Hause", nicht die
+// Erreichbarkeit.
 bool ttsUsesLocal();

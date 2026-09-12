@@ -1,26 +1,30 @@
 #pragma once
 // ============================================================================
-//  ALEXO - Encoder rotativo per scorrere la chat sul display.
-//  Decodifica in quadratura via interrupt (conta anche mentre il loop di core 1
-//  e' bloccato su rete). I pin sono in config.h.
+//  ALEXO - Drehgeber zum Blättern im Chat auf dem Display.
+//  Quadraturauswertung über Interrupts (zählt auch weiter, während der Loop auf
+//  Kern 1 im Netzwerk hängt). Die Anschlüsse stehen in config.h.
 // ============================================================================
 #include <Arduino.h>
 
-// Inizializza i pin e gli interrupt dell'encoder.
+// Richtet Anschlüsse und Interrupts des Drehgebers ein.
 void encoderBegin();
 
-// Detenti accumulati dall'ultima chiamata: >0 in un verso, <0 nell'altro, 0 fermo.
+// Rastungen seit dem letzten Aufruf: >0 in die eine Richtung, <0 in die andere,
+// 0 bei Stillstand.
 int32_t encoderTake();
 
-// true UNA volta per un CLICK SINGOLO confermato. NB: e' "differito" di ~280ms
-// per disambiguare dal doppio click (vedi encoderDoublePressed): se entro quella
-// finestra arriva un secondo click, NON viene emesso un singolo (ma un doppio).
-// I click con giro (premuto+giro = volume) non contano come click.
+// EINMAL true bei einem bestätigten EINFACHEN KLICK. Achtung: er ist um etwa
+// 280 ms "verzögert", um ihn vom Doppelklick zu unterscheiden (siehe
+// encoderDoublePressed). Kommt in diesem Fenster ein zweiter Klick, wird KEIN
+// einfacher gemeldet, sondern ein doppelter. Klicks mit Drehung
+// (gedrückt und gedreht = Lautstärke) zählen nicht als Klick.
 bool encoderButtonPressed();
 
-// true UNA volta per un DOPPIO click (due pressioni rapide). Usato come toggle.
+// EINMAL true bei einem DOPPELKLICK (zwei schnelle Betätigungen). Dient als
+// Umschalter.
 bool encoderDoublePressed();
 
-// true finche' il pulsante e' tenuto premuto (lettura istantanea, pull-up:
-// premuto = LOW). Serve a distinguere il giro libero dal "premuto + giro".
+// true, solange die Taste gedrückt gehalten wird (sofortige Abfrage, Pull-up:
+// gedrückt = LOW). Damit lässt sich freies Drehen von "gedrückt und gedreht"
+// unterscheiden.
 bool encoderButtonHeld();
