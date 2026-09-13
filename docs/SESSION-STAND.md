@@ -6,8 +6,9 @@ Spezifikation: `docs/specs/2026-09-12-uebersetzung-deutsch.md`
 Plan: `docs/plans/2026-09-12-uebersetzung-deutsch.md`
 
 **Gearbeitet wird ab jetzt ausschliesslich auf dem Branch `deutsch`.** Er trägt
-die vollständige Übersetzung. `main` bleibt unangetastet als Anschluss an das
-Originalprojekt, damit sich Änderungen von dort weiter zusammenführen lassen.
+die vollständige Übersetzung und ist seit dem 12.09.2026 der Standard-Branch
+auf GitHub. `main` bleibt unangetastet als Anschluss an das Originalprojekt,
+damit sich Änderungen von dort weiter zusammenführen lassen.
 
 ### Stand
 
@@ -50,8 +51,6 @@ Offen:
 - **Die Stimmen-Kennung** ab Werk ist noch die des Originalprojekts. Der
   Betreiber wählt eine eigene Stimme im ElevenLabs-Konto und trägt sie im
   Web-Panel ein.
-- **Der Standard-Branch auf GitHub** ist weiterhin `main`. Ob `deutsch` an
-  seine Stelle treten soll, ist noch nicht entschieden.
 
 ### Verworfen
 
@@ -79,7 +78,8 @@ Offen:
   Paket nennt, das es selbst nicht führt; sie liegt beiseitegelegt und lässt
   sich durch Zurückschieben wiederherstellen. Zweitens ein volles Laufwerk. Der
   Paketordner für dieses Projekt liegt deshalb ausserhalb des Standardpfads.
-  **Jeder Build braucht diese Umgebungsvariable:**
+  Das ist eine Eigenheit dieses einen Entwicklungsrechners und keine Anforderung
+  des Projekts. **Dort braucht jeder Build diese Umgebungsvariable:**
 
   ```bash
   PLATFORMIO_CORE_DIR=<eigener Paketordner> pio run -e esp32-s3-devkitc-1
@@ -117,7 +117,6 @@ Offen:
    `MUSIC_STATIONS_DEF` und der Tabelle `CATALOG` in `src/music.cpp`.
    Beobachtbares Kriterium: "spiel Rockmusik" muss den Rock-Sender liefern.
 4. Eine eigene Stimme im ElevenLabs-Konto wählen und im Web-Panel eintragen.
-5. Entscheiden, ob `deutsch` der Standard-Branch auf GitHub werden soll.
 
 ### Empfohlene Skills für die Folgesitzung
 

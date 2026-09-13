@@ -197,7 +197,6 @@ tools/
   pruefe_sprache.py  # sucht italienische Reste in den übersetzten Dateien
   test_cp437.py      # prüft die Zeichentabelle des Displays gegen den cp437-Codec von Python
   test_wortgrenzen.py # prüft, dass die Absichtserkennung ganze Wörter vergleicht und nicht Teilzeichenketten
-  test_cp437.py      # prüft die Zeichentabelle des Displays gegen den cp437-Codec von Python
 ```
 
 > **Das Einstellungs-Panel** (`http://alexo.local/`): die abstimmbaren Werte

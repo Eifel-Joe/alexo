@@ -344,7 +344,6 @@ tools/                 ← Hilfswerkzeuge für die Entwicklung
   pruefe_sprache.py    ← sucht italienische Reste in den übersetzten Dateien
   test_cp437.py        ← prüft die Zeichentabelle des Displays
   test_wortgrenzen.py  ← prüft die Wortgrenzen der Absichtserkennung
-  test_cp437.py        ← prüft die Zeichentabelle des Displays
 ```
 
 **Zwei Kerne (zwei Gehirne im Prozessor).** Der ESP32-S3 hat zwei Rechenkerne. Alexo

@@ -1,5 +1,9 @@
 # ALEXO — Anleitung zur Verdrahtung
 
+> 🇩🇪 **Deutsche Fassung.** Dieses Repository ist ein Fork von
+> [PeppeMinniti/alexo](https://github.com/PeppeMinniti/alexo). Die Verdrahtung ist
+> dieselbe wie im Originalprojekt, nur der Text ist übersetzt.
+
 Vollständige Übersicht **aller** Verbindungen von Anschluss zu Anschluss zwischen den
 Bauteilen, samt Kondensatoren, Widerständen, den unterschiedlichen Beschriftungen auf
 den Modulen und den bewährten Regeln. Keine Zeichnungen aus Textzeichen, nur Listen von

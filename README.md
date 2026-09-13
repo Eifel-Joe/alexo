@@ -10,6 +10,10 @@ gesprochen, samt Chat auf dem Display und Lichtanimationen.
 > der Assistent hört und antwortet auf Deutsch. Bezeichner im Code, Dateinamen und
 > Ordnernamen sind absichtlich italienisch geblieben, damit ein Abgleich mit dem
 > Originalprojekt möglich bleibt.
+>
+> **Stand:** die Übersetzung ist übersetzt und geprüft, aber **noch nicht am Gerät
+> gelaufen** — die Hardware war nicht verfügbar. Die Bilder unten zeigen deshalb
+> noch die italienische Fassung.
 
 <p align="center">
   <img src="IMMAGINI/alexo.png" alt="Alexo — gedrucktes Gehäuse, Startbild, Anzeige der Aktualisierung, Chat auf dem Display und Radioanzeige" width="820">
@@ -68,7 +72,9 @@ wechselt die Animation je nach Zustand (zuhören, denken, sprechen).
   **PC im eigenen Netz** laufen statt in der Cloud, mit einem Schalter "nie ins
   Internet gehen"
 - ⏱️ **Abbruch bei Stille**, der sich dem Grundrauschen anpasst
-- 📻 **Webradio** über MP3 (Sender per Sprache, Wechsel über den Drehgeber)
+- 📻 **Webradio** über MP3 (Sender per Sprache, Wechsel über den Drehgeber). Der
+  Musikwunsch wird auf Deutsch erkannt, die mitgelieferten Sender tragen aber noch
+  italienische Schlüsselwörter; sie lassen sich im Web-Panel ersetzen
 - 🌐 **Web-Panel** (`http://alexo.local/`): Parameter abstimmen, Lautstärke, Stimmen,
   Persönlichkeit von Claude und der **Chat in Echtzeit** — ohne neu zu übersetzen
 - 🕒 **Echte Uhrzeit** über NTP, die das Gehirn mitbekommt
